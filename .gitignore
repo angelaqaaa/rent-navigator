@@ -1,0 +1,16 @@
+# Superseded local reference
+/REFERENCE-SPEC.md
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+.venv/
+.DS_Store
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

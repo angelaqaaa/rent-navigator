@@ -372,6 +372,7 @@ class TraceRecorder:
             cost = (
                 cost_for_usage(model_id, call.usage) if operation == "generation" else _zero_cost()
             )
+            # Preserve accounting independently of optional completion metadata.
             record = self._record(
                 cost,
                 timestamp=timestamp,
@@ -379,13 +380,27 @@ class TraceRecorder:
                 provider_call_index=call_index,
                 provider_operation=operation,
                 requested_model_id=model_id,
-                returned_model_id=call.returned_model_id,
+                returned_model_id=None,
                 duration_ms=(self._monotonic() - started) * 1000,
                 stage_durations=(),
-                response_code=call.response_code,
+                response_code="provider_error",
             )
-            self._sink.emit(record)
+            invalid_completion = False
+            try:
+                record = TraceRecord.model_validate(
+                    record.model_copy(
+                        update={
+                            "returned_model_id": call.returned_model_id,
+                            "response_code": call.response_code,
+                        }
+                    )
+                )
+            except ValidationError:
+                invalid_completion = True
             self._calls.append(record)
+            self._sink.emit(record)
+            if invalid_completion:
+                raise UnsafeMetadataError("Invalid provider completion metadata") from None
 
     def _record(
         self,

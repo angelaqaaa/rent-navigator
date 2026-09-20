@@ -1,6 +1,7 @@
 """Synthetic metadata fixtures only; these are not serving measurements."""
 
 import json
+import traceback
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from io import StringIO
@@ -389,3 +390,112 @@ def test_synthetic_sink_rejects_bypassed_extra_fields_and_emits_no_warning(
             MetadataSink(stream).emit(forged)
     assert stream.getvalue() == ""
     assert not recwarn.list
+
+
+@pytest.mark.parametrize("known_usage", [False, True], ids=["missing-usage", "known-usage"])
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("returned_model_id", "unexpected/model-id"),
+        ("response_code", "private synthetic completion status"),
+    ],
+)
+def test_synthetic_invalid_completion_preserves_accounting(
+    known_usage: bool,
+    field: str,
+    invalid_value: str,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+    recwarn: pytest.WarningsRecorder,
+) -> None:
+    trace, clock, stream = synthetic_recorder()
+    with pytest.raises(ValueError) as error, trace:
+        with trace.provider_call(ACTOR_MODEL) as call:
+            if known_usage:
+                call.usage = Usage(input_tokens=1000, output_tokens=100)
+            setattr(call, field, invalid_value)
+            clock.advance(0.125)
+
+    records = records_from(stream)
+    assert len(records) == 2
+    detail, endpoint = records
+    assert [record.record_kind for record in records] == ["provider_call", "endpoint"]
+    assert [record.provider_call_index for record in records] == [1, None]
+    total = provider_cost_totals(records)
+    for result in (detail, endpoint, total):
+        assert result.input_tokens == (1000 if known_usage else None)
+        assert result.output_tokens == (100 if known_usage else None)
+        assert result.usage_complete is known_usage
+        assert result.actual_cost_usd == (Decimal("0.0015") if known_usage else None)
+        assert result.reserved_cost_usd == Decimal("0.011")
+    for record in records:
+        assert record.requested_model_id == ACTOR_MODEL
+        assert record.returned_model_id is None
+        assert record.response_code == "provider_error"
+        assert record.duration_ms == 125
+    assert isinstance(error.value, UnsafeMetadataError)
+    assert str(error.value) == "Invalid provider completion metadata"
+    visible_error = "".join(traceback.format_exception(error.value))
+    captured = capsys.readouterr()
+    for output in (stream.getvalue(), visible_error, caplog.text, captured.out, captured.err):
+        assert invalid_value not in output
+        assert "ValidationError" not in output
+        assert "input_value=" not in output
+    assert not recwarn.list
+
+
+@pytest.mark.parametrize("known_usage", [False, True], ids=["missing-usage", "known-usage"])
+def test_synthetic_rejected_completion_keeps_contiguous_call_accounting(
+    known_usage: bool,
+) -> None:
+    trace, _, stream = synthetic_recorder()
+    with pytest.raises(UnsafeMetadataError):
+        with trace.provider_call(ACTOR_MODEL) as call:
+            call.returned_model_id = "unexpected/model-id"
+            if known_usage:
+                call.usage = Usage(input_tokens=1000, output_tokens=100)
+    with trace.provider_call(ACTOR_MODEL) as call:
+        call.usage = Usage(input_tokens=1000, output_tokens=100)
+        call.returned_model_id = ACTOR_MODEL
+    endpoint = trace.finish("provider_error")
+    records = records_from(stream)
+    assert [record.provider_call_index for record in records] == [1, 2, None]
+    assert records[0].response_code == "provider_error"
+    assert records[1].response_code == "ok"
+    total = provider_cost_totals(records)
+    assert total.actual_cost_usd == endpoint.actual_cost_usd
+    assert total.actual_cost_usd == (Decimal("0.003") if known_usage else None)
+    assert total.usage_complete is known_usage
+    assert total.reserved_cost_usd == endpoint.reserved_cost_usd == Decimal("0.022")
+    with pytest.raises(ValueError, match="Duplicate provider call"):
+        provider_cost_totals([*records, records[0]])
+    with pytest.raises(ValueError, match="does not match"):
+        provider_cost_totals([records[0], endpoint])
+
+
+def test_synthetic_rejected_count_tokens_completion_remains_free() -> None:
+    trace, _, stream = synthetic_recorder()
+    with pytest.raises(UnsafeMetadataError), trace:
+        with trace.provider_call(ACTOR_MODEL, operation="count_tokens") as call:
+            call.returned_model_id = "unexpected/model-id"
+    records = records_from(stream)
+    assert [record.provider_call_index for record in records] == [1, None]
+    assert records[0].provider_operation == "count_tokens"
+    assert all(record.response_code == "provider_error" for record in records)
+    for result in (*records, provider_cost_totals(records)):
+        assert result.input_tokens == result.output_tokens == 0
+        assert result.usage_complete is True
+        assert result.actual_cost_usd == result.reserved_cost_usd == Decimal(0)
+
+
+def test_synthetic_no_provider_calls_remains_complete_zero() -> None:
+    trace, _, stream = synthetic_recorder()
+    with trace:
+        pass
+    records = records_from(stream)
+    assert len(records) == 1
+    assert records[0].record_kind == "endpoint"
+    for result in (records[0], provider_cost_totals(records), provider_cost_totals([])):
+        assert result.input_tokens == result.output_tokens == 0
+        assert result.usage_complete is True
+        assert result.actual_cost_usd == result.reserved_cost_usd == Decimal(0)

@@ -1074,3 +1074,127 @@ def test_lazy_provider_loggers_cannot_emit_payload_after_client_creation(
         logger.warning(sentinel)
         logger.critical(sentinel)
     assert sentinel not in caplog.text
+
+
+async def observe_cancelled_child(adapter: ProviderAdapter, clock: Clock) -> Outcome:
+    trace, stream = recorder(clock)
+
+    async def invoke() -> None:
+        with trace:
+            try:
+                await adapter.generate(
+                    model=ACTOR_MODEL,
+                    system="synthetic",
+                    messages=INPUT,
+                    trace=trace,
+                    deadline=Deadline.start(clock=clock),
+                )
+            except asyncio.CancelledError:
+                trace.finish("deadline_exceeded")
+                raise
+            else:
+                trace.finish("ok")
+
+    child = asyncio.create_task(invoke())
+    with pytest.raises(asyncio.CancelledError):
+        await child
+    assert child.cancelled()
+    log = stream.getvalue()
+    return Outcome(
+        None,
+        None,
+        [TraceRecord.model_validate_json(line) for line in log.splitlines()],
+        log,
+    )
+
+
+def assert_no_generation_after_queued_cancellation(outcome: Outcome, ledger: SpendLedger) -> None:
+    assert [record.provider_operation for record in outcome.records] == ["count_tokens", None]
+    assert outcome.records[-1].response_code == "deadline_exceeded"
+    assert_accounting(outcome, actual="0", reserved="0", complete=True, generation_count=0)
+    assert ledger.committed_usd == 0
+    assert not ledger.stopped and not ledger.reforecast_required
+
+
+def test_queued_cancellation_after_count_return_never_dispatches_generation() -> None:
+    class CancellingMessages(RecordingMessages):
+        async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+            count = await super().count_tokens(**kwargs)
+            task = asyncio.current_task()
+            assert task is not None
+            task.cancel()
+            return count
+
+    async def scenario() -> None:
+        fake, ledger, clock = CancellingMessages(), SpendLedger(Decimal("1")), Clock()
+        outcome = await observe_cancelled_child(ProviderAdapter(fake, budget=ledger), clock)
+        assert len(fake.counts) == 1
+        assert not fake.creates
+        assert_no_generation_after_queued_cancellation(outcome, ledger)
+
+    asyncio.run(scenario())
+
+
+def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        paths: list[str] = []
+
+        def respond(request: httpx2.Request) -> httpx2.Response:
+            paths.append(request.url.path)
+            if request.url.path.endswith("/count_tokens"):
+                task = asyncio.current_task()
+                assert task is not None
+                task.cancel()
+                return httpx2.Response(200, json={"input_tokens": 1000})
+            return httpx2.Response(
+                200,
+                json={
+                    "id": "msg_synthetic_cancel_boundary",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": ACTOR_MODEL,
+                    "content": [{"type": "text", "text": SYNTHETIC_CONTENT}],
+                    "stop_reason": "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 1000, "output_tokens": 100},
+                },
+            )
+
+        monkeypatch.setattr(os, "environ", {})
+        client = AsyncAnthropic(
+            api_key="synthetic-test-key",
+            base_url="https://api.anthropic.com",
+            max_retries=0,
+            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
+        )
+        try:
+            ledger, clock = SpendLedger(Decimal("1")), Clock()
+            adapter = ProviderAdapter(cast(MessagesPort, client.messages), budget=ledger)
+            outcome = await observe_cancelled_child(adapter, clock)
+            assert paths == ["/v1/messages/count_tokens"]
+            assert_no_generation_after_queued_cancellation(outcome, ledger)
+        finally:
+            await client.close()
+
+    asyncio.run(scenario())
+
+
+def test_queued_cancellation_during_reservation_refunds_without_generation() -> None:
+    class CancellingLedger(SpendLedger):
+        def reserve(self, model: RequestedModel) -> Reservation:
+            ticket = super().reserve(model)
+            task = asyncio.current_task()
+            assert task is not None
+            task.cancel()
+            return ticket
+
+    async def scenario() -> None:
+        fake, ledger, clock = RecordingMessages(), CancellingLedger(Decimal("1")), Clock()
+        outcome = await observe_cancelled_child(ProviderAdapter(fake, budget=ledger), clock)
+        assert len(fake.counts) == 1
+        assert not fake.creates
+        assert_no_generation_after_queued_cancellation(outcome, ledger)
+
+    asyncio.run(scenario())

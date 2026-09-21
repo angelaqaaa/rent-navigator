@@ -335,6 +335,8 @@ class ProviderAdapter:
                     usage: Usage | None = Usage(input_tokens=0, output_tokens=0)
                     reforecast = False
                     try:
+                        # Deliver pending cancellation before recording or dispatching a call.
+                        await asyncio.sleep(0)
                         # A budget implementation may consume time before granting admission.
                         timeout = deadline.remaining()
                         with trace.provider_call(model) as call:

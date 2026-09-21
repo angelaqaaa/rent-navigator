@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, and pure notice deadline and rent increase calculators. The service exposes only `GET /healthz`; calculation and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, and an internal asynchronous provider/extraction seam. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -8,7 +8,7 @@ The snapshot date is the earliest actual UTC fetch date among the six sources. I
 
 ## Run locally
 
-Use uv **0.11.21**. The project uses an isolated **Python 3.12.13** environment; system Python is not changed. No API key is required for the current commands.
+Use uv **0.11.21**. The project uses an isolated **Python 3.12.13** environment; system Python is not changed. No API key is required for local health, tests or offline smoke commands.
 
 ```sh
 uv python install 3.12.13
@@ -89,6 +89,31 @@ Spacing uses the confirmed last increase, or the tenancy start only when no prev
 
 An explicitly confirmed section 6.1 exemption affects only the guideline check. The form check compares N1/N2 with the confirmed status; neither a form nor a date establishes an exemption. Exemption evidence, form completeness, actual delivery contents and overall legal validity are not adjudicated.
 
+## Internal provider and extraction
+
+`ProviderAdapter.generate` preflights the full prepared request and performs at most one asynchronous, non-streaming generation. It uses the locked SDK's standard Messages API, fixed model settings, no retries, a 7,000-token preflight limit and conservative per-call reservations. Actor sampling is sent as fixed `extra_body={"temperature": 0}` because this SDK exposes it through that parameter; judge sampling overrides are omitted. Native tool-use blocks are preserved for later integration, with no tool execution or loop.
+
+`extract_letter(request, *, provider, trace, redact, deadline)` requires a redactor with no default fallback. It redacts before constructing either provider payload, transforms the public extraction schema for provider support, then validates the response against the original strict three-field model. Missing or ambiguous facts remain null. Refusal, truncation, malformed content and invalid fields fail without repair. The caller supplies one absolute `Deadline` and owns `trace.finish(...)`; errors must finish with the safe `ProviderFailure.code`, and cancellation must finish safely before propagating. The development smoke shows this composition.
+
+Usage is captured before output validation. Missing/partial usage or unpriced billing categories retain unknown actual cost and the full reservation; input usage above the reservation preserves known cost. These conditions stop further paid requests for reconciliation. `SpendLedger` is an atomic in-memory batch ledger, not a durable project account or daily admission counter. Endpoint summaries and provider details are not added twice.
+
+The formal email/phone/postal redactor is **not implemented**. The current smoke accepts only two fixed anonymous synthetic letters; arbitrary real letters are not supported. Agent integration, HTTP business routes and the full safety pipeline remain future work.
+
+Run the explicit offline smoke from a clean committed checkout, using a new output directory each time:
+
+```sh
+test -z "$(git status --porcelain)" && \
+uv run --locked python -m rent_navigator.smoke_extraction --offline \
+  --source-commit "$(git rev-parse HEAD)" \
+  --evidence-dir /tmp/rent-navigator-extraction-offline
+```
+
+It uses in-process fakes, writes metadata plus a clearly marked synthetic report, and makes no real requests. It also runs from an installed wheel or a container with networking disabled. Synthetic token costs and timings are not production measurements.
+
+Runtime model availability and live extraction compatibility are **NOT RUN: credentials pending**. A separate `--live --billing-ready` mode exists for later authorized verification after an API key is available in the process environment and prepaid billing/replenishment settings are confirmed. It checks both approved model IDs, then attempts at most two actor generations, reserving at most US$0.022 for the batch; any failure or mismatch stops it. Do not rerun a paid attempt without checking the remaining authorized call/budget allowance. Evidence directories cannot overwrite an earlier attempt. No judge generation is performed.
+
+The real client is explicitly constructed with the official base URL and `max_retries=0`; SDK/transport logging is disabled and custom-header environment overrides are rejected. Never place keys in source, command arguments, evidence, or logs. Default tests and PR CI require neither credentials nor provider access.
+
 ## Verify
 
 ```sh
@@ -126,5 +151,7 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `index.build_index(path)` creates a derived index; `inspect_index(path)` reads its metadata; `search(path, question, expected_corpus_hash=...)` returns typed chunks and BM25 scores. Data loading does not depend on the working directory.
 - `notice.notice_deadline_check(facts, *, corpus)` returns the existing `ToolResult` with four ordered notice checks, partial derived fields, and resolving rule IDs.
 - `rent.rent_increase_check(facts, *, corpus)` returns the existing `ToolResult` with seven ordered checks, exact decimal caps, partial derived fields, and resolving rule IDs. Its provider-visible arguments remain exactly `RentFacts`.
+- `provider.ProviderAdapter` accepts an injected async messages port and batch budget. `Deadline` is shared across calls, and `configuration_hash` identifies fixed settings and request schemas without including message contents.
+- `extract.extract_letter(request, *, provider, trace, redact, deadline)` returns the existing `Extraction`; `extraction_config_hash()` covers its fixed prompt and transformed schema. Composition with the real SDK uses `cast(MessagesPort, client.messages)` at this tested boundary.
 
-Request processing, provider integration, evaluation and deployment remain future work.
+Agent/request integration, formal redaction, evaluation and deployment remain future work.

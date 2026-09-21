@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --locked
+      - name: Lint
+        run: uv run --locked ruff check .
+      - name: Check formatting
+        run: uv run --locked ruff format --check .
+      - name: Strict type checks
+        run: uv run --locked mypy
+      - name: Tests
+        run: uv run --locked pytest
+      - name: Build distribution
+        run: uv build --no-sources
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+      - name: Build the committed source
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          git archive --format=tar HEAD | docker build \
+            --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" \
+            --tag rent-navigator:ci -
+      - name: Smoke test the image revision
+        run: |
+          container_id=$(docker run --detach --publish 127.0.0.1:18000:8000 rent-navigator:ci)
+          trap 'docker rm --force "$container_id" >/dev/null' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/healthz > /tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          actual = json.loads(Path("/tmp/health.json").read_text())
+          expected = {"status": "ok", "source_commit": os.environ["SOURCE_COMMIT"]}
+          assert actual == expected, (actual, expected)
+          print(actual)
+          PY
+          test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' rent-navigator:ci)" = "$SOURCE_COMMIT"

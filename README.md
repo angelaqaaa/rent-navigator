@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, and an offline SQLite FTS5 index. The service exposes only `GET /healthz`; it performs no legal calculations and answers no questions. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, and a pure notice deadline calculator. The service exposes only `GET /healthz`; calculation and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -75,6 +75,12 @@ FTS5 indexes headings and text with `unicode61`, default BM25 weights, ascending
 
 Rebuild tests compare logical rows and ordered IDs/scores from two clean rebuilds in the same SQLite environment. They do not require identical database bytes or scores across SQLite versions. Generic smoke queries check mechanics and provenance only; they are not gold questions, relevance labels or retrieval-quality measurements.
 
+## Notice calculator
+
+`notice.notice_deadline_check(facts: NoticeFacts, *, corpus: Corpus)` calculates ordinary notice-only thresholds for hand or mail service, with proposed effective years 2026–2027. The caller loads and validates the immutable corpus before calling the function. The calculation reads rule values in memory and performs no file, database, network, clock, or environment access. The internal `corpus` argument is not part of the public tool-input schema.
+
+Every result includes scope, supported-year, rental-period and notice checks. Known exclusions return `unsupported` with null derived fields. Unknown confirmations prevent a passing overall result while preserving a determinable notice failure; missing facts preserve each independently calculable date. Signed day intervals retain late-service failures. If a derived date exceeds years 0001–9999, only that date becomes null. A passing result means only the checked conditions passed; these thresholds do not establish a lawful increase or valid notice. Rent spacing, amounts, forms and exemption decisions are not calculated.
+
 ## Verify
 
 ```sh
@@ -110,5 +116,6 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `models.py`, `trace.py`, and the health-only application factory retain their WP1 interfaces.
 - `corpus.load_corpus()` returns immutable source/chunk/rule metadata plus `snapshot_date` and `corpus_hash`. `.chunk(id)`, `.rule(id)`, and `.citation(id)` resolve identifiers and reject missing ones.
 - `index.build_index(path)` creates a derived index; `inspect_index(path)` reads its metadata; `search(path, question, expected_corpus_hash=...)` returns typed chunks and BM25 scores. Data loading does not depend on the working directory.
+- `notice.notice_deadline_check(facts, *, corpus)` returns the existing `ToolResult` with four ordered notice checks, partial derived fields, and resolving rule IDs.
 
-The next package can consume immutable rule data for the notice tool. Calculations, request processing, provider integration, evaluation and deployment are not implemented here.
+The rent calculator, request processing, provider integration, evaluation and deployment remain future work.

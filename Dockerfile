@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
-COPY pyproject.toml uv.lock .python-version README.md ./
+COPY pyproject.toml uv.lock .python-version README.md NOTICE ./
 COPY src/ ./src/
 RUN uv sync --locked --no-dev --no-editable
 

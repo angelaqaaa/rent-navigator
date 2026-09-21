@@ -1,0 +1,5 @@
+# Preserve official response bytes; review normalized text separately.
+src/rent_navigator/corpus/raw/* -text -diff
+src/rent_navigator/corpus/text/*.txt text eol=lf
+src/rent_navigator/corpus/*.json text eol=lf
+src/rent_navigator/corpus/*.jsonl text eol=lf

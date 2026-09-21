@@ -1,0 +1,61 @@
+Ontario source materials
+========================
+
+This independent educational project reproduces the six official sources below.
+Government source materials retain their original copyright and are not licensed
+as project code. No affiliation with or endorsement by the Government of Ontario
+or the Landlord and Tenant Board is implied.
+
+Residential Tenancies Act, 2006, S.O. 2006, c. 17
+© King's Printer for Ontario, 2006.
+https://www.ontario.ca/laws/statute/06r17
+
+Legislation Act, 2006, S.O. 2006, c. 21, Sched. F
+© King's Printer for Ontario, 2006.
+https://www.ontario.ca/laws/statute/06l21
+
+These reproductions of Ontario statutes are not official versions. Consult the
+canonical e-Laws pages for official versions and subsequent amendments.
+
+Residential rent increases
+Government of Ontario; Crown copyright, King's Printer for Ontario.
+https://www.ontario.ca/page/residential-rent-increases
+
+Brochure: A Guide to the Residential Tenancies Act
+Landlord and Tenant Board, Tribunals Ontario; Crown copyright,
+King's Printer for Ontario.
+https://tribunalsontario.ca/documents/ltb/Brochures/Guide%20to%20RTA%20%28English%29.html
+
+Form N1: Notice of Rent Increase — Instructions (November 30, 2015)
+Landlord and Tenant Board, Tribunals Ontario; Crown copyright,
+King's Printer for Ontario.
+https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf
+
+Form N2: Notice of Rent Increase (Unit Partially Exempt) — Instructions (May 2017)
+Landlord and Tenant Board, Tribunals Ontario; Crown copyright,
+King's Printer for Ontario.
+https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N2%20instructions_final_Nov30_2015.pdf
+
+Original responses in rent_navigator/corpus/raw are retained without editing.
+The statute responses are the full JSON documents served by the canonical
+e-Laws pages' official API, including their complete HTML content. Canonical
+citation URLs remain the public statute URLs, not the transport endpoints.
+
+The text files are faithful, normalized extractions of the complete source
+documents. Web navigation is excluded; headings, paragraphs and legal numbering
+are retained, including the extracted PDF page text. Statutory
+future-amendment annotations remain in full text but are excluded from operative
+chunks. The index contains only the sections specified in CONTRACTS.md.
+Source dates, consolidation periods and exact response/text hashes are recorded
+in corpus/manifest.json. Historical examples in instructions are not rewritten
+as current examples. Project rule descriptions are separate from quoted text.
+
+Copyright and reproduction terms:
+https://www.ontario.ca/page/copyright-information
+
+The Crown permits accurate reproduction of Ontario legal materials with
+attribution and notice that unofficial reproductions are not official versions.
+Other government materials are reproduced here for non-commercial educational
+purposes with attribution and unchanged original content. This notice does not
+grant additional rights to those materials; commercial reuse may require a
+licence under the source's terms.

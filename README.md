@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, and a pure notice deadline calculator. The service exposes only `GET /healthz`; calculation and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, and pure notice deadline and rent increase calculators. The service exposes only `GET /healthz`; calculation and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -79,7 +79,15 @@ Rebuild tests compare logical rows and ordered IDs/scores from two clean rebuild
 
 `notice.notice_deadline_check(facts: NoticeFacts, *, corpus: Corpus)` calculates ordinary notice-only thresholds for hand or mail service, with proposed effective years 2026–2027. The caller loads and validates the immutable corpus before calling the function. The calculation reads rule values in memory and performs no file, database, network, clock, or environment access. The internal `corpus` argument is not part of the public tool-input schema.
 
-Every result includes scope, supported-year, rental-period and notice checks. Known exclusions return `unsupported` with null derived fields. Unknown confirmations prevent a passing overall result while preserving a determinable notice failure; missing facts preserve each independently calculable date. Signed day intervals retain late-service failures. If a derived date exceeds years 0001–9999, only that date becomes null. A passing result means only the checked conditions passed; these thresholds do not establish a lawful increase or valid notice. Rent spacing, amounts, forms and exemption decisions are not calculated.
+Every result includes scope, supported-year, rental-period and notice checks. Known exclusions return `unsupported` with null derived fields. Unknown confirmations prevent a passing overall result while preserving a determinable notice failure; missing facts preserve each independently calculable date. Signed day intervals retain late-service failures. If a derived date exceeds years 0001–9999, only that date becomes null. A passing result means only the checked conditions passed; these thresholds do not establish a lawful increase or valid notice.
+
+## Rent calculator
+
+`rent.rent_increase_check(facts: RentFacts, *, corpus: Corpus)` reuses the public notice calculator and adds spacing, guideline and form checks. It has the same scope, supported years and requirement for an already loaded corpus, with no file, database, network, clock or environment access. All seven checks remain present, including simultaneous failures. A definite failure takes priority over missing facts unless scope or rental-period confirmation is unknown; known exclusions clear every derived field.
+
+Spacing uses the confirmed last increase, or the tenancy start only when no previous increase is confirmed. It adds calendar months, mapping February 29 to February 28 when needed. An anniversary beyond year 9999 is null in the output but still fails against a known supported effective date. Exact guideline caps use scaled integers, independent of decimal precision. A fractional cap's next whole cent returns `rounding_uncertain`; this is project uncertainty policy, not a statutory rounding rule. Available percentages and caps remain visible when other required facts are missing.
+
+An explicitly confirmed section 6.1 exemption affects only the guideline check. The form check compares N1/N2 with the confirmed status; neither a form nor a date establishes an exemption. Exemption evidence, form completeness, actual delivery contents and overall legal validity are not adjudicated.
 
 ## Verify
 
@@ -92,7 +100,7 @@ uv run --locked pytest
 uv build --no-sources
 ```
 
-`uv.lock` records exact dependency versions and distribution hashes. Strict mypy covers source and tests. Tests cover public JSON boundaries, synthetic trace accounting, source/chunk integrity, rule resolution, deterministic extraction, query tokenization and offline rebuilds. Synthetic timing/usage values are not serving measurements.
+`uv.lock` records exact dependency versions and distribution hashes. Strict mypy covers source and tests. Tests cover public JSON boundaries, synthetic trace accounting, source/chunk integrity, rule resolution, deterministic extraction, query tokenization, offline rebuilds, notice boundaries, calendar anniversaries, exact rent caps and form/status combinations. Synthetic timing/usage values are not serving measurements.
 
 The unfiltered PR workflow runs basic checks, installs the wheel outside the checkout with locked dependencies, and runs `tests/smoke_corpus.py`. This checks package data, citations, rules and two rebuilds with socket access disabled. Offline evaluation, live evaluation and branch protection remain future work; the workflow does not yet provide evaluation regression blocking.
 
@@ -117,5 +125,6 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `corpus.load_corpus()` returns immutable source/chunk/rule metadata plus `snapshot_date` and `corpus_hash`. `.chunk(id)`, `.rule(id)`, and `.citation(id)` resolve identifiers and reject missing ones.
 - `index.build_index(path)` creates a derived index; `inspect_index(path)` reads its metadata; `search(path, question, expected_corpus_hash=...)` returns typed chunks and BM25 scores. Data loading does not depend on the working directory.
 - `notice.notice_deadline_check(facts, *, corpus)` returns the existing `ToolResult` with four ordered notice checks, partial derived fields, and resolving rule IDs.
+- `rent.rent_increase_check(facts, *, corpus)` returns the existing `ToolResult` with seven ordered checks, exact decimal caps, partial derived fields, and resolving rule IDs. Its provider-visible arguments remain exactly `RentFacts`.
 
-The rent calculator, request processing, provider integration, evaluation and deployment remain future work.
+Request processing, provider integration, evaluation and deployment remain future work.

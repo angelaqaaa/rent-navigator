@@ -1,0 +1,106 @@
+[
+  {
+    "id": "notice.90_days",
+    "value": 90,
+    "unit": "calendar_days",
+    "description": "Ordinary notice of rent increase requires at least 90 days.",
+    "evidence_ids": [
+      "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+    ]
+  },
+  {
+    "id": "notice.mail_5_days",
+    "value": 5,
+    "unit": "calendar_days",
+    "description": "A notice sent by mail is deemed given on the fifth day after mailing.",
+    "evidence_ids": [
+      "f98fecd206abbbaf02afa4334a3275ae052e19d5ee8f5b609c28f22a96fcc05a"
+    ]
+  },
+  {
+    "id": "spacing.12_months",
+    "value": 12,
+    "unit": "calendar_months",
+    "description": "Ordinary increases require 12 months since the last increase or first rental.",
+    "evidence_ids": [
+      "d23348353fecdb08307c3e74b0e8899d26b35fd5bb14420c1f744ed51dbfca52"
+    ]
+  },
+  {
+    "id": "guideline.2026",
+    "value": "2.1",
+    "unit": "percent",
+    "description": "The 2026 guideline for a confirmed controlled tenancy is 2.1 percent.",
+    "evidence_ids": [
+      "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+      "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109"
+    ]
+  },
+  {
+    "id": "guideline.2027",
+    "value": "1.9",
+    "unit": "percent",
+    "description": "The 2027 guideline for a confirmed controlled tenancy is 1.9 percent.",
+    "evidence_ids": [
+      "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2",
+      "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723"
+    ]
+  },
+  {
+    "id": "exemption.s6_1",
+    "value": "confirmed_s6_1_exemption",
+    "unit": "semantic",
+    "description": "An explicitly confirmed section 6.1 exemption excludes the guideline check; the project does not decide exemption evidence.",
+    "evidence_ids": [
+      "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+      "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8"
+    ]
+  },
+  {
+    "id": "calendar.s89",
+    "value": "exclude_start_include_end_calendar_months",
+    "unit": "semantic",
+    "description": "Count days excluding the first day and including the last; count calendar months by corresponding date, or the last day when no corresponding date exists.",
+    "evidence_ids": [
+      "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859"
+    ]
+  },
+  {
+    "id": "form.N1",
+    "value": "N1",
+    "unit": "form",
+    "description": "Use N1 for the confirmed ordinary controlled scenario; form completeness is outside the project checks.",
+    "evidence_ids": [
+      "416445ce84343a5b8e40226374c738b0b3a1e94663b5822e5b3b9b2cf08b88e5",
+      "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e"
+    ]
+  },
+  {
+    "id": "form.N2",
+    "value": "N2",
+    "unit": "form",
+    "description": "Use N2 for a confirmed section 6.1 exemption in the ordinary scenario; the form itself does not establish exemption.",
+    "evidence_ids": [
+      "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+      "a68845e8524b0c5bad6303e8560c462512fe41eb2176366c63abaa608c59edc4"
+    ]
+  },
+  {
+    "id": "scope.ordinary",
+    "value": "confirmed_ordinary_private_residential",
+    "unit": "semantic",
+    "description": "Project scope requires confirmed ordinary private residential facts and rental-period start. Excluded statutory regimes and special increases are retained as context, not implemented as additional calculators.",
+    "evidence_ids": [
+      "0de611461cb91b2b1cee6dfccf2e8da154d6d858f40490c411a021411a04cb3b",
+      "11ca9f2885f8162384c24815bf6bf0fd47893b301f35a7c63fa43a67042c50eb",
+      "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+      "79d155d4cd0bc67a97cc20eb19e66d5ff6bbfa1096d9671ff711464bd329dfdb",
+      "8c05df2155a417224adfe8d6373ad0fb66c46776574b5e633892ce52b5880502",
+      "abcdfba56fd89aa859d86e60bd19a328493cf5ba2508867a55aa7bb21c4a1ea7",
+      "bf98890cc4532908b3862ad1c97a02d500d0de513ea402ec4d1eea7d73e51ec2",
+      "c2f54625ea915df85ea272c98e140a40f9d54a1865a73ec405a772d8b9c44ee3",
+      "c32486aa0f815df76c04be918a02ae818208b717e94dc680bb323468cf80c43b",
+      "fad7d737385e942ab2cc28788f74b62bef39c10a8fc92f422337e55ae3f386f1"
+    ]
+  }
+]

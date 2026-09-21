@@ -36,6 +36,18 @@ jobs:
         run: uv run --locked pytest
       - name: Build distribution
         run: uv build --no-sources
+      - name: Verify the installed wheel outside the checkout
+        run: |
+          uv venv --python 3.12.13 "$RUNNER_TEMP/rent-navigator-wheel"
+          uv export --locked --no-dev --no-emit-project --format requirements-txt \
+            --output-file "$RUNNER_TEMP/rent-navigator-runtime.txt"
+          uv pip install --python "$RUNNER_TEMP/rent-navigator-wheel/bin/python" \
+            --require-hashes --requirement "$RUNNER_TEMP/rent-navigator-runtime.txt"
+          uv pip install --python "$RUNNER_TEMP/rent-navigator-wheel/bin/python" \
+            --no-deps dist/*.whl
+          cd /tmp
+          "$RUNNER_TEMP/rent-navigator-wheel/bin/python" \
+            "$GITHUB_WORKSPACE/tests/smoke_corpus.py" --checkout-root "$GITHUB_WORKSPACE"
 
   docker:
     runs-on: ubuntu-24.04
@@ -72,3 +84,9 @@ jobs:
           print(actual)
           PY
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' rent-navigator:ci)" = "$SOURCE_COMMIT"
+      - name: Verify packaged corpus offline as the container user
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            --workdir /tmp \
+            --volume "$GITHUB_WORKSPACE/tests/smoke_corpus.py:/tmp/smoke_corpus.py:ro" \
+            rent-navigator:ci python /tmp/smoke_corpus.py --checkout-root /app

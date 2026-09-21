@@ -339,6 +339,8 @@ class ProviderAdapter:
                         await asyncio.sleep(0)
                         # A budget implementation may consume time before granting admission.
                         timeout = deadline.remaining()
+                        if self._budget.stopped:
+                            raise ProviderFailure("provider_error")
                         with trace.provider_call(model) as call:
                             usage = None
                             try:

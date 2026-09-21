@@ -1198,3 +1198,44 @@ def test_queued_cancellation_during_reservation_refunds_without_generation() -> 
         assert_no_generation_after_queued_cancellation(outcome, ledger)
 
     asyncio.run(scenario())
+
+
+def test_shared_ledger_freeze_refunds_already_reserved_undispatched_call() -> None:
+    async def scenario() -> None:
+        reservations: list[Reservation] = []
+
+        class RecordingLedger(SpendLedger):
+            def reserve(self, model: RequestedModel) -> Reservation:
+                ticket = super().reserve(model)
+                reservations.append(ticket)
+                return ticket
+
+        ledger = RecordingLedger(Decimal("0.022"))
+
+        async def verify_both_reserved_before_first_dispatch() -> None:
+            assert len(reservations) == 2
+            assert ledger.committed_usd == Decimal("0.022")
+            assert not ledger.stopped
+
+        first_fake = RecordingMessages(
+            reply(usage=None), before_create=verify_both_reserved_before_first_dispatch
+        )
+        second_fake = RecordingMessages()
+        # Both tasks reach the dispatch checkpoint before the first task resumes.
+        first_task = asyncio.create_task(perform(first_fake, ledger, trace_number=1))
+        second_task = asyncio.create_task(perform(second_fake, ledger, trace_number=2))
+        first, second = await asyncio.gather(first_task, second_task)
+        assert len(reservations) == 2
+        assert len(first_fake.creates) == 1
+        assert first.failure is not None and first.failure.code == "provider_error"
+        assert_accounting(first, actual=None, reserved="0.011", complete=False)
+        assert second.failure is not None and second.failure.code == "provider_error"
+        assert len(second_fake.counts) == 1
+        assert not second_fake.creates
+        assert [record.provider_operation for record in second.records] == ["count_tokens", None]
+        assert second.records[-1].response_code == "provider_error"
+        assert_accounting(second, actual="0", reserved="0", complete=True, generation_count=0)
+        assert ledger.committed_usd == Decimal("0.011")
+        assert ledger.stopped and ledger.reforecast_required
+
+    asyncio.run(scenario())

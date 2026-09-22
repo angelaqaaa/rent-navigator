@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Final
 
-_POLICY_VERSION: Final = "pattern-redaction-v1"
+_POLICY_VERSION: Final = "pattern-redaction-v2"
 _HORIZONTAL: Final = r"[ \t\u00a0\u202f]"
 _SEPARATOR: Final = r"[ \t\u00a0\u202f.-]*"
 _LOCAL_ATOM: Final = r"[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
@@ -56,10 +56,14 @@ def _policy_manifest() -> dict[str, object]:
         "flags": _FLAGS,
         "order": ["email", "phone", "postal"],
         "placeholders": {"email": "[EMAIL]", "phone": "[PHONE]", "postal": "[POSTAL]"},
+        "email_processing": "replace the leftmost supported candidate, then rescan until stable",
         "currency": {
             "pattern": _CURRENCY_PATTERN,
             "flags": _FLAGS,
-            "protection": "preserve any phone match overlapping a marked currency span",
+            "protection": (
+                "preserve marked currency spans exactly; match phones wholly within each "
+                "unprotected region using original outer token boundaries"
+            ),
             "timing": "after email replacement, before phone replacement",
             "unlabelled_nanp": "redact",
         },
@@ -74,6 +78,23 @@ def _policy_hash(material: Mapping[str, object]) -> str:
 REDACTION_POLICY_HASH: Final = _policy_hash(_policy_manifest())
 
 
+def _redact_phones(text: str) -> str:
+    currency_spans = tuple(match.span() for match in _CURRENCY.finditer(text))
+    parts: list[str] = []
+    cursor = 0
+    for start, end in (*currency_spans, (len(text), len(text))):
+        # Use the original string and its true end so both token boundaries survive.
+        for match in _PHONE.finditer(text, cursor):
+            if match.start() >= start:
+                break
+            if match.end() <= start:
+                parts.extend((text[cursor : match.start()], "[PHONE]"))
+                cursor = match.end()
+        parts.extend((text[cursor:start], text[start:end]))
+        cursor = end
+    return "".join(parts)
+
+
 def redact_text(text: str) -> str:
     """Replace supported contact patterns while preserving all unmatched text.
 
@@ -82,13 +103,10 @@ def redact_text(text: str) -> str:
     """
     if not isinstance(text, str):
         raise TypeError("redaction input must be a string")
-    redacted = _EMAIL.sub("[EMAIL]", text)
-    currency_spans = tuple(match.span() for match in _CURRENCY.finditer(redacted))
-
-    def replace_phone(match: re.Match[str]) -> str:
-        if any(start < match.end() and match.start() < end for start, end in currency_spans):
-            return match.group()
-        return "[PHONE]"
-
-    redacted = _PHONE.sub(replace_phone, redacted)
-    return _POSTAL.sub("[POSTAL]", redacted)
+    redacted = text
+    while True:
+        redacted, count = _EMAIL.subn("[EMAIL]", redacted, count=1)
+        if count == 0:
+            break
+        # Each replacement consumes an @; the placeholder cannot introduce one.
+    return _POSTAL.sub("[POSTAL]", _redact_phones(redacted))

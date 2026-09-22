@@ -204,6 +204,80 @@ def test_currency_cannot_protect_across_a_line_break() -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "The fee is $1 416-555-0123 is the contact number.",
+            "The fee is $1 [PHONE] is the contact number.",
+        ),
+        (
+            "Rent is CAD 1 416-555-0123; call this number.",
+            "Rent is CAD 1 [PHONE]; call this number.",
+        ),
+        ("C$1\t416.555.0123 ext. 12", "C$1\t[PHONE]"),
+        ("$1\u00a0(416) 555-0123", "$1\u00a0[PHONE]"),
+        ("CAD 1\u202f4165550123", "CAD 1\u202f[PHONE]"),
+        (
+            "416-555-0123 costs $1; CAD 1 416-555-0123 costs C$2.",
+            "[PHONE] costs $1; CAD 1 [PHONE] costs C$2.",
+        ),
+        ("$4165550123.00 416-555-0123", "$4165550123.00 [PHONE]"),
+        ("CAD 4165550123.00 416-555-0123", "CAD 4165550123.00 [PHONE]"),
+        ("4165550123$1", "[PHONE]$1"),
+    ],
+)
+def test_only_currency_span_is_protected_from_phone_replacement(
+    text: str,
+    expected: str,
+) -> None:
+    assert redact_text(text) == expected
+    assert redact_text(expected) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "4165550123CAD 1",
+        "4165550123C$1",
+        "4165550123c$1",
+        "$1 4165550123C$2",
+        "$1+14165550123",
+        "$1(416)5550123",
+        "$1 abc4165550123",
+        "$1 4165550123abc",
+        "$1 é4165550123",
+        "$1 4165550123é",
+    ],
+)
+def test_currency_regions_preserve_original_outer_phone_token_boundaries(text: str) -> None:
+    assert redact_text(text) == text
+
+
+@pytest.mark.parametrize("joiner", ["/", "+"])
+@pytest.mark.parametrize("count", [2, 3, 25])
+def test_adjacent_email_candidates_are_completed_within_one_call(
+    joiner: str,
+    count: int,
+) -> None:
+    addresses = [f"unit{index}@example.invalid" for index in range(count)]
+    text = "Contact <" + joiner.join(addresses) + ">; rent $1,234.50 on 2027-04-01."
+    redacted = redact_text(text)
+    assert all(address not in redacted for address in addresses)
+    assert "@" not in redacted
+    assert redacted.count("[EMAIL]") == count
+    assert redacted.startswith("Contact <")
+    assert redacted.endswith(">; rent $1,234.50 on 2027-04-01.")
+    assert redact_text(redacted) == redacted
+
+
+def test_adjacent_emails_do_not_remove_unmatched_separators_or_expand_grammar() -> None:
+    text = "unit@example.invalid; another@example.invalid — unit@exämple.invalid"
+    expected = "[EMAIL]; [EMAIL] — unit@exämple.invalid"
+    assert redact_text(text) == expected
+    assert redact_text(expected) == expected
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "The current rent is $1,234.50, proposed $1,259.80, effective 2027-04-01.",
@@ -256,7 +330,7 @@ def test_policy_hash_is_canonical_stable_and_independent_of_inputs(
 
 
 @pytest.mark.parametrize(
-    "key", ["version", "patterns", "flags", "order", "placeholders", "currency"]
+    "key", ["version", "patterns", "flags", "order", "placeholders", "email_processing", "currency"]
 )
 def test_every_policy_component_changes_derived_hash(key: str) -> None:
     material = guards._policy_manifest()

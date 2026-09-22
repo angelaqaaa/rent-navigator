@@ -369,6 +369,109 @@ def test_s06_typed_phone_shaped_cents_never_enter_regex_redaction(
     assert_count_matches_generation(harness.fake)
 
 
+@pytest.mark.parametrize("path", ["extraction", "question"])
+@pytest.mark.parametrize(
+    ("contact_text", "sentinels", "protected_amount"),
+    [
+        (
+            "The fee is $1 416-555-0123 is the contact number.",
+            ("416-555-0123",),
+            "$1 [PHONE]",
+        ),
+        (
+            "Rent is CAD 1 416-555-0123; call this number.",
+            ("416-555-0123",),
+            "CAD 1 [PHONE]",
+        ),
+        (
+            "Contact unit@example.invalid/another@example.invalid.",
+            ("unit@example.invalid", "another@example.invalid"),
+            None,
+        ),
+        (
+            "Contact unit@example.invalid+another@example.invalid.",
+            ("unit@example.invalid", "another@example.invalid"),
+            None,
+        ),
+    ],
+    ids=["dollar-overlap", "cad-overlap", "slash-emails", "plus-emails"],
+)
+def test_contact_combinations_redacted_in_first_provider_payload(
+    corpus: Corpus,
+    caplog: pytest.LogCaptureFixture,
+    path: str,
+    contact_text: str,
+    sentinels: tuple[str, ...],
+    protected_amount: str | None,
+) -> None:
+    preserved_text = (
+        "The current rent is $1,234.50, the proposed rent is $1,259.80, effective 2027-04-01. "
+        "Explicit amounts remain $4165550123.00 and CAD 4165550123.00."
+    )
+    raw_text = f"{contact_text} {preserved_text}"
+    request = QuestionRequest(attempt_id=uuid4(), mode="question", question=raw_text)
+    fake = RecordingMessages(
+        [synthetic_message() if path == "extraction" else final_message([corpus.chunks[0].id])]
+    )
+    harness = Harness(request, corpus, fake)
+    stream = StringIO()
+    redactor_inputs: list[str] = []
+
+    def redact_once(text: str) -> str:
+        redactor_inputs.append(text)
+        fake.events.append("redact")
+        return redact_text(text)
+
+    if path == "extraction":
+        context = TraceContext(
+            **{
+                **harness.context.model_dump(),
+                "phase": "extraction",
+                "trace_id": uuid4(),
+                "config_hash": extraction_config_hash(),
+            }
+        )
+        trace = TraceRecorder(context, MetadataSink(stream))
+        result = asyncio.run(
+            extract_letter(
+                ExtractRequest(attempt_id=request.attempt_id, letter=raw_text),
+                provider=ProviderAdapter(fake, budget=SpendLedger(Decimal("0.1"))),
+                trace=trace,
+                redact=redact_once,
+                deadline=Deadline.start(),
+            )
+        )
+        trace.finish("ok")
+        assert result == Extraction(
+            current_cents=123450, proposed_cents=125980, effective_on=date(2027, 4, 1)
+        )
+    else:
+        asyncio.run(harness.run(redact=redact_once))
+
+    assert redactor_inputs == [raw_text]
+    assert fake.events.index("redact") < fake.events.index("count")
+    assert len(fake.counts) == len(fake.creates) == 1
+    assert_count_matches_generation(fake)
+    for parameters in (*fake.counts, *fake.creates):
+        sent_text = (
+            parameters["messages"][0]["content"]
+            if path == "extraction"
+            else payload_of(parameters)["question"]
+        )
+        assert preserved_text in sent_text
+        for sentinel in sentinels:
+            assert sentinel not in json.dumps(parameters)
+        if protected_amount is not None:
+            assert protected_amount in sent_text
+        else:
+            assert sent_text.count("[EMAIL]") == 2
+        assert redact_text(sent_text) == sent_text
+
+    metadata_and_logs = stream.getvalue() + harness.stream.getvalue() + caplog.text
+    for sentinel in (*sentinels, raw_text, preserved_text):
+        assert sentinel not in metadata_and_logs
+
+
 def test_s07_excluded_scope_keeps_actual_unsupported_tool_result(
     cases: dict[str, SecurityCase],
     corpus: Corpus,

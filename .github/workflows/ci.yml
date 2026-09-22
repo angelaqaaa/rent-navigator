@@ -48,6 +48,8 @@ jobs:
           cd /tmp
           "$RUNNER_TEMP/rent-navigator-wheel/bin/python" \
             "$GITHUB_WORKSPACE/tests/smoke_corpus.py" --checkout-root "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/rent-navigator-wheel/bin/python" -m rent_navigator.eval validate-gold \
+            --data-dir "$GITHUB_WORKSPACE/eval"
 
   docker:
     runs-on: ubuntu-24.04
@@ -90,3 +92,104 @@ jobs:
             --workdir /tmp \
             --volume "$GITHUB_WORKSPACE/tests/smoke_corpus.py:/tmp/smoke_corpus.py:ro" \
             rent-navigator:ci python /tmp/smoke_corpus.py --checkout-root /app
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            --workdir /tmp --volume "$GITHUB_WORKSPACE/eval:/tmp/eval:ro" \
+            rent-navigator:ci python -m rent_navigator.eval validate-gold --data-dir /tmp/eval
+
+  offline-eval-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      manifest-sha256: ${{ steps.identity.outputs.manifest-sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Execute the existing security boundary suite
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          uv run --locked pytest tests/test_security_pipeline.py \
+            --junitxml="$RUNNER_TEMP/security.xml"
+      - name: Run approved exact cases and deterministic retrieval
+        if: always()
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          uv run --locked python -m rent_navigator.eval offline \
+            --data-dir eval --output-dir "$RUNNER_TEMP/offline-artifacts" \
+            --source-sha "$SOURCE_COMMIT" --base-sha "$BASE_SHA" \
+            --security-report "$RUNNER_TEMP/security.xml" --lockfile uv.lock
+      - name: Record producer manifest identity
+        id: identity
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/offline-artifacts/manifest.json"; then
+            digest=$(sha256sum "$RUNNER_TEMP/offline-artifacts/manifest.json" | cut -d ' ' -f 1)
+            printf 'manifest-sha256=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Preserve complete or failed offline evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: offline-${{ env.SOURCE_COMMIT }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/offline-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+
+  offline-eval:
+    if: always()
+    needs: [checks, docker, offline-eval-run]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require every prerequisite to succeed
+        env:
+          PREREQUISITES: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          prerequisites = json.loads(os.environ["PREREQUISITES"])
+          expected = {"checks", "docker", "offline-eval-run"}
+          if set(prerequisites) != expected or any(job["result"] != "success" for job in prerequisites.values()):
+              raise SystemExit("Offline acceptance requires every prerequisite to succeed.")
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: offline-${{ env.SOURCE_COMMIT }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/offline-artifacts
+          digest-mismatch: error
+      - name: Verify source, approval, evidence and exact artifact contents
+        env:
+          MANIFEST_SHA256: ${{ needs.offline-eval-run.outputs.manifest-sha256 }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+          OFFLINE_RESULT: ${{ needs.offline-eval-run.result }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          prerequisites=$(python3 -c 'import json, os; print(json.dumps({"checks": os.environ["CHECKS_RESULT"], "docker": os.environ["DOCKER_RESULT"], "offline-eval-run": os.environ["OFFLINE_RESULT"]}))')
+          uv run --locked python -m rent_navigator.eval verify-offline \
+            --data-dir eval --output-dir "$RUNNER_TEMP/offline-artifacts" \
+            --source-sha "$SOURCE_COMMIT" --base-sha "$BASE_SHA" \
+            --manifest-sha256 "$MANIFEST_SHA256" --prerequisites "$prerequisites" \
+            --lockfile uv.lock

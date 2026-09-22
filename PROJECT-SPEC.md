@@ -29,6 +29,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | Actor input preflight/reservation 15k/16k; judge 7k/8k | Trim evidence; add per-round budgets | WP6 counted 12,289 tokens with complete evidence; retain sources and simple model-level accounting within $50 |
 | Server-formatted CAD context for rent explanations | Leave cents conversion to generated prose | A real response confused cents with dollars and the rent ceiling with the increase; preserve exact amounts and meanings |
 | Pattern redaction of free text; additive test injection | Rewrite typed facts; replace corpus chunks | Preserve confirmed money and evidence identity while testing payload privacy and hostile context |
+| Owner-approved gold hash; shared-operation measurement | Implicit gold approval; a separate measurement service | Freeze the independent oracle before scoring and reuse serving behavior within the deadline |
 
 These freshly justify adopted reference patterns; its domain, thresholds and schedule are discarded. Review amendments also freeze `max(28, B−2)`: the former N=16 formula reduced to a constant 28 and did not compare meaningfully with B.
 
@@ -83,7 +84,7 @@ Exact tool/extraction scoring plus one blind structured judge: factual support u
 
 Collection at clean commit S: same Docker image/machine, three warm-ups/arm, five full runs/arm, serial seed-42 order, alternating arms, no cache. Baseline removes retrieved context and citation enforcement, retaining tools/model/budgets. Letter mismatches fail without correction. Only admission quotas are disabled.
 
-Report **X/Y = successes/80 attempts**, counts, per-run ranges, tool/Q&A breakdown; hallucinated answered outputs/answered outputs plus errors/refusals; nearest-rank **p50/p95** for all 80 production attempts; **cost/100 = 100 × serving token cost/attempts**, including extraction. Judge/hosting costs are separate. Trace all failures; missing usage makes the cost claim incomplete. Audit first-run answers for all cases/both arms plus all flagged hallucinations; publish agreement/discrepancies. Exact protocol: annex §9.
+Report **X/Y = successes/80 attempts**, counts, per-run ranges, tool/Q&A breakdown; hallucinated answered outputs/answered outputs plus errors/refusals; nearest-rank **p50/p95** for all 80 production attempts, measured at the warm-local serving-operation boundary (excluding HTTP/browser transport); **cost/100 = 100 × serving token cost/attempts**, including extraction. Judge/hosting costs are separate. Trace all failures; missing usage makes the cost claim incomplete. Audit first-run answers for all cases/both arms plus all flagged hallucinations; publish agreement/discrepancies. Exact protocol: annex §9.
 
 ### 7. Ordered cuts
 

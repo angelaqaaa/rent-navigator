@@ -113,28 +113,49 @@ def test_offline_entry_records_one_native_roundtrip_and_matching_costs(
         assert "extra_body" not in counted["request"]
 
 
-def test_synthetic_request_and_redactor_restrict_the_anonymous_context() -> None:
+def test_synthetic_request_validation_restricts_the_anonymous_context() -> None:
     first, second = cli.synthetic_request(), cli.synthetic_request()
     assert first.attempt_id != second.attempt_id
     assert first.facts == second.facts
-    payload = json.dumps(
-        {
-            "mode": first.mode,
-            "confirmed": first.confirmed,
-            "facts": first.facts.model_dump(mode="json"),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
+    assert cli._validate_synthetic_request(first) == first
+    changed = first.model_copy(
+        update={"facts": first.facts.model_copy(update={"current_cents": 200001})}
     )
-    assert cli.synthetic_redactor(payload) == payload
-    for arbitrary in (
-        "private question",
-        payload + " ",
-        payload.replace("200000", "200001"),
-        first.model_dump_json(),
-    ):
-        with pytest.raises(ValueError, match="preset synthetic context"):
-            cli.synthetic_redactor(arbitrary)
+    with pytest.raises(ValueError, match="preset synthetic request"):
+        cli._validate_synthetic_request(changed)
+
+
+@pytest.mark.parametrize("mutation", ["changed_fact", "private_value", "question"])
+def test_request_allowlist_prevents_capture_independently_of_redaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    request = cli.synthetic_request()
+    sentinel = "SYNTHETIC PRIVATE REQUEST SENTINEL"
+    invalid: object
+    if mutation == "question":
+        from rent_navigator.models import QuestionRequest
+
+        invalid = QuestionRequest(mode="question", attempt_id=request.attempt_id, question=sentinel)
+    else:
+        value = 200001 if mutation == "changed_fact" else sentinel
+        invalid = request.model_copy(
+            update={"facts": request.facts.model_copy(update={"current_cents": value})}
+        )
+    monkeypatch.setattr(cli, "synthetic_request", lambda: invalid)
+    monkeypatch.setattr(cli, "create_client", _reject_client)
+    monkeypatch.setattr(cli, "redact_text", lambda text: text)
+    evidence = tmp_path / mutation
+    report = asyncio.run(cli.run_smoke(source_commit="a" * 40, evidence_dir=evidence))
+    assert report["mechanical_acceptance"] == "INCOMPLETE"
+    assert report["error"] == "provider_error"
+    assert report["count_attempts"] == report["generation_attempts"] == 0
+    assert "synthetic_request" not in report
+    assert not (evidence / "metadata.jsonl").exists()
+    assert not (evidence / "requests.jsonl").exists()
+    assert not (evidence / "responses.jsonl").exists()
+    assert sentinel not in (evidence / "report.json").read_text()
 
 
 def test_entry_refuses_overwrite_without_modifying_prior_evidence(tmp_path: Path) -> None:

@@ -3,6 +3,7 @@
 import asyncio
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any, Final, Literal, cast
 
@@ -18,6 +19,7 @@ from anthropic.types import (
 from pydantic import TypeAdapter, ValidationError
 
 from rent_navigator.corpus import Chunk, Corpus
+from rent_navigator.guards import REDACTION_POLICY_HASH
 from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit
 from rent_navigator.models import (
     ASK_REQUEST_ADAPTER,
@@ -144,6 +146,22 @@ _CITATION_SYSTEM: Final = (
 _SELECTION_CHOICE: Final[ToolChoiceParam] = {"type": "any", "disable_parallel_tool_use": True}
 _FINAL_CHOICE: Final[ToolChoiceParam] = {"type": "none"}
 _ANSWER_SEPARATOR: Final = "\n"
+_RETRIEVAL_SIDECAR_POLICY: Final = {
+    "version": 1,
+    "key": "untrusted_retrieved_text",
+    "max_characters": 4000,
+    "placement": "production user context beside unchanged canonical evidence",
+    "baseline": "no retrieval or sidecar",
+    "identity": "no evidence ID, citation permission, rank or metadata",
+}
+
+
+@dataclass(frozen=True)
+class RetrievalContext:
+    """Internal test context; the sidecar is untrusted text, never a source chunk."""
+
+    hits: tuple[SearchHit, ...]
+    untrusted_text: str | None
 
 
 def _json(value: object) -> str:
@@ -198,6 +216,8 @@ def agent_config_hash(mode: Mode, arm: Arm = "production") -> str:
         "version": 2,
         "mode": mode,
         "arm": arm,
+        "redaction_hash": REDACTION_POLICY_HASH,
+        "retrieval_sidecar_policy": _RETRIEVAL_SIDECAR_POLICY,
         "prompts": {
             "base": _BASE_SYSTEM,
             "question": _QUESTION_SYSTEM,
@@ -244,10 +264,20 @@ def _passages(chunks: tuple[Chunk, ...]) -> list[dict[str, str]]:
 
 
 def _retrieve(
-    query: str, retrieve: Callable[[str], tuple[SearchHit, ...]], corpus: Corpus
-) -> tuple[Chunk, ...]:
-    hits = retrieve(query)
-    if not isinstance(hits, tuple) or len(hits) > 5:
+    query: str,
+    retrieve: Callable[[str], tuple[SearchHit, ...] | RetrievalContext],
+    corpus: Corpus,
+) -> tuple[tuple[Chunk, ...], str | None]:
+    result = retrieve(query)
+    hits = result.hits if isinstance(result, RetrievalContext) else result
+    sidecar = result.untrusted_text if isinstance(result, RetrievalContext) else None
+    if sidecar is not None and (not isinstance(sidecar, str) or not 1 <= len(sidecar) <= 4000):
+        raise ProviderFailure("provider_error")
+    if (
+        not isinstance(hits, tuple)
+        or len(hits) > 5
+        or any(not isinstance(hit, SearchHit) for hit in hits)
+    ):
         raise ProviderFailure("provider_error")
     chunks = tuple(Chunk.model_validate(hit.chunk) for hit in hits)
     if len({chunk.id for chunk in chunks}) != len(chunks):
@@ -255,7 +285,7 @@ def _retrieve(
     for chunk in chunks:
         if corpus.chunk(chunk.id) != chunk:
             raise ProviderFailure("provider_error")
-    return chunks
+    return chunks, sidecar
 
 
 def _tool_call(response: Message, request: NoticeRequest | RentRequest) -> ToolUseBlock:
@@ -340,7 +370,7 @@ async def answer(
     *,
     provider: ProviderAdapter,
     corpus: Corpus,
-    retrieve: Callable[[str], tuple[SearchHit, ...]],
+    retrieve: Callable[[str], tuple[SearchHit, ...] | RetrievalContext],
     redact: Callable[[str], str],
     deadline: Deadline,
     context: TraceContext,
@@ -381,9 +411,6 @@ async def answer(
                     payload["question"] = redacted
                 else:
                     payload.update(confirmed=True, facts=request.facts.model_dump(mode="json"))
-                    redacted = redact(_json(payload))
-                    if not isinstance(redacted, str) or json.loads(redacted) != payload:
-                        raise ProviderFailure("provider_error")
                 deadline.check()
             chunks: tuple[Chunk, ...] = ()
             if arm == "production":
@@ -396,9 +423,11 @@ async def answer(
                         if request.mode == "notice"
                         else RENT_QUERY
                     )
-                    chunks = _retrieve(query, retrieve, corpus)
+                    chunks, sidecar = _retrieve(query, retrieve, corpus)
                     retrieved_ids = tuple(chunk.id for chunk in chunks)
                     payload["evidence"] = _passages(chunks)
+                    if sidecar is not None:
+                        payload["untrusted_retrieved_text"] = sidecar
                     deadline.check()
             messages: list[MessageParam] = [{"role": "user", "content": _json(payload)}]
             allowed = set(retrieved_ids)

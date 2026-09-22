@@ -15,6 +15,7 @@ from pydantic import TypeAdapter
 
 from rent_navigator.corpus import load_corpus
 from rent_navigator.extract import extract_letter, extraction_config_hash
+from rent_navigator.guards import redact_text
 from rent_navigator.model_policy import MODEL_POLICIES
 from rent_navigator.models import Extraction, ExtractRequest, SourceCommit
 from rent_navigator.provider import (
@@ -52,10 +53,10 @@ CASES = (
 
 
 def synthetic_redactor(letter: str) -> str:
-    """Accept only the preset anonymous fixtures until the real redactor exists."""
+    """Enforce the two-letter artifact allowlist, then apply the production policy."""
     if letter not in {case[1] for case in CASES}:
         raise ValueError("Only preset synthetic fixtures are permitted")
-    return letter
+    return redact_text(letter)
 
 
 class _OfflineMessages:

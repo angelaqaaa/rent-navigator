@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, and bounded analysis orchestration with a restricted development CLI. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, bounded analysis orchestration, pattern redaction, and eight offline security fixtures. Development CLIs accept only fixed synthetic inputs. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -99,7 +99,11 @@ Usage is captured before output validation. Missing/partial usage or unpriced bi
 
 `model_policy.MODEL_POLICIES` supplies admission, accounting and runner budgets from one immutable table. Actor calls reserve **US$0.019**, judge calls **US$0.024**, at the unchanged token rates. The limits apply uniformly by model across extraction, questions, tool selection, final answers and both internal arms. Configuration and pricing hashes cover these model limits; historical evidence retains its original reservations and identities.
 
-The formal email/phone/postal redactor is **not implemented**. The extraction smoke accepts only two fixed anonymous synthetic letters; arbitrary real letters are not supported. HTTP business routes and the full safety pipeline remain future work.
+`guards.redact_text` replaces supported email, NANP phone and Canadian postal patterns with `[EMAIL]`, `[PHONE]` and `[POSTAL]`, in that order. It preserves unmatched text and is idempotent. Letters and questions are redacted before the first token count, with the same redacted content used for generation. Confirmed facts have no free-text fields and are serialized unchanged; their numeric values never enter regex redaction. The extraction smoke still enforces its two-letter allowlist before applying this policy; arbitrary letters are not accepted by the CLI.
+
+The policy supports ASCII dot-atom email addresses with dotted domains, ten-digit NANP numbers with optional country code/area parentheses/extensions, and Canadian postal codes in compact, horizontal-space or single-hyphen form. Horizontal whitespace is space, tab, nonbreaking space or narrow nonbreaking space; patterns do not join lines. Explicit `$`, `C$` and `CAD` decimal amounts are protected, including `$4165550123.00`; an unlabelled ten-digit NANP token is treated as a phone number. Dates, ordinary rents and percentages remain intact. Names, street addresses, obfuscated contacts, international phone formats and Unicode hyphens are outside this policy. Pattern redaction does not establish anonymity.
+
+`REDACTION_POLICY_HASH` identifies the fixed pattern strings, flags, order, placeholders and currency policy. Extraction and analysis configuration hashes include it; request contents never enter these hashes.
 
 Run the explicit offline smoke from a clean committed checkout, using a new output directory each time:
 
@@ -128,7 +132,11 @@ Rent final requests also receive exact CAD display strings for the confirmed cur
 
 The trusted internal `baseline` arm omits retrieval and evidence passages while preserving the same facts, tools, model, budgets and deadline. Citations may be empty; supplied IDs must still belong to executed rules. It is tested with fakes only and is not a public request or CLI option. `agent_config_hash(mode, arm)` identifies fixed prompts, tool/output schemas, stage choices, display text and provider configuration without request text or identifiers.
 
-The CLI accepts exactly one preset anonymous confirmed-rent fixture: $2,000 to $2,048, effective September 1, 2026, hand-served July 3, with a September 1, 2025 previous increase, controlled status and N1. Its expected result has both notice and guideline failures, a 60-day notice interval and an exact $2,042 cap. It accepts no arbitrary question, letter, file or standard-input content. Until the formal redactor exists, its mandatory redaction boundary admits only that exact preset fact context.
+The CLI accepts exactly one preset anonymous confirmed-rent fixture: $2,000 to $2,048, effective September 1, 2026, hand-served July 3, with a September 1, 2025 previous increase, controlled status and N1. Its expected result has both notice and guideline failures, a 60-day notice interval and an exact $2,042 cap. It accepts no arbitrary question, letter, file or standard-input content. The runner validates the fixed request before recording any request payload, independently of redaction.
+
+`agent.RetrievalContext(hits, untrusted_text)` is an internal test seam alongside the ordinary retrieval tuple. Production analysis places its optional 1–4,000-character sidecar under `untrusted_retrieved_text` in user context beside unchanged canonical excerpts. It receives no evidence identity or citation permission and is absent from trace metadata. Full preflight includes it; the baseline never retrieves or receives it. No public request field or CLI flag exposes this seam. Its fixed policy is included in `agent_config_hash`.
+
+`security_cases.load_security_cases(corpus=...)` explicitly loads eight ordered, packaged synthetic cases, S01–S08, and validates their canonical evidence references. `security_cases_hash()` hashes the exact resource bytes. Offline tests drive the real extraction and analysis boundaries for unauthorized tools, forged citations, strict output/disclaimer ownership, altered confirmed facts, hostile retrieval, contact redaction, excluded scope and fixed refusal text. These fixtures are not gold labels or evaluation scores. Safe fake outputs do not establish instruction obedience, affiliation claims, narrative false-pass prevention or advice avoidance. **Seven real-model safety cases remain pending WP9**; there is no semantic safety guarantee or live regression gate.
 
 From a clean committed checkout:
 
@@ -189,7 +197,9 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `notice.notice_deadline_check(facts, *, corpus)` returns the existing `ToolResult` with four ordered notice checks, partial derived fields, and resolving rule IDs.
 - `rent.rent_increase_check(facts, *, corpus)` returns the existing `ToolResult` with seven ordered checks, exact decimal caps, partial derived fields, and resolving rule IDs. Its provider-visible arguments remain exactly `RentFacts`.
 - `provider.ProviderAdapter` accepts an injected async messages port and batch budget. `Deadline` is shared across calls, and `configuration_hash` identifies fixed settings and request schemas without including message contents.
-- `extract.extract_letter(request, *, provider, trace, redact, deadline)` returns the existing `Extraction`; `extraction_config_hash()` covers its fixed prompt and transformed schema. Composition with the real SDK uses `cast(MessagesPort, client.messages)` at this tested boundary.
+- `extract.extract_letter(request, *, provider, trace, redact, deadline)` returns the existing `Extraction`; `extraction_config_hash()` covers its fixed prompt, transformed schema and redaction policy. Composition with the real SDK uses `cast(MessagesPort, client.messages)` at this tested boundary.
 - `agent.answer(...)` returns the existing `AskResponse` and owns analysis trace completion. `agent_config_hash(mode, arm)` supplies its configuration identity; extraction keeps its separate caller-owned trace contract.
 
-HTTP request integration, formal redaction, evaluation and deployment remain future work.
+- `guards.redact_text(text)` applies the versioned free-text policy; `security_cases.load_security_cases(corpus=...)` returns the eight strict synthetic fixtures without executing them.
+
+HTTP request integration, evaluation, real-model security verification and deployment remain future work.

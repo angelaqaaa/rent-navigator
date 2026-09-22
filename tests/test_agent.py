@@ -325,7 +325,7 @@ def test_fact_native_roundtrip_exact_tool_and_all_evidence(
     response = asyncio.run(harness.run())
     assert harness.queries == [NOTICE_QUERY if mode == "notice" else RENT_QUERY]
     assert len(fake.creates) == len(fake.counts) == 2
-    assert fake.events.index("redact") < fake.events.index("count")
+    assert "redact" not in fake.events
     assert fake.creates[0]["tools"] == fake.creates[1]["tools"] == provider_tool_definitions()
     assert fake.creates[0]["tool_choice"] == {"type": "any", "disable_parallel_tool_use": True}
     assert "output_config" not in fake.creates[0]
@@ -617,9 +617,12 @@ class Clock:
 def test_one_shared_deadline_covers_preparation_and_both_calls(
     corpus: Corpus, boundary: str
 ) -> None:
-    request = request_for()
+    request = request_for("question" if boundary == "redaction" else "rent")
     clock = Clock()
-    fake = RecordingMessages([selection(request), final_message([corpus.chunks[0].id])])
+    fake = RecordingMessages(
+        ([] if boundary == "redaction" else [selection(request)])
+        + [final_message([corpus.chunks[0].id])]
+    )
     harness = Harness(request, corpus, fake)
 
     def redact(text: str) -> str:
@@ -683,8 +686,12 @@ def test_cancellation_propagates_and_finishes_once_with_inflight_reservation(
 def test_local_failures_have_safe_error_and_exactly_one_endpoint(
     corpus: Corpus, failure: str
 ) -> None:
-    request = request_for()
-    harness = Harness(request, corpus, RecordingMessages([selection(request)]))
+    request = request_for("question" if failure == "redactor" else "rent")
+    harness = Harness(
+        request,
+        corpus,
+        RecordingMessages([] if failure == "redactor" else [selection(request)]),
+    )
     kwargs: dict[str, Any] = {}
 
     def explode(_value: str) -> Any:
@@ -889,22 +896,28 @@ def test_actual_calculator_is_invoked_exactly_once_with_confirmed_facts(
 
 
 @pytest.mark.parametrize("bad_redactor", ["altered", "non_string", "invalid_json"])
-def test_fact_redaction_cannot_alter_confirmed_semantics(corpus: Corpus, bad_redactor: str) -> None:
-    harness = Harness(request_for(), corpus, RecordingMessages([]))
+def test_fact_redaction_callback_is_not_invoked(corpus: Corpus, bad_redactor: str) -> None:
+    request = request_for()
+    harness = Harness(
+        request,
+        corpus,
+        RecordingMessages([selection(request), final_message([corpus.chunks[0].id])]),
+    )
+    calls: list[str] = []
 
     def redact(text: str) -> Any:
+        calls.append(text)
         if bad_redactor == "non_string":
             return None
         if bad_redactor == "invalid_json":
             return "not JSON"
         return text.replace("204800", "204200")
 
-    with pytest.raises(ProviderFailure) as caught:
-        asyncio.run(harness.run(redact=redact))
-    assert caught.value.code == "provider_error"
-    assert not harness.fake.counts
-    assert not harness.fake.creates
-    assert harness.endpoint().actual_cost_usd == Decimal(0)
+    response = asyncio.run(harness.run(redact=redact))
+    assert response.tool_result == expected_tool(request, corpus)
+    assert not calls
+    assert len(harness.fake.counts) == len(harness.fake.creates) == 2
+    assert harness.endpoint().actual_cost_usd == Decimal("0.003")
 
 
 @pytest.mark.parametrize("retrieval", ["duplicates", "too_many", "changed_chunk"])

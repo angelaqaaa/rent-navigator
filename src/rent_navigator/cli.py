@@ -15,6 +15,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from rent_navigator.agent import TOOL_STATUS_TEXT, agent_config_hash, answer
 from rent_navigator.corpus import Corpus, load_corpus
+from rent_navigator.guards import redact_text
 from rent_navigator.index import build_index, search
 from rent_navigator.model_policy import MODEL_POLICIES
 from rent_navigator.models import AskResponse, RentRequest, SourceCommit
@@ -36,8 +37,7 @@ from rent_navigator.trace import (
 )
 
 
-def synthetic_request() -> RentRequest:
-    """Create the sole permitted scenario with a fresh correlation identifier."""
+def _preset_request() -> RentRequest:
     return RentRequest.model_validate_json(
         json.dumps(
             {
@@ -61,20 +61,17 @@ def synthetic_request() -> RentRequest:
     )
 
 
-def synthetic_redactor(value: str) -> str:
-    """Permit only the exact preset anonymous fact context, never arbitrary text."""
-    expected = json.dumps(
-        {
-            "mode": "rent",
-            "confirmed": True,
-            "facts": synthetic_request().facts.model_dump(mode="json"),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    if value != expected:
-        raise ValueError("Only the preset synthetic context is permitted")
-    return value
+def synthetic_request() -> RentRequest:
+    """Create the sole permitted scenario with a fresh correlation identifier."""
+    return _preset_request()
+
+
+def _validate_synthetic_request(request: RentRequest) -> RentRequest:
+    """Enforce the artifact allowlist independently of free-text redaction."""
+    validated = RentRequest.model_validate_json(request.model_dump_json(warnings=False))
+    if validated.facts != _preset_request().facts:
+        raise ValueError("Only the preset synthetic request is permitted")
+    return validated
 
 
 def _json_value(value: object) -> object:
@@ -267,7 +264,7 @@ async def run_smoke(
         report["corpus_hash"] = corpus.corpus_hash
         index = evidence_dir / "index.sqlite3"
         build_index(index, corpus)
-        request = synthetic_request()
+        request = _validate_synthetic_request(synthetic_request())
         report["synthetic_request"] = request.model_dump(mode="json")
         messages: MessagesPort
         if live:
@@ -284,7 +281,7 @@ async def run_smoke(
                 retrieve=lambda query: search(
                     index, query, expected_corpus_hash=corpus.corpus_hash
                 ),
-                redact=synthetic_redactor,
+                redact=redact_text,
                 deadline=Deadline.start(),
                 context=TraceContext(
                     attempt_id=request.attempt_id,

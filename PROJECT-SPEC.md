@@ -28,6 +28,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | Paid single-service deployment | Sleeping free tier | Reliable recruiting demo with minimal operations |
 | Actor input preflight/reservation 15k/16k; judge 7k/8k | Trim evidence; add per-round budgets | WP6 counted 12,289 tokens with complete evidence; retain sources and simple model-level accounting within $50 |
 | Server-formatted CAD context for rent explanations | Leave cents conversion to generated prose | A real response confused cents with dollars and the rent ceiling with the increase; preserve exact amounts and meanings |
+| Pattern redaction of free text; additive test injection | Rewrite typed facts; replace corpus chunks | Preserve confirmed money and evidence identity while testing payload privacy and hostile context |
 
 These freshly justify adopted reference patterns; its domain, thresholds and schedule are discarded. Review amendments also freeze `max(28, B−2)`: the former N=16 formula reduced to a constant 28 and did not compare meaningfully with B.
 
@@ -62,7 +63,7 @@ Pin on README, page and every answer:
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of {snapshot_date}; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
-No recommendations to pay, withhold, file or challenge. Redact email/phone/postal patterns before any provider request; warn users to remove names/addresses manually. Persist metadata only; synthetic evaluation artifacts are allowed.
+No recommendations to pay, withhold, file or challenge. Redact email/phone/postal patterns in free text before any provider request; preserve typed facts under annex §5 and warn users to remove names/addresses manually. Persist metadata only; synthetic evaluation artifacts are allowed.
 
 Builder may choose private helpers and test organization. Do not change contracts, dependencies, sources, models, scope, labels, thresholds, disclaimer or budgets. Read both documents and prior PR evidence each session. Escalate unavailable dependencies, legal contradictions, material ambiguity, failed acceptance or a three-hour overrun. Conventional lowercase commits/PR titles; no assistant attribution or co-author lines.
 

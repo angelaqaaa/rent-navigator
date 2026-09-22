@@ -265,7 +265,7 @@ def test_invalid_output_is_not_repaired_and_billed_usage_survives(
     assert records[1].usage_complete is True
     assert records[1].actual_cost_usd == Decimal("0.0015")
     assert endpoint.actual_cost_usd == provider_cost_totals(records).actual_cost_usd
-    assert endpoint.reserved_cost_usd == Decimal("0.011")
+    assert endpoint.reserved_cost_usd == Decimal("0.019")
     logs = stream.getvalue() + caplog.text
     assert RAW_SENTINEL not in logs
     assert "SYNTHETIC INVALID GENERATED SENTINEL" not in logs

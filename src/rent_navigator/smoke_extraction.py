@@ -5,7 +5,6 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -16,6 +15,7 @@ from pydantic import TypeAdapter
 
 from rent_navigator.corpus import load_corpus
 from rent_navigator.extract import extract_letter, extraction_config_hash
+from rent_navigator.model_policy import MODEL_POLICIES
 from rent_navigator.models import Extraction, ExtractRequest, SourceCommit
 from rent_navigator.provider import (
     Deadline,
@@ -87,6 +87,7 @@ async def run_smoke(
     # Refuse to overwrite a previous attempt, including an incomplete attempt.
     evidence_dir.mkdir(parents=True, exist_ok=False)
     corpus = load_corpus()
+    batch_reservation = 2 * MODEL_POLICIES[ACTOR_MODEL].reservation_usd
     report: dict[str, Any] = {
         "mode": "live_development" if live else "offline_synthetic",
         "source_commit": source_commit,
@@ -99,11 +100,11 @@ async def run_smoke(
         "generation_attempts": 0,
         "real_generation_attempts": 0,
         "live_acceptance": "NOT RUN" if not live else "INCOMPLETE",
-        "budget_reservation_limit_usd": "0.022",
+        "budget_reservation_limit_usd": format(batch_reservation, "f"),
         "purpose": "synthetic development verification; not release measurements",
     }
     client: AsyncAnthropic | None = None
-    ledger = SpendLedger(Decimal("0.022"))
+    ledger = SpendLedger(batch_reservation)
     try:
         messages: MessagesPort
         if live:

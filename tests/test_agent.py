@@ -355,7 +355,7 @@ def test_fact_native_roundtrip_exact_tool_and_all_evidence(
     assert endpoint.retrieved_evidence_ids == tuple(hit.chunk.id for hit in harness.hits)
     assert sum(stage.stage == "tool_execution" for stage in endpoint.stage_durations) == 1
     assert endpoint.actual_cost_usd == Decimal("0.003")
-    assert endpoint.reserved_cost_usd == Decimal("0.022")
+    assert endpoint.reserved_cost_usd == Decimal("0.038")
     assert "SYNTHETIC SELECTION NARRATION" not in harness.stream.getvalue()
 
 
@@ -578,7 +578,7 @@ def test_second_call_failure_retains_first_tool_retrieval_and_accounting(
         second = message([{"type": "text", "text": "not json"}])
     fake = RecordingMessages([selection(request), second])
     if failure == "budget":
-        fake.estimates = [1000, 7001]
+        fake.estimates = [1000, 15001]
     harness = Harness(request, corpus, fake)
     with pytest.raises(ProviderFailure) as caught:
         asyncio.run(harness.run())
@@ -595,7 +595,7 @@ def test_second_call_failure_retains_first_tool_retrieval_and_accounting(
     if failure in {"provider", "missing_usage"}:
         assert endpoint.actual_cost_usd is None
         assert not endpoint.usage_complete
-        assert endpoint.reserved_cost_usd == Decimal("0.022")
+        assert endpoint.reserved_cost_usd == Decimal("0.038")
         assert harness.ledger.stopped
     else:
         assert endpoint.actual_cost_usd == Decimal("0.0015" if failure == "budget" else "0.003")
@@ -669,7 +669,7 @@ def test_cancellation_propagates_and_finishes_once_with_inflight_reservation(
     endpoint = harness.endpoint()
     assert endpoint.response_code == "deadline_exceeded"
     assert endpoint.actual_cost_usd is None
-    assert endpoint.reserved_cost_usd == Decimal("0.011") * call_number
+    assert endpoint.reserved_cost_usd == Decimal("0.019") * call_number
     assert endpoint.tool_name == ("rent_increase_check" if call_number == 2 else None)
     assert harness.ledger.stopped
 

@@ -5,7 +5,6 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -17,6 +16,7 @@ from pydantic import BaseModel, TypeAdapter
 from rent_navigator.agent import TOOL_STATUS_TEXT, agent_config_hash, answer
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.index import build_index, search
+from rent_navigator.model_policy import MODEL_POLICIES
 from rent_navigator.models import AskResponse, RentRequest, SourceCommit
 from rent_navigator.provider import (
     Deadline,
@@ -246,6 +246,7 @@ async def run_smoke(
     if live and not billing_ready:
         raise ProviderFailure("budget_exhausted")
     evidence_dir.mkdir(parents=True, exist_ok=False)
+    batch_reservation = 2 * MODEL_POLICIES[ACTOR_MODEL].reservation_usd
     report: dict[str, Any] = {
         "mode": "live_development" if live else "offline_synthetic",
         "purpose": "one synthetic development fixture; not evaluation or performance measurement",
@@ -253,14 +254,14 @@ async def run_smoke(
         "config_hash": agent_config_hash("rent", "production"),
         "pricing_hash": PRICING_HASH,
         "started_at_utc": datetime.now(UTC).isoformat(),
-        "budget_reservation_limit_usd": "0.022",
+        "budget_reservation_limit_usd": format(batch_reservation, "f"),
         "mechanical_acceptance": "INCOMPLETE",
         "explanation_review": "PENDING" if live else "NOT APPLICABLE: synthetic response",
         "response": None,
     }
     client: AsyncAnthropic | None = None
     recording: _RecordingMessages | None = None
-    ledger = SpendLedger(Decimal("0.022"))
+    ledger = SpendLedger(batch_reservation)
     try:
         corpus = load_corpus()
         report["corpus_hash"] = corpus.corpus_hash

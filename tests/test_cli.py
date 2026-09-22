@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 import rent_navigator.cli as cli
 from rent_navigator.agent import TOOL_STATUS_TEXT, agent_config_hash
-from rent_navigator.corpus import load_corpus
+from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.index import inspect_index
 from rent_navigator.models import AskResponse
 from rent_navigator.provider import ProviderFailure
@@ -57,7 +57,7 @@ def test_offline_entry_records_one_native_roundtrip_and_matching_costs(
     assert report["config_hash"] == agent_config_hash("rent", "production")
     assert report["corpus_hash"] == corpus.corpus_hash
     assert report["pricing_hash"] == PRICING_HASH
-    assert report["budget_reservation_limit_usd"] == "0.022"
+    assert report["budget_reservation_limit_usd"] == "0.038"
     assert report["reforecast_required"] is False
     assert Decimal(report["batch_committed_usd"]) == Decimal("0.0004")
     response = AskResponse.model_validate_json(json.dumps(report["response"]))
@@ -83,7 +83,7 @@ def test_offline_entry_records_one_native_roundtrip_and_matching_costs(
     assert report["token_accounting"]["input_tokens"] == 200
     assert report["token_accounting"]["output_tokens"] == 40
     assert report["token_accounting"]["actual_cost_usd"] == "0.0004"
-    assert report["token_accounting"]["reserved_cost_usd"] == "0.022"
+    assert report["token_accounting"]["reserved_cost_usd"] == "0.038"
     assert all(record.source_commit == SOURCE_COMMIT for record in records)
     assert "current_cents" not in (evidence / "metadata.jsonl").read_text()
     requests = _jsonl(evidence / "synthetic_requests.jsonl")
@@ -239,7 +239,7 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
             if outcome == "first_count_error":
                 raise RuntimeError(_ERROR_SENTINEL)
             return MessageTokensCount(
-                input_tokens=7001
+                input_tokens=15001
                 if outcome == "second_count_overflow" and self.count_calls == 2
                 else 100
             )
@@ -330,7 +330,7 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
         assert report["token_accounting"]["usage_complete"] is False
         assert report["reforecast_required"] is True
         assert Decimal(report["batch_committed_usd"]) == (
-            Decimal("0.011") if generation_count == 1 else Decimal("0.0112")
+            Decimal("0.019") if generation_count == 1 else Decimal("0.0192")
         )
     else:
         assert report["token_accounting"]["usage_complete"] is True
@@ -340,8 +340,8 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
         assert records[-1].tool_name == "rent_increase_check"
         assert len(records[-1].check_statuses) == 7
     if outcome == "second_count_overflow":
-        assert report["preflight_estimates"] == [100, 7001]
-        assert report["token_accounting"]["reserved_cost_usd"] == "0.011"
+        assert report["preflight_estimates"] == [100, 15001]
+        assert report["token_accounting"]["reserved_cost_usd"] == "0.019"
         second_request = counted_requests[1]["request"]
         assert second_request["tool_choice"] == {"type": "none"}
         assert second_request["output_config"]["format"]["type"] == "json_schema"
@@ -411,3 +411,55 @@ def test_recording_boundary_caps_dispatch_and_excludes_transport_secrets(tmp_pat
         assert len(records) == 2
         assert all(set(row["request"]) == {"model", "system", "messages"} for row in records)
     assert _KEY_SENTINEL not in "\n".join(path.read_text() for path in tmp_path.iterdir())
+
+
+def test_offline_recorded_12289_second_count_preserves_complete_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replay only the retained token estimates through a synthetic provider."""
+    corpus = load_corpus()
+
+    class RecordedEstimateMessages(cli._OfflineMessages):
+        def __init__(self, corpus: Corpus) -> None:
+            super().__init__(corpus)
+            self.count_number = 0
+
+        async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+            estimate = (3414, 12289)[self.count_number]
+            self.count_number += 1
+            return MessageTokensCount(input_tokens=estimate)
+
+    monkeypatch.setattr(cli, "create_client", _reject_client)
+    monkeypatch.setattr(cli, "_OfflineMessages", RecordedEstimateMessages)
+    evidence = tmp_path / "recorded-estimate-offline"
+    report = asyncio.run(cli.run_smoke(source_commit=SOURCE_COMMIT, evidence_dir=evidence))
+    assert report["mode"] == "offline_synthetic"
+    assert report["mechanical_acceptance"] == "PASS"
+    assert report["preflight_estimates"] == [3414, 12289]
+    assert report["generation_attempts"] == report["count_attempts"] == 2
+    assert report["real_generation_attempts"] == 0
+    assert report["budget_reservation_limit_usd"] == "0.038"
+    assert report["token_accounting"]["reserved_cost_usd"] == "0.038"
+    # Usage is still the fake's billed usage, not the historical request's measurement.
+    assert report["token_accounting"]["actual_cost_usd"] == "0.0004"
+    assert not report["reforecast_required"]
+    counted = _jsonl(evidence / "synthetic_preflight_requests.jsonl")[1]["request"]
+    generated = _jsonl(evidence / "synthetic_requests.jsonl")[1]["request"]
+    assert counted["messages"] == generated["messages"]
+    assert counted["tools"] == generated["tools"]
+    assert counted["output_config"] == generated["output_config"]
+    messages = counted["messages"]
+    top_five = json.loads(messages[0]["content"])["evidence"]
+    result = json.loads(messages[2]["content"][0]["content"])
+    added = json.loads(messages[2]["content"][1]["text"])["evidence"]
+    required_ids = {item["id"] for item in top_five} | {
+        identifier for rule in result["rule_ids"] for identifier in corpus.rule(rule).evidence_ids
+    }
+    passages = top_five + added
+    assert len(top_five) == 5
+    assert len(passages) == len(required_ids) == 20
+    assert {item["id"] for item in passages} == required_ids
+    assert all(item["text"] == corpus.chunk(item["id"]).text for item in passages)
+    endpoint = _records(evidence)[-1]
+    assert endpoint.tool_name == "rent_increase_check"
+    assert endpoint.retrieved_evidence_ids == tuple(item["id"] for item in top_five)

@@ -26,6 +26,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | Same-tool baseline; blind judge and audit | Tool-free baseline/multiple judges | Isolate retrieval; expose judge disagreement |
 | N=16; twelve bounded packages | N=20; ten larger packages | Preserve six retrieval questions while splitting risky seams |
 | Paid single-service deployment | Sleeping free tier | Reliable recruiting demo with minimal operations |
+| Actor input preflight/reservation 15k/16k; judge 7k/8k | Trim evidence; add per-round budgets | WP6 counted 12,289 tokens with complete evidence; retain sources and simple model-level accounting within $50 |
 
 These freshly justify adopted reference patterns; its domain, thresholds and schedule are discarded. Review amendments also freeze `max(28, B−2)`: the former N=16 formula reduced to a constant 28 and did not compare meaningfully with B.
 
@@ -92,7 +93,7 @@ N=16 is already the pre-scoring scope cut. Further cuts, in order: **(1)** remov
 
 Reviews **12h**; kickoffs **3h**; gold/labels **5h**; audit **2h**; accounts/deploy **2h**; measurement/release **3.5h**; design/review/amendments **5h** = **32.5h**. Weekly totals September 20–26 / September 27–October 3 / October 4–10 / October 11–14: **10 / 9.5 / 9.5 / 3.5h** against **10 / 10 / 10 / 5h**. Slack: **0 / 0.5 / 0.5 / 1.5h**. Replace estimates with actual time; reviews/rework are not free. Builder time is separately **24–36h**.
 
-US$50: hosting **14**, API development/CI/measurement **16**, public demo **9**, contingency **11**. Prepay $25; disable automatic replenishment. Demo admission budget **$0.30/day for 30 days**; restart-independent bound is prepaid credit, not the in-memory counter. Annex §10 budgets the required runs at **$15.390**, with explicit token and batch limits.
+US$50: hosting **14**, API development/CI/measurement **21**, public demo **9**, contingency **6**. The WP6 context amendment reallocates $5 from contingency; target API prepayment is $30, with $25 confirmed and $5 still pending before further paid work. Disable automatic replenishment. Demo admission budget **$0.30/day for 30 days**; restart-independent bound is prepaid credit, not the in-memory counter. Annex §10 reconciles **$20.475** future reservations plus **$0.006081** incurred cost, leaving **$0.518919** within development $21.
 
 ### 9. Integrity
 

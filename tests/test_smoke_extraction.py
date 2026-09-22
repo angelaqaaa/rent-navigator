@@ -64,6 +64,21 @@ def test_synthetic_redactor_refuses_arbitrary_letters() -> None:
         smoke.synthetic_redactor("An arbitrary private letter must not pass this boundary")
 
 
+def test_letter_allowlist_runs_before_real_redaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import Mock
+
+    from rent_navigator.guards import redact_text
+
+    redactor = Mock(wraps=redact_text)
+    monkeypatch.setattr(smoke, "redact_text", redactor)
+    with pytest.raises(ValueError, match="preset synthetic"):
+        smoke.synthetic_redactor("unit@example.invalid")
+    redactor.assert_not_called()
+    for _, letter, _ in smoke.CASES:
+        assert smoke.synthetic_redactor(letter) == letter
+    assert redactor.call_count == 2
+
+
 @pytest.mark.parametrize(
     "outcome", ["success", "mismatch", "missing_usage", "refusal", "unavailable"]
 )

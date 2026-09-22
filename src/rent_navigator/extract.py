@@ -1,12 +1,15 @@
 """One structured extraction through an explicitly supplied redaction boundary."""
 
+import json
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Final
 
 from anthropic import transform_schema
 from anthropic.types import MessageParam, TextBlock
 from pydantic import ValidationError
 
+from rent_navigator.guards import REDACTION_POLICY_HASH
 from rent_navigator.models import Extraction, ExtractRequest
 from rent_navigator.provider import (
     Deadline,
@@ -30,10 +33,12 @@ EXTRACTION_SYSTEM: Final = (
 
 def extraction_config_hash() -> str:
     """Identify fixed behavior without incorporating any letter or attempt metadata."""
-    return configuration_hash(
+    provider_hash = configuration_hash(
         system=EXTRACTION_SYSTEM,
         output_schema=transform_schema(Extraction.model_json_schema()),
     )
+    policy = {"version": 1, "provider_hash": provider_hash, "redaction_hash": REDACTION_POLICY_HASH}
+    return sha256(json.dumps(policy, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 async def extract_letter(

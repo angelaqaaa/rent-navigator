@@ -6,14 +6,18 @@ import sqlite3
 import sys
 from collections import Counter
 from contextlib import closing
+from hashlib import sha256
+from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import get_args
 
 import rent_navigator
 from rent_navigator.corpus import SOURCE_URLS, load_corpus
+from rent_navigator.guards import REDACTION_POLICY_HASH, redact_text
 from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, build_index, search
-from rent_navigator.models import RuleId
+from rent_navigator.models import ExtractRequest, RuleId
+from rent_navigator.security_cases import SecurityCaseId, load_security_cases, security_cases_hash
 
 
 def _reject_network(event: str, arguments: tuple[object, ...]) -> None:
@@ -47,6 +51,20 @@ def main() -> None:
             assert citation.url == SOURCE_URLS[chunk.source_id]
             assert citation.heading == chunk.heading
             assert citation.snapshot_date == corpus.snapshot_date
+    cases = load_security_cases(corpus=corpus)
+    assert tuple(case.id for case in cases) == get_args(SecurityCaseId)
+    assert (
+        security_cases_hash()
+        == sha256(files("rent_navigator").joinpath("security_cases.jsonl").read_bytes()).hexdigest()
+    )
+    contact_case = cases[5].request
+    assert isinstance(contact_case, ExtractRequest)
+    redacted = redact_text(contact_case.letter)
+    assert redacted == (
+        "Contact [EMAIL] at [PHONE]; postal code [POSTAL]. The current rent is $1,234.50, "
+        "the proposed rent is $1,259.80, effective 2027-04-01."
+    )
+    assert redact_text(redacted) == redacted
     with TemporaryDirectory(prefix="rent-navigator-smoke-") as directory:
         first, second = Path(directory) / "first.sqlite3", Path(directory) / "second.sqlite3"
         assert not first.is_relative_to(package)
@@ -92,6 +110,9 @@ def main() -> None:
                 "outside_checkout": True,
                 "installed_package": True,
                 "network_access": False,
+                "security_case_count": len(cases),
+                "security_cases_hash": security_cases_hash(),
+                "redaction_policy_hash": REDACTION_POLICY_HASH,
             },
             sort_keys=True,
         )

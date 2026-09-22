@@ -4,6 +4,7 @@ import json
 import traceback
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
+from hashlib import sha256
 from io import StringIO
 from typing import Any
 from uuid import UUID
@@ -11,6 +12,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
+from rent_navigator.model_policy import MODEL_POLICIES, RequestedModel, policy_manifest
 from rent_navigator.trace import (
     ACTOR_MODEL,
     JUDGE_MODEL,
@@ -80,7 +82,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     actor = cost_for_usage(ACTOR_MODEL, usage)
     judge = cost_for_usage(JUDGE_MODEL, usage)
     assert actor.actual_cost_usd == Decimal("0.004069")
-    assert actor.reserved_cost_usd == Decimal("0.011")
+    assert actor.reserved_cost_usd == Decimal("0.019")
     assert judge.actual_cost_usd == Decimal("0.008138")
     assert judge.reserved_cost_usd == Decimal("0.024")
     assert actor.usage_complete is True
@@ -93,22 +95,55 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         None,
         Usage(input_tokens=None, output_tokens=None),
         Usage(input_tokens=100, output_tokens=None),
+        Usage(input_tokens=None, output_tokens=100),
     ],
 )
-def test_synthetic_missing_usage_retains_reservation(usage: Usage | None) -> None:
-    cost = cost_for_usage(ACTOR_MODEL, usage)
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+def test_synthetic_missing_usage_retains_reservation(
+    usage: Usage | None, model: RequestedModel, reserved: str
+) -> None:
+    cost = cost_for_usage(model, usage)
     assert cost.actual_cost_usd is None
     assert cost.usage_complete is False
-    assert cost.reserved_cost_usd == Decimal("0.011")
+    assert cost.reserved_cost_usd == Decimal(reserved)
+
+
+def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
+    manifest = policy_manifest()
+    assert manifest == {
+        ACTOR_MODEL: {
+            "preflight_limit": 15000,
+            "reserved_input_tokens": 16000,
+            "max_output_tokens": 600,
+            "input_per_million": "1",
+            "output_per_million": "5",
+        },
+        JUDGE_MODEL: {
+            "preflight_limit": 7000,
+            "reserved_input_tokens": 8000,
+            "max_output_tokens": 800,
+            "input_per_million": "2",
+            "output_per_million": "10",
+        },
+    }
+    assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.019")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.024")
+    assert (
+        PRICING_HASH
+        == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    )
+    assert PRICING_HASH != "b36ccff4b6bc11e7343861e7400ba18a710b14659b6cb1a3d7eab72390897b4d"
+    manifest[ACTOR_MODEL]["reserved_input_tokens"] = 8000
+    assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 16000
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:
     zero = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=0, output_tokens=0))
     assert zero.actual_cost_usd == Decimal(0)
     assert zero.usage_complete is True
-    overage = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=9000, output_tokens=600))
-    assert overage.actual_cost_usd == Decimal("0.012")
-    assert overage.reserved_cost_usd == Decimal("0.011")
+    overage = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=17000, output_tokens=600))
+    assert overage.actual_cost_usd == Decimal("0.020")
+    assert overage.reserved_cost_usd == Decimal("0.019")
 
 
 @pytest.mark.parametrize(
@@ -159,7 +194,7 @@ def test_synthetic_stage_timing_call_metadata_and_no_double_counting() -> None:
     assert endpoint.corpus_hash is None
     total = provider_cost_totals(records)
     assert total.actual_cost_usd == Decimal("0.0015")
-    assert total.reserved_cost_usd == Decimal("0.011")
+    assert total.reserved_cost_usd == Decimal("0.019")
     assert total.input_tokens == 1000
     assert total.output_tokens == 100
     assert total.actual_cost_usd == endpoint.actual_cost_usd
@@ -185,7 +220,7 @@ def test_synthetic_failed_call_and_stage_keep_duration_and_unknown_cost() -> Non
     assert records[0].response_code == endpoint.response_code == "deadline_exceeded"
     assert endpoint.actual_cost_usd is None
     assert endpoint.usage_complete is False
-    assert endpoint.reserved_cost_usd == Decimal("0.011")
+    assert endpoint.reserved_cost_usd == Decimal("0.019")
     assert "private synthetic letter" not in stream.getvalue()
     assert "raw provider exception" not in stream.getvalue()
 
@@ -214,7 +249,7 @@ def test_synthetic_missing_call_makes_entire_endpoint_cost_incomplete() -> None:
     assert total.input_tokens == 1050
     assert total.output_tokens is None
     assert endpoint.actual_cost_usd is total.actual_cost_usd is None
-    assert total.reserved_cost_usd == Decimal("0.022")
+    assert total.reserved_cost_usd == Decimal("0.038")
 
 
 def test_synthetic_attempt_links_extraction_and_analysis_without_text() -> None:
@@ -427,7 +462,7 @@ def test_synthetic_invalid_completion_preserves_accounting(
         assert result.output_tokens == (100 if known_usage else None)
         assert result.usage_complete is known_usage
         assert result.actual_cost_usd == (Decimal("0.0015") if known_usage else None)
-        assert result.reserved_cost_usd == Decimal("0.011")
+        assert result.reserved_cost_usd == Decimal("0.019")
     for record in records:
         assert record.requested_model_id == ACTOR_MODEL
         assert record.returned_model_id is None
@@ -466,7 +501,7 @@ def test_synthetic_rejected_completion_keeps_contiguous_call_accounting(
     assert total.actual_cost_usd == endpoint.actual_cost_usd
     assert total.actual_cost_usd == (Decimal("0.003") if known_usage else None)
     assert total.usage_complete is known_usage
-    assert total.reserved_cost_usd == endpoint.reserved_cost_usd == Decimal("0.022")
+    assert total.reserved_cost_usd == endpoint.reserved_cost_usd == Decimal("0.038")
     with pytest.raises(ValueError, match="Duplicate provider call"):
         provider_cost_totals([*records, records[0]])
     with pytest.raises(ValueError, match="does not match"):

@@ -20,12 +20,16 @@ from anthropic.types import Message, MessageParam, MessageTokensCount, ToolChoic
 from anthropic.types import Usage as SDKUsage
 from pydantic import TypeAdapter, ValidationError
 
-from rent_navigator.models import ErrorCode
-from rent_navigator.trace import (
+from rent_navigator.model_policy import (
     ACTOR_MODEL,
     JUDGE_MODEL,
-    CostSummary,
+    MODEL_POLICIES,
     RequestedModel,
+    policy_manifest,
+)
+from rent_navigator.models import ErrorCode
+from rent_navigator.trace import (
+    CostSummary,
     ReturnedModel,
     TraceRecorder,
     Usage,
@@ -197,11 +201,17 @@ def configuration_hash(
     """Hash behavior configuration without messages, secrets or correlation IDs."""
     config = {
         "models": {
-            ACTOR_MODEL: {"temperature": 0, "thinking": "disabled", "max_tokens": 600},
-            JUDGE_MODEL: {"thinking": "disabled", "max_tokens": 800},
+            ACTOR_MODEL: {
+                "temperature": 0,
+                "thinking": "disabled",
+                "max_tokens": MODEL_POLICIES[ACTOR_MODEL].max_output_tokens,
+            },
+            JUDGE_MODEL: {
+                "thinking": "disabled",
+                "max_tokens": MODEL_POLICIES[JUDGE_MODEL].max_output_tokens,
+            },
         },
-        "preflight_limit": 7000,
-        "reserved_input_tokens": 8000,
+        "model_policy": policy_manifest(),
         "deadline_seconds": 45,
         "stream": False,
         "max_retries": 0,
@@ -284,8 +294,9 @@ class ProviderAdapter:
     ) -> Message:
         """Count once and generate at most once, preserving usage before validation."""
         try:
-            if model not in (ACTOR_MODEL, JUDGE_MODEL) or self._budget.stopped:
+            if model not in MODEL_POLICIES or self._budget.stopped:
                 raise ProviderFailure("provider_error")
+            policy = MODEL_POLICIES[model]
             payload: dict[str, Any] = {
                 "model": model,
                 "system": system,
@@ -313,7 +324,7 @@ class ProviderAdapter:
                             tokens = getattr(count, "input_tokens", None)
                             if type(tokens) is not int or tokens < 0:
                                 raise ProviderFailure("provider_error")
-                            if tokens > 7000:
+                            if tokens > policy.preflight_limit:
                                 raise ProviderFailure("budget_exhausted")
                         except BaseException as error:
                             call.response_code = _error_code(error)
@@ -321,7 +332,7 @@ class ProviderAdapter:
 
             generation = dict(
                 payload,
-                max_tokens=600 if model == ACTOR_MODEL else 800,
+                max_tokens=policy.max_output_tokens,
                 stream=False,
                 service_tier="standard_only",
             )
@@ -353,7 +364,7 @@ class ProviderAdapter:
                                 reforecast = not cost.usage_complete or (
                                     usage is not None
                                     and usage.input_tokens is not None
-                                    and usage.input_tokens > 8000
+                                    and usage.input_tokens > policy.reserved_input_tokens
                                 )
                                 with trace.stage("validation"):
                                     try:

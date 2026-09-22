@@ -28,6 +28,7 @@ from anthropic.types import (
 from pydantic import TypeAdapter
 
 import rent_navigator.provider as provider_module
+from rent_navigator.model_policy import policy_manifest
 from rent_navigator.models import provider_tool_definitions
 from rent_navigator.provider import (
     Deadline,
@@ -223,7 +224,7 @@ def assert_accounting(
 
 @pytest.mark.parametrize(
     ("model", "max_tokens", "actual", "reservation"),
-    [(ACTOR_MODEL, 600, "0.0015", "0.011"), (JUDGE_MODEL, 800, "0.003", "0.024")],
+    [(ACTOR_MODEL, 600, "0.0015", "0.019"), (JUDGE_MODEL, 800, "0.003", "0.024")],
 )
 def test_fixed_generation_settings_and_count_payload_parity(
     model: RequestedModel, max_tokens: int, actual: str, reservation: str
@@ -314,15 +315,26 @@ def test_no_optional_generation_features_are_inserted() -> None:
         )
 
 
-@pytest.mark.parametrize(("estimate", "allowed"), [(7000, True), (7001, False)])
-def test_preflight_limit_rejects_before_any_paid_call(estimate: int, allowed: bool) -> None:
-    fake, ledger = RecordingMessages(estimate=estimate), SpendLedger(Decimal("1"))
-    outcome = asyncio.run(perform(fake, ledger))
+@pytest.mark.parametrize(
+    ("model", "estimate", "allowed", "actual", "reservation"),
+    [
+        (ACTOR_MODEL, 15000, True, "0.0015", "0.019"),
+        (ACTOR_MODEL, 15001, False, "0.0015", "0.019"),
+        (JUDGE_MODEL, 7000, True, "0.003", "0.024"),
+        (JUDGE_MODEL, 7001, False, "0.003", "0.024"),
+    ],
+)
+def test_preflight_limit_rejects_before_any_paid_call(
+    model: RequestedModel, estimate: int, allowed: bool, actual: str, reservation: str
+) -> None:
+    fake = RecordingMessages(reply(model=model), estimate=estimate)
+    ledger = SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
     assert len(fake.counts) == 1
     assert len(fake.creates) == int(allowed)
     if allowed:
         assert outcome.failure is None
-        assert_accounting(outcome, actual="0.0015", reserved="0.011", complete=True)
+        assert_accounting(outcome, actual=actual, reserved=reservation, complete=True)
     else:
         assert outcome.failure is not None and outcome.failure.code == "budget_exhausted"
         assert_accounting(outcome, actual="0", reserved="0", complete=True, generation_count=0)
@@ -350,16 +362,19 @@ def test_invalid_count_response_never_enters_generation(estimate: object) -> Non
         malformed_usage(input_tokens=-1, output_tokens=100),
     ],
 )
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
 def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
     usage: object,
+    model: RequestedModel,
+    reservation: str,
 ) -> None:
-    fake, ledger = RecordingMessages(reply(usage=usage)), SpendLedger(Decimal("1"))
-    outcome = asyncio.run(perform(fake, ledger))
+    fake, ledger = RecordingMessages(reply(model=model, usage=usage)), SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
-    assert_accounting(outcome, actual=None, reserved="0.011", complete=False)
-    assert ledger.committed_usd == Decimal("0.011")
+    assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
+    assert ledger.committed_usd == Decimal(reservation)
     assert ledger.stopped
-    retry = asyncio.run(perform(fake, ledger, trace_number=2))
+    retry = asyncio.run(perform(fake, ledger, model=model, trace_number=2))
     assert retry.failure is not None
     assert len(fake.creates) == 1
 
@@ -375,12 +390,15 @@ def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
         {"unrecognized_billed_tokens": 1},
     ],
 )
-def test_nonzero_unpriced_categories_make_entire_cost_unknown(extra: dict[str, Any]) -> None:
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+def test_nonzero_unpriced_categories_make_entire_cost_unknown(
+    extra: dict[str, Any], model: RequestedModel, reservation: str
+) -> None:
     usage = SDKUsage.model_validate({"input_tokens": 1000, "output_tokens": 100, **extra})
-    fake, ledger = RecordingMessages(reply(usage=usage)), SpendLedger(Decimal("1"))
-    outcome = asyncio.run(perform(fake, ledger))
+    fake, ledger = RecordingMessages(reply(model=model, usage=usage)), SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
-    assert_accounting(outcome, actual=None, reserved="0.011", complete=False)
+    assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
     assert ledger.stopped and ledger.reforecast_required
 
 
@@ -403,19 +421,28 @@ def test_zero_categories_and_nonbilling_metadata_preserve_known_usage(
     fake, ledger = RecordingMessages(reply(usage=usage)), SpendLedger(Decimal("1"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is None
-    assert_accounting(outcome, actual="0.0015", reserved="0.011", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
     assert not ledger.stopped and not ledger.reforecast_required
 
 
-@pytest.mark.parametrize(("input_tokens", "overage"), [(8000, False), (8001, True)])
+@pytest.mark.parametrize(
+    ("model", "input_tokens", "overage", "cost", "reservation"),
+    [
+        (ACTOR_MODEL, 16000, False, "0.0165", "0.019"),
+        (ACTOR_MODEL, 16001, True, "0.016501", "0.019"),
+        (JUDGE_MODEL, 8000, False, "0.017", "0.024"),
+        (JUDGE_MODEL, 8001, True, "0.017002", "0.024"),
+    ],
+)
 def test_input_reservation_overage_keeps_exact_cost_and_stops_further_batches(
-    input_tokens: int, overage: bool
+    model: RequestedModel, input_tokens: int, overage: bool, cost: str, reservation: str
 ) -> None:
-    fake = RecordingMessages(reply(usage=SDKUsage(input_tokens=input_tokens, output_tokens=100)))
+    fake = RecordingMessages(
+        reply(model=model, usage=SDKUsage(input_tokens=input_tokens, output_tokens=100))
+    )
     ledger = SpendLedger(Decimal("1"))
-    outcome = asyncio.run(perform(fake, ledger))
-    cost = "0.008501" if overage else "0.0085"
-    assert_accounting(outcome, actual=cost, reserved="0.011", complete=True)
+    outcome = asyncio.run(perform(fake, ledger, model=model))
+    assert_accounting(outcome, actual=cost, reserved=reservation, complete=True)
     assert ledger.committed_usd == Decimal(cost)
     assert ledger.stopped == overage
     assert ledger.reforecast_required == overage
@@ -439,7 +466,7 @@ def test_invalid_returned_model_id_retains_accounting_without_leaking_metadata(
     assert_accounting(
         outcome,
         actual="0.0015" if usage is _DEFAULT_USAGE else None,
-        reserved="0.011",
+        reserved="0.019",
         complete=usage is _DEFAULT_USAGE,
     )
     generation = next(
@@ -458,17 +485,25 @@ def test_invalid_generation_outcomes_preserve_known_cost(stop: str) -> None:
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "invalid_generated_output"
     assert len(fake.counts) == len(fake.creates) == 1
-    assert_accounting(outcome, actual="0.0015", reserved="0.011", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
 
 
-def test_output_above_fixed_budget_is_invalid_but_not_free() -> None:
+@pytest.mark.parametrize(
+    ("model", "output", "actual", "reservation"),
+    [(ACTOR_MODEL, 601, "0.004005", "0.019"), (JUDGE_MODEL, 801, "0.01001", "0.024")],
+)
+def test_output_above_fixed_budget_is_invalid_but_not_free(
+    model: RequestedModel, output: int, actual: str, reservation: str
+) -> None:
     fake, ledger = (
-        RecordingMessages(reply(usage=SDKUsage(input_tokens=1000, output_tokens=601))),
+        RecordingMessages(
+            reply(model=model, usage=SDKUsage(input_tokens=1000, output_tokens=output))
+        ),
         SpendLedger(Decimal("1")),
     )
-    outcome = asyncio.run(perform(fake, ledger))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
     assert outcome.failure is not None and outcome.failure.code == "invalid_generated_output"
-    assert_accounting(outcome, actual="0.004005", reserved="0.011", complete=True)
+    assert_accounting(outcome, actual=actual, reserved=reservation, complete=True)
 
 
 def test_native_tool_use_blocks_and_stop_reason_are_preserved() -> None:
@@ -534,11 +569,11 @@ def test_provider_failures_are_safe_single_attempts_with_complete_accounting(
     assert_accounting(
         outcome,
         actual=None if operation == "create" else "0",
-        reserved="0.011" if operation == "create" else "0",
+        reserved="0.019" if operation == "create" else "0",
         complete=operation == "count",
         generation_count=int(operation == "create"),
     )
-    assert ledger.committed_usd == (Decimal("0.011") if operation == "create" else Decimal(0))
+    assert ledger.committed_usd == (Decimal("0.019") if operation == "create" else Decimal(0))
 
 
 def test_deadline_defaults_to_45_seconds_and_rejects_exact_expiry() -> None:
@@ -583,7 +618,7 @@ def test_generation_finishing_after_deadline_keeps_returned_usage() -> None:
     fake = RecordingMessages(before_create=consume_deadline)
     outcome = asyncio.run(perform(fake, ledger, clock=clock))
     assert outcome.failure is not None and outcome.failure.code == "deadline_exceeded"
-    assert_accounting(outcome, actual="0.0015", reserved="0.011", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
 
 
 def test_two_calls_share_one_absolute_deadline() -> None:
@@ -602,14 +637,14 @@ def test_two_calls_share_one_absolute_deadline() -> None:
         assert first.failure is None
         second = await perform(fake, ledger, clock=clock, deadline=deadline, trace_number=2)
         assert second.failure is not None and second.failure.code == "deadline_exceeded"
-        assert_accounting(second, actual="0.0015", reserved="0.011", complete=True)
+        assert_accounting(second, actual="0.0015", reserved="0.019", complete=True)
         assert ledger.committed_usd == Decimal("0.003")
 
     asyncio.run(scenario())
 
 
 def test_insufficient_budget_does_not_enter_generation() -> None:
-    fake, ledger = RecordingMessages(), SpendLedger(Decimal("0.010999"))
+    fake, ledger = RecordingMessages(), SpendLedger(Decimal("0.018999"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "budget_exhausted"
     assert not fake.creates
@@ -626,11 +661,11 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
 
         fake, ledger = (
             RecordingMessages(before_create=hold_generation),
-            SpendLedger(Decimal("0.011")),
+            SpendLedger(Decimal("0.019")),
         )
         first = asyncio.create_task(perform(fake, ledger))
         await entered.wait()
-        assert ledger.committed_usd == Decimal("0.011")
+        assert ledger.committed_usd == Decimal("0.019")
         second = await perform(fake, ledger, trace_number=2)
         assert second.failure is not None and second.failure.code == "budget_exhausted"
         assert len(fake.creates) == 1
@@ -638,12 +673,15 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
         completed = await first
         assert completed.failure is None
         assert ledger.committed_usd == Decimal("0.0015")
-        assert_accounting(completed, actual="0.0015", reserved="0.011", complete=True)
+        assert_accounting(completed, actual="0.0015", reserved="0.019", complete=True)
 
     asyncio.run(scenario())
 
 
-def test_task_cancellation_records_inflight_generation_and_leaves_no_background_call() -> None:
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+def test_task_cancellation_records_inflight_generation_and_leaves_no_background_call(
+    model: RequestedModel, reservation: str
+) -> None:
     async def scenario() -> None:
         entered, ended = asyncio.Event(), asyncio.Event()
 
@@ -665,7 +703,7 @@ def test_task_cancellation_records_inflight_generation_and_leaves_no_background_
         async def invoke() -> None:
             with trace:
                 await adapter.generate(
-                    model=ACTOR_MODEL,
+                    model=model,
                     system="synthetic",
                     messages=INPUT,
                     trace=trace,
@@ -682,10 +720,10 @@ def test_task_cancellation_records_inflight_generation_and_leaves_no_background_
         assert_accounting(
             Outcome(None, None, records, stream.getvalue()),
             actual=None,
-            reserved="0.011",
+            reserved=reservation,
             complete=False,
         )
-        assert ledger.committed_usd == Decimal("0.011") and ledger.stopped
+        assert ledger.committed_usd == Decimal(reservation) and ledger.stopped
         assert len(fake.creates) == 1
 
     asyncio.run(scenario())
@@ -700,17 +738,20 @@ def test_unpriced_service_tier_requires_reforecast(tier: str) -> None:
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert ledger.stopped
-    assert_accounting(outcome, actual=None, reserved="0.011", complete=False)
+    assert_accounting(outcome, actual=None, reserved="0.019", complete=False)
 
 
-def test_zero_usage_is_known_free_and_reservation_refund_permits_the_next_call() -> None:
-    fake = RecordingMessages(reply(usage=SDKUsage(input_tokens=0, output_tokens=0)))
-    ledger = SpendLedger(Decimal("0.011"))
-    first = asyncio.run(perform(fake, ledger))
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+def test_zero_usage_is_known_free_and_reservation_refund_permits_the_next_call(
+    model: RequestedModel, reservation: str
+) -> None:
+    fake = RecordingMessages(reply(model=model, usage=SDKUsage(input_tokens=0, output_tokens=0)))
+    ledger = SpendLedger(Decimal(reservation))
+    first = asyncio.run(perform(fake, ledger, model=model))
     assert first.failure is None
-    assert_accounting(first, actual="0", reserved="0.011", complete=True)
+    assert_accounting(first, actual="0", reserved=reservation, complete=True)
     assert ledger.committed_usd == 0 and not ledger.stopped
-    second = asyncio.run(perform(fake, ledger, trace_number=2))
+    second = asyncio.run(perform(fake, ledger, model=model, trace_number=2))
     assert second.failure is None and len(fake.creates) == 2
     assert ledger.committed_usd == 0
 
@@ -751,7 +792,7 @@ def test_expiry_during_validation_does_not_return_success(monkeypatch: pytest.Mo
     monkeypatch.setattr(TypeAdapter, "validate_python", expire_after_validation)
     outcome = asyncio.run(perform(fake, ledger, clock=clock))
     assert outcome.failure is not None and outcome.failure.code == "deadline_exceeded"
-    assert_accounting(outcome, actual="0.0015", reserved="0.011", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
     assert (
         next(
             stage for stage in outcome.records[-1].stage_durations if stage.stage == "validation"
@@ -991,7 +1032,7 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
             assert_accounting(
                 Outcome(None, error.value, records, stream.getvalue()),
                 actual=None if generation else "0",
-                reserved="0.011" if generation else "0",
+                reserved="0.019" if generation else "0",
                 complete=not generation,
                 generation_count=int(generation),
             )
@@ -1015,10 +1056,11 @@ def test_partial_usage_preserves_each_valid_known_counter(
     assert generation.output_tokens == output_tokens
     assert outcome.records[-1].input_tokens == input_tokens
     assert outcome.records[-1].output_tokens == output_tokens
-    assert_accounting(outcome, actual=None, reserved="0.011", complete=False)
+    assert_accounting(outcome, actual=None, reserved="0.019", complete=False)
 
 
-def test_expiry_during_reservation_refunds_undispatched_generation() -> None:
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+def test_expiry_during_reservation_refunds_undispatched_generation(model: RequestedModel) -> None:
     clock = Clock()
 
     class ExpiringLedger(SpendLedger):
@@ -1028,7 +1070,7 @@ def test_expiry_during_reservation_refunds_undispatched_generation() -> None:
             return reservation
 
     fake, ledger = RecordingMessages(), ExpiringLedger(Decimal("1"))
-    outcome = asyncio.run(perform(fake, ledger, clock=clock))
+    outcome = asyncio.run(perform(fake, ledger, model=model, clock=clock))
     assert outcome.failure is not None and outcome.failure.code == "deadline_exceeded"
     assert len(fake.counts) == 1
     assert not fake.creates
@@ -1076,14 +1118,16 @@ def test_lazy_provider_loggers_cannot_emit_payload_after_client_creation(
     assert sentinel not in caplog.text
 
 
-async def observe_cancelled_child(adapter: ProviderAdapter, clock: Clock) -> Outcome:
+async def observe_cancelled_child(
+    adapter: ProviderAdapter, clock: Clock, *, model: RequestedModel = ACTOR_MODEL
+) -> Outcome:
     trace, stream = recorder(clock)
 
     async def invoke() -> None:
         with trace:
             try:
                 await adapter.generate(
-                    model=ACTOR_MODEL,
+                    model=model,
                     system="synthetic",
                     messages=INPUT,
                     trace=trace,
@@ -1181,7 +1225,10 @@ def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request
     asyncio.run(scenario())
 
 
-def test_queued_cancellation_during_reservation_refunds_without_generation() -> None:
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+def test_queued_cancellation_during_reservation_refunds_without_generation(
+    model: RequestedModel,
+) -> None:
     class CancellingLedger(SpendLedger):
         def reserve(self, model: RequestedModel) -> Reservation:
             ticket = super().reserve(model)
@@ -1192,7 +1239,9 @@ def test_queued_cancellation_during_reservation_refunds_without_generation() -> 
 
     async def scenario() -> None:
         fake, ledger, clock = RecordingMessages(), CancellingLedger(Decimal("1")), Clock()
-        outcome = await observe_cancelled_child(ProviderAdapter(fake, budget=ledger), clock)
+        outcome = await observe_cancelled_child(
+            ProviderAdapter(fake, budget=ledger), clock, model=model
+        )
         assert len(fake.counts) == 1
         assert not fake.creates
         assert_no_generation_after_queued_cancellation(outcome, ledger)
@@ -1210,11 +1259,11 @@ def test_shared_ledger_freeze_refunds_already_reserved_undispatched_call() -> No
                 reservations.append(ticket)
                 return ticket
 
-        ledger = RecordingLedger(Decimal("0.022"))
+        ledger = RecordingLedger(Decimal("0.038"))
 
         async def verify_both_reserved_before_first_dispatch() -> None:
             assert len(reservations) == 2
-            assert ledger.committed_usd == Decimal("0.022")
+            assert ledger.committed_usd == Decimal("0.038")
             assert not ledger.stopped
 
         first_fake = RecordingMessages(
@@ -1228,14 +1277,54 @@ def test_shared_ledger_freeze_refunds_already_reserved_undispatched_call() -> No
         assert len(reservations) == 2
         assert len(first_fake.creates) == 1
         assert first.failure is not None and first.failure.code == "provider_error"
-        assert_accounting(first, actual=None, reserved="0.011", complete=False)
+        assert_accounting(first, actual=None, reserved="0.019", complete=False)
         assert second.failure is not None and second.failure.code == "provider_error"
         assert len(second_fake.counts) == 1
         assert not second_fake.creates
         assert [record.provider_operation for record in second.records] == ["count_tokens", None]
         assert second.records[-1].response_code == "provider_error"
         assert_accounting(second, actual="0", reserved="0", complete=True, generation_count=0)
-        assert ledger.committed_usd == Decimal("0.011")
+        assert ledger.committed_usd == Decimal("0.019")
         assert ledger.stopped and ledger.reforecast_required
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "preflight_limit",
+        "reserved_input_tokens",
+        "max_output_tokens",
+        "input_per_million",
+        "output_per_million",
+    ],
+)
+def test_provider_configuration_identity_covers_each_models_complete_policy(
+    model: RequestedModel, field: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = provider_module.configuration_hash(system="fixed synthetic system")
+    amended = policy_manifest()
+    old_value = amended[model][field]
+    amended[model][field] = (
+        old_value + 1 if isinstance(old_value, int) else str(Decimal(old_value) + 1)
+    )
+    monkeypatch.setattr(provider_module, "policy_manifest", lambda: amended)
+    changed = provider_module.configuration_hash(system="fixed synthetic system")
+    assert changed != original
+    assert changed == provider_module.configuration_hash(system="fixed synthetic system")
+
+
+def test_retained_second_request_estimate_is_admitted_by_uniform_actor_policy() -> None:
+    fake = RecordingMessages(
+        reply(usage=SDKUsage(input_tokens=12289, output_tokens=100)), estimate=12289
+    )
+    ledger = SpendLedger(Decimal("0.019"))
+    outcome = asyncio.run(perform(fake, ledger))
+    assert outcome.failure is None
+    assert len(fake.counts) == len(fake.creates) == 1
+    assert fake.creates[0]["max_tokens"] == 600
+    assert_accounting(outcome, actual="0.012789", reserved="0.019", complete=True)
+    assert ledger.committed_usd == Decimal("0.012789")
+    assert not ledger.stopped

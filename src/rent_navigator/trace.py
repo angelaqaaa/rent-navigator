@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
 from types import TracebackType
-from typing import Annotated, Final, Literal, TextIO
+from typing import Annotated, Literal, TextIO
 
 from pydantic import (
     ConfigDict,
@@ -20,6 +20,10 @@ from pydantic import (
     model_validator,
 )
 
+from rent_navigator.model_policy import ACTOR_MODEL as ACTOR_MODEL
+from rent_navigator.model_policy import JUDGE_MODEL as JUDGE_MODEL
+from rent_navigator.model_policy import MODEL_POLICIES, policy_manifest
+from rent_navigator.model_policy import RequestedModel as RequestedModel
 from rent_navigator.models import (
     CanonicalUUID,
     CheckId,
@@ -31,9 +35,6 @@ from rent_navigator.models import (
     ToolName,
 )
 
-ACTOR_MODEL: Final = "claude-haiku-4-5-20251001"
-JUDGE_MODEL: Final = "claude-sonnet-5"
-RequestedModel = Literal["claude-haiku-4-5-20251001", "claude-sonnet-5"]
 ReturnedModel = Annotated[
     str,
     StringConstraints(pattern=r"^claude-[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100),
@@ -46,13 +47,8 @@ NonNegativeInt = Annotated[int, Field(ge=0)]
 Milliseconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 Usd = Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
 
-_PRICING = {
-    ACTOR_MODEL: {"input_per_million": "1", "output_per_million": "5", "max_output": 600},
-    JUDGE_MODEL: {"input_per_million": "2", "output_per_million": "10", "max_output": 800},
-    "reserved_input_tokens": 8000,
-}
 PRICING_HASH = sha256(
-    json.dumps(_PRICING, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    json.dumps(policy_manifest(), sort_keys=True, separators=(",", ":")).encode("utf-8")
 ).hexdigest()
 
 
@@ -88,13 +84,12 @@ class CostSummary(Usage):
 
 def cost_for_usage(model_id: RequestedModel, usage: Usage | None) -> CostSummary:
     """Use the frozen rates, retaining the full reservation when usage is missing."""
-    if model_id == ACTOR_MODEL:
-        input_rate, output_rate, max_output = Decimal(1), Decimal(5), 600
-    elif model_id == JUDGE_MODEL:
-        input_rate, output_rate, max_output = Decimal(2), Decimal(10), 800
-    else:
-        raise ValueError("Unsupported requested model")
-    reserved = (8000 * input_rate + max_output * output_rate) / 1_000_000
+    try:
+        policy = MODEL_POLICIES[model_id]
+    except KeyError:
+        raise ValueError("Unsupported requested model") from None
+    input_rate, output_rate = policy.input_per_million, policy.output_per_million
+    reserved = policy.reservation_usd
     input_tokens = usage.input_tokens if usage is not None else None
     output_tokens = usage.output_tokens if usage is not None else None
     complete = input_tokens is not None and output_tokens is not None

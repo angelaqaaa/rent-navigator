@@ -278,6 +278,46 @@ def test_adjacent_emails_do_not_remove_unmatched_separators_or_expand_grammar() 
 
 
 @pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("4165550123+14165550123", "[PHONE][PHONE]"),
+        ("M5V2T6+14165550123", "[POSTAL][PHONE]"),
+        ("M5V2T6+14165550123+14165550123", "[POSTAL][PHONE][PHONE]"),
+        ("4165550123/M5V2T6+14165550123", "[PHONE]/[POSTAL][PHONE]"),
+        ("(M5V2T6)+14165550123", "([POSTAL])[PHONE]"),
+        ("4165550123+unit@example.invalid", "[EMAIL]"),
+        (
+            "unit@example.invalid; 4165550123+14165550123; M5V2T6",
+            "[EMAIL]; [PHONE][PHONE]; [POSTAL]",
+        ),
+        (
+            "M5V2T6+14165550123 / unit@example.invalid+another@example.invalid / $1 416-555-0123",
+            "[POSTAL][PHONE] / [EMAIL][EMAIL] / $1 [PHONE]",
+        ),
+        (
+            ("M5V2T6+14165550123+14165550123; unit@example.invalid/another@example.invalid; " * 8)
+            + "CAD 4165550123.00 on 2027-04-01",
+            ("[POSTAL][PHONE][PHONE]; [EMAIL][EMAIL]; " * 8) + "CAD 4165550123.00 on 2027-04-01",
+        ),
+    ],
+)
+def test_complete_policy_pass_stabilizes_contact_combinations(text: str, expected: str) -> None:
+    assert redact_text(text) == expected
+    assert redact_text(expected) == expected
+
+
+def test_supported_4000_character_chain_completes_without_a_pass_cap() -> None:
+    prefix = "M5V2T6"
+    phone = "+14165550123"
+    count, padding = divmod(4000 - len(prefix), len(phone))
+    text = prefix + phone * count + " " * padding
+    expected = "[POSTAL]" + "[PHONE]" * count + " " * padding
+    assert len(text) == 4000
+    assert redact_text(text) == expected
+    assert redact_text(expected) == expected
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "The current rent is $1,234.50, proposed $1,259.80, effective 2027-04-01.",
@@ -330,7 +370,17 @@ def test_policy_hash_is_canonical_stable_and_independent_of_inputs(
 
 
 @pytest.mark.parametrize(
-    "key", ["version", "patterns", "flags", "order", "placeholders", "email_processing", "currency"]
+    "key",
+    [
+        "version",
+        "patterns",
+        "flags",
+        "order",
+        "placeholders",
+        "email_processing",
+        "pass_processing",
+        "currency",
+    ],
 )
 def test_every_policy_component_changes_derived_hash(key: str) -> None:
     material = guards._policy_manifest()

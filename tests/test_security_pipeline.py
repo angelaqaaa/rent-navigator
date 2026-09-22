@@ -371,17 +371,17 @@ def test_s06_typed_phone_shaped_cents_never_enter_regex_redaction(
 
 @pytest.mark.parametrize("path", ["extraction", "question"])
 @pytest.mark.parametrize(
-    ("contact_text", "sentinels", "protected_amount"),
+    ("contact_text", "sentinels", "expected_contact"),
     [
         (
             "The fee is $1 416-555-0123 is the contact number.",
             ("416-555-0123",),
-            "$1 [PHONE]",
+            "The fee is $1 [PHONE] is the contact number.",
         ),
         (
             "Rent is CAD 1 416-555-0123; call this number.",
             ("416-555-0123",),
-            "CAD 1 [PHONE]",
+            "Rent is CAD 1 [PHONE]; call this number.",
         ),
         (
             "Contact unit@example.invalid/another@example.invalid.",
@@ -393,8 +393,25 @@ def test_s06_typed_phone_shaped_cents_never_enter_regex_redaction(
             ("unit@example.invalid", "another@example.invalid"),
             None,
         ),
+        (
+            "4165550123+14165550123",
+            ("4165550123+14165550123", "+14165550123"),
+            "[PHONE][PHONE]",
+        ),
+        (
+            "M5V2T6+14165550123",
+            ("M5V2T6", "+14165550123"),
+            "[POSTAL][PHONE]",
+        ),
     ],
-    ids=["dollar-overlap", "cad-overlap", "slash-emails", "plus-emails"],
+    ids=[
+        "dollar-overlap",
+        "cad-overlap",
+        "slash-emails",
+        "plus-emails",
+        "joined-phones",
+        "postal-joined-phone",
+    ],
 )
 def test_contact_combinations_redacted_in_first_provider_payload(
     corpus: Corpus,
@@ -402,7 +419,7 @@ def test_contact_combinations_redacted_in_first_provider_payload(
     path: str,
     contact_text: str,
     sentinels: tuple[str, ...],
-    protected_amount: str | None,
+    expected_contact: str | None,
 ) -> None:
     preserved_text = (
         "The current rent is $1,234.50, the proposed rent is $1,259.80, effective 2027-04-01. "
@@ -461,8 +478,8 @@ def test_contact_combinations_redacted_in_first_provider_payload(
         assert preserved_text in sent_text
         for sentinel in sentinels:
             assert sentinel not in json.dumps(parameters)
-        if protected_amount is not None:
-            assert protected_amount in sent_text
+        if expected_contact is not None:
+            assert sent_text == f"{expected_contact} {preserved_text}"
         else:
             assert sent_text.count("[EMAIL]") == 2
         assert redact_text(sent_text) == sent_text

@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Final
 
-_POLICY_VERSION: Final = "pattern-redaction-v2"
+_POLICY_VERSION: Final = "pattern-redaction-v3"
 _HORIZONTAL: Final = r"[ \t\u00a0\u202f]"
 _SEPARATOR: Final = r"[ \t\u00a0\u202f.-]*"
 _LOCAL_ATOM: Final = r"[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
@@ -57,6 +57,7 @@ def _policy_manifest() -> dict[str, object]:
         "order": ["email", "phone", "postal"],
         "placeholders": {"email": "[EMAIL]", "phone": "[PHONE]", "postal": "[POSTAL]"},
         "email_processing": "replace the leftmost supported candidate, then rescan until stable",
+        "pass_processing": "repeat the complete ordered pass until the string is unchanged",
         "currency": {
             "pattern": _CURRENCY_PATTERN,
             "flags": _FLAGS,
@@ -105,8 +106,12 @@ def redact_text(text: str) -> str:
         raise TypeError("redaction input must be a string")
     redacted = text
     while True:
-        redacted, count = _EMAIL.subn("[EMAIL]", redacted, count=1)
-        if count == 0:
-            break
-        # Each replacement consumes an @; the placeholder cannot introduce one.
-    return _POSTAL.sub("[POSTAL]", _redact_phones(redacted))
+        previous = redacted
+        while True:
+            redacted, count = _EMAIL.subn("[EMAIL]", redacted, count=1)
+            if count == 0:
+                break
+        redacted = _POSTAL.sub("[POSTAL]", _redact_phones(redacted))
+        if redacted == previous:
+            return redacted
+        # A changed pass consumes @ or ASCII digits; placeholders introduce neither.

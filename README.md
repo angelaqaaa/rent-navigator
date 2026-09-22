@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, and an internal asynchronous provider/extraction seam. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, and bounded analysis orchestration with a restricted development CLI. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -91,13 +91,13 @@ An explicitly confirmed section 6.1 exemption affects only the guideline check. 
 
 ## Internal provider and extraction
 
-`ProviderAdapter.generate` preflights the full prepared request and performs at most one asynchronous, non-streaming generation. It uses the locked SDK's standard Messages API, fixed model settings, no retries, a 7,000-token preflight limit and conservative per-call reservations. Actor sampling is sent as fixed `extra_body={"temperature": 0}` because this SDK exposes it through that parameter; judge sampling overrides are omitted. Native tool-use blocks are preserved for later integration, with no tool execution or loop.
+`ProviderAdapter.generate` preflights the full prepared request and performs at most one asynchronous, non-streaming generation. It uses the locked SDK's standard Messages API, fixed model settings, no retries, a 7,000-token preflight limit and conservative per-call reservations. Actor sampling is sent as fixed `extra_body={"temperature": 0}` because this SDK exposes it through that parameter; judge sampling overrides are omitted. The adapter preserves native tool-use blocks; the separate analysis entry validates and executes them.
 
 `extract_letter(request, *, provider, trace, redact, deadline)` requires a redactor with no default fallback. It redacts before constructing either provider payload, transforms the public extraction schema for provider support, then validates the response against the original strict three-field model. Missing or ambiguous facts remain null. Refusal, truncation, malformed content and invalid fields fail without repair. The caller supplies one absolute `Deadline` and owns `trace.finish(...)`; errors must finish with the safe `ProviderFailure.code`, and cancellation must finish safely before propagating. The development smoke shows this composition.
 
 Usage is captured before output validation. Missing/partial usage or unpriced billing categories retain unknown actual cost and the full reservation; input usage above the reservation preserves known cost. These conditions stop further paid requests for reconciliation. `SpendLedger` is an atomic in-memory batch ledger, not a durable project account or daily admission counter. Endpoint summaries and provider details are not added twice.
 
-The formal email/phone/postal redactor is **not implemented**. The current smoke accepts only two fixed anonymous synthetic letters; arbitrary real letters are not supported. Agent integration, HTTP business routes and the full safety pipeline remain future work.
+The formal email/phone/postal redactor is **not implemented**. The extraction smoke accepts only two fixed anonymous synthetic letters; arbitrary real letters are not supported. HTTP business routes and the full safety pipeline remain future work.
 
 Run the explicit offline smoke from a clean committed checkout, using a new output directory each time:
 
@@ -115,6 +115,29 @@ On **2026-09-21**, one live development smoke on source commit `b3de863abf7306fa
 Further `--live --billing-ready` runs require explicit budget authorization, an API key in the process environment, and confirmed prepaid billing/replenishment settings. The runner checks both approved model IDs, then attempts at most two actor generations, reserving at most US$0.022 for the batch; any failure or mismatch stops it. Do not rerun a paid attempt without checking the remaining authorized call/budget allowance. Evidence directories cannot overwrite an earlier attempt. No judge generation is performed.
 
 The real client is explicitly constructed with the official base URL and `max_retries=0`; SDK/transport logging is disabled and custom-header environment overrides are rejected. Never place keys in source, command arguments, evidence, or logs. Default tests and PR CI require neither credentials nor provider access.
+
+## Internal analysis and restricted CLI
+
+`agent.answer(request, *, provider, corpus, retrieve, redact, deadline, context, sink, arm="production")` owns and finishes exactly one analysis trace. It requires an injected redactor and the caller's absolute deadline. Question mode retrieves the original question once locally, sends only redacted text, and makes one actor call without tools. Confirmed notice/rent facts require a native provider tool call with exactly matching arguments, one execution of the existing calculator, and a second generation with the matching tool-result ID and tools disabled. Invalid calls and outputs fail without repair or retries.
+
+The second request includes every evidence chunk mapped by every executed rule, deduplicated against the original top five. Every production statement must cite an allowed retrieved or executed-rule chunk; the server resolves the canonical URL, heading and snapshot. This guarantees provenance and citation coverage, not semantic support. The actual calculator result remains authoritative. All prepared history, tools, evidence and output schema enter token preflight; evidence is never truncated to pass the budget limit.
+
+The trusted internal `baseline` arm omits retrieval and evidence passages while preserving the same facts, tools, model, budgets and deadline. Citations may be empty; supplied IDs must still belong to executed rules. It is tested with fakes only and is not a public request or CLI option. `agent_config_hash(mode, arm)` identifies fixed prompts, tool/output schemas, stage choices, display text and provider configuration without request text or identifiers.
+
+The CLI accepts exactly one preset anonymous confirmed-rent fixture: $2,000 to $2,048, effective September 1, 2026, hand-served July 3, with a September 1, 2025 previous increase, controlled status and N1. Its expected result has both notice and guideline failures, a 60-day notice interval and an exact $2,042 cap. It accepts no arbitrary question, letter, file or standard-input content. Until the formal redactor exists, its mandatory redaction boundary admits only that exact preset fact context.
+
+From a clean committed checkout:
+
+```sh
+test -z "$(git status --porcelain)" && \
+uv run --locked python -m rent_navigator.cli --offline \
+  --source-commit "$(git rev-parse HEAD)" \
+  --evidence-dir /tmp/rent-navigator-analysis-offline
+```
+
+Use a fresh external writable directory. The CLI builds SQLite there and retains its report, metadata trace, synthetic requests/returns and preflight estimates; it refuses to overwrite an earlier attempt. Offline mode uses recording fakes and incurs no provider cost. The same command works from an installed wheel outside the checkout and in a non-root container with a read-only filesystem, networking disabled and writable temporary storage. Synthetic token counts and timings are fixture values, not measured production behavior.
+
+Explicit `--live --billing-ready` uses the same production path for one fixed fixture, with at most two actor generations, two preflights, a US$0.022 batch reservation, no judge and no retries. It requires separately authorized budget, confirmed prepaid billing with replenishment disabled and a key provided only through the process environment. Any failure stops the attempt and preserves incomplete evidence. A passing mechanical check still requires review that the generated explanation describes both failures faithfully; it is not a legal gold case, evaluation result or proof of general safety. No live success is claimed by the offline fixtures.
 
 ## Verify
 
@@ -155,5 +178,6 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `rent.rent_increase_check(facts, *, corpus)` returns the existing `ToolResult` with seven ordered checks, exact decimal caps, partial derived fields, and resolving rule IDs. Its provider-visible arguments remain exactly `RentFacts`.
 - `provider.ProviderAdapter` accepts an injected async messages port and batch budget. `Deadline` is shared across calls, and `configuration_hash` identifies fixed settings and request schemas without including message contents.
 - `extract.extract_letter(request, *, provider, trace, redact, deadline)` returns the existing `Extraction`; `extraction_config_hash()` covers its fixed prompt and transformed schema. Composition with the real SDK uses `cast(MessagesPort, client.messages)` at this tested boundary.
+- `agent.answer(...)` returns the existing `AskResponse` and owns analysis trace completion. `agent_config_hash(mode, arm)` supplies its configuration identity; extraction keeps its separate caller-owned trace contract.
 
-Agent/request integration, formal redaction, evaluation and deployment remain future work.
+HTTP request integration, formal redaction, evaluation and deployment remain future work.

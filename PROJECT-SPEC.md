@@ -27,6 +27,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | N=16; twelve bounded packages | N=20; ten larger packages | Preserve six retrieval questions while splitting risky seams |
 | Paid single-service deployment | Sleeping free tier | Reliable recruiting demo with minimal operations |
 | Actor input preflight/reservation 15k/16k; judge 7k/8k | Trim evidence; add per-round budgets | WP6 counted 12,289 tokens with complete evidence; retain sources and simple model-level accounting within $50 |
+| Server-formatted CAD context for rent explanations | Leave cents conversion to generated prose | A real response confused cents with dollars and the rent ceiling with the increase; preserve exact amounts and meanings |
 
 These freshly justify adopted reference patterns; its domain, thresholds and schedule are discarded. Review amendments also freeze `max(28, B−2)`: the former N=16 formula reduced to a constant 28 and did not compare meaningfully with B.
 

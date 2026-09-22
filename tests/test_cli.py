@@ -349,7 +349,15 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
         messages = second_request["messages"]
         initial_evidence = json.loads(messages[0]["content"])["evidence"]
         actual_result = json.loads(messages[2]["content"][0]["content"])
-        added_evidence = json.loads(messages[2]["content"][1]["text"])["evidence"]
+        assert messages[2]["content"][0]["type"] == "tool_result"
+        assert json.loads(messages[2]["content"][1]["text"]) == {
+            "money_display_cad": {
+                "current_rent_cad": "2000.00",
+                "proposed_rent_cad": "2048.00",
+                "exact_new_rent_ceiling_cad": "2042.00",
+            }
+        }
+        added_evidence = json.loads(messages[2]["content"][2]["text"])["evidence"]
         corpus = load_corpus()
         expected_ids = {item["id"] for item in initial_evidence} | {
             identifier
@@ -451,7 +459,15 @@ def test_offline_recorded_12289_second_count_preserves_complete_evidence(
     messages = counted["messages"]
     top_five = json.loads(messages[0]["content"])["evidence"]
     result = json.loads(messages[2]["content"][0]["content"])
-    added = json.loads(messages[2]["content"][1]["text"])["evidence"]
+    assert messages[2]["content"][0]["type"] == "tool_result"
+    assert json.loads(messages[2]["content"][1]["text"]) == {
+        "money_display_cad": {
+            "current_rent_cad": "2000.00",
+            "proposed_rent_cad": "2048.00",
+            "exact_new_rent_ceiling_cad": "2042.00",
+        }
+    }
+    added = json.loads(messages[2]["content"][2]["text"])["evidence"]
     required_ids = {item["id"] for item in top_five} | {
         identifier for rule in result["rule_ids"] for identifier in corpus.rule(rule).evidence_ids
     }

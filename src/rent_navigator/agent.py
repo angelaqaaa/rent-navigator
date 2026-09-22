@@ -15,7 +15,7 @@ from anthropic.types import (
     ToolChoiceParam,
     ToolUseBlock,
 )
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from rent_navigator.corpus import Chunk, Corpus
 from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit
@@ -25,6 +25,7 @@ from rent_navigator.models import (
     AskRequest,
     AskResponse,
     Citation,
+    DecimalString,
     GeneratedResult,
     NoticeFacts,
     NoticeRequest,
@@ -106,6 +107,27 @@ _FINAL_SYSTEM: Final = (
     "status; generated text cannot replace the result. Explain definite failures, applicable "
     "limits, and missing facts. Do not call any tool again."
 )
+_RENT_MONEY_SYSTEM: Final = (
+    "For rent amounts, current_cents, proposed_cents, and cap_cents_exact are Canadian cents, "
+    "not dollars. Use only the supplied money_display_cad strings for monetary amounts: "
+    "current_rent_cad is the current rent, proposed_rent_cad is the proposed total new rent, "
+    "and exact_new_rent_ceiling_cad is the exact mathematical ceiling on total new rent, "
+    "not the amount of an increase. Do not invent or calculate other monetary figures. "
+    "Do not assume a monthly rental period. Null amounts remain unknown; preserve unknown "
+    "and rounding_uncertain conclusions without rounding the supplied display strings."
+)
+_MONEY_DISPLAY_KEY: Final = "money_display_cad"
+_MONEY_DISPLAY_FIELDS: Final = (
+    "current_rent_cad",
+    "proposed_rent_cad",
+    "exact_new_rent_ceiling_cad",
+)
+_MONEY_FORMAT_POLICY: Final = (
+    "v1: shift canonical Canadian cents left two decimal places using strings; "
+    "retain at least two decimal places, all fractional-cent precision, sign, and null; "
+    "no rounding, grouping, currency prefix, or frequency assumption"
+)
+_CENTS_DECIMAL: Final = TypeAdapter(DecimalString)
 _RESULT_SYSTEM: Final = (
     "Return only the structured result: kind answer or refusal, refusal_reason null for an "
     "answer or needs_confirmation/out_of_scope/insufficient_evidence for a refusal, and "
@@ -115,7 +137,9 @@ _RESULT_SYSTEM: Final = (
 _CITATION_SYSTEM: Final = (
     "Every answer statement must include at least one citation_id naming a supplied evidence "
     "chunk that supports it. Use chunk IDs, never rule IDs or invented IDs/URLs. If the "
-    "available snapshot evidence is insufficient, return insufficient_evidence."
+    "available snapshot evidence is insufficient, return insufficient_evidence. "
+    "When a statement names a statutory section, cite the supplied statutory chunk for "
+    "that section; otherwise omit the specific section reference."
 )
 _SELECTION_CHOICE: Final[ToolChoiceParam] = {"type": "any", "disable_parallel_tool_use": True}
 _FINAL_CHOICE: Final[ToolChoiceParam] = {"type": "none"}
@@ -124,6 +148,26 @@ _ANSWER_SEPARATOR: Final = "\n"
 
 def _json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _cents_to_cad(value: int | str | None) -> str | None:
+    """Shift validated cents to exact dollar text without decimal arithmetic."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        if isinstance(value, bool) or value <= 0:
+            raise ValueError("Expected positive integer cents")
+        groups: list[str] = []
+        while value >= 1_000_000_000:
+            value, group = divmod(value, 1_000_000_000)
+            groups.append(f"{group:09d}")
+        text = str(value) + "".join(reversed(groups))
+    else:
+        text = _CENTS_DECIMAL.validate_python(value, strict=True)
+    sign = "-" if text.startswith("-") else ""
+    whole, _, fraction = text.removeprefix("-").partition(".")
+    digits = whole.zfill(3)
+    return f"{sign}{digits[:-2]}.{digits[-2:]}{fraction}"
 
 
 def _system(mode: Mode, arm: Arm, *, selection: bool = False) -> str:
@@ -136,6 +180,8 @@ def _system(mode: Mode, arm: Arm, *, selection: bool = False) -> str:
     )
     parts = [_BASE_SYSTEM, specific]
     if not selection:
+        if mode == "rent":
+            parts.append(_RENT_MONEY_SYSTEM)
         parts.append(_RESULT_SYSTEM)
         if arm == "production":
             parts.append(_CITATION_SYSTEM)
@@ -149,7 +195,7 @@ def agent_config_hash(mode: Mode, arm: Arm = "production") -> str:
     tools = provider_tool_definitions()
     schema = transform_schema(GeneratedResult.model_json_schema())
     config = {
-        "version": 1,
+        "version": 2,
         "mode": mode,
         "arm": arm,
         "prompts": {
@@ -157,6 +203,7 @@ def agent_config_hash(mode: Mode, arm: Arm = "production") -> str:
             "question": _QUESTION_SYSTEM,
             "selection": _SELECTION_SYSTEM,
             "final": _FINAL_SYSTEM,
+            "rent_money": _RENT_MONEY_SYSTEM,
             "result": _RESULT_SYSTEM,
             "citations": _CITATION_SYSTEM,
         },
@@ -165,6 +212,11 @@ def agent_config_hash(mode: Mode, arm: Arm = "production") -> str:
         "rounding_text": ROUNDING_UNCERTAINTY_TEXT,
         "disclaimer": DISCLAIMER_TEMPLATE,
         "answer_separator": _ANSWER_SEPARATOR,
+        "money_display": {
+            "block": _MONEY_DISPLAY_KEY,
+            "fields": _MONEY_DISPLAY_FIELDS,
+            "formatter": _MONEY_FORMAT_POLICY,
+        },
         "tools": tools,
         "output_schema": schema,
         "tool_choices": {"question": None, "selection": _SELECTION_CHOICE, "final": _FINAL_CHOICE},
@@ -404,6 +456,27 @@ async def answer(
                             "content": tool_result.model_dump_json(),
                         }
                     ]
+                    if request.mode == "rent":
+                        amounts = (
+                            request.facts.current_cents,
+                            request.facts.proposed_cents,
+                            tool_result.cap_cents_exact,
+                        )
+                        followup.append(
+                            {
+                                "type": "text",
+                                "text": _json(
+                                    {
+                                        _MONEY_DISPLAY_KEY: {
+                                            key: _cents_to_cad(value)
+                                            for key, value in zip(
+                                                _MONEY_DISPLAY_FIELDS, amounts, strict=True
+                                            )
+                                        }
+                                    }
+                                ),
+                            }
+                        )
                     if arm == "production":
                         added = tuple(
                             chunk

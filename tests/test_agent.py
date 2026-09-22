@@ -2,11 +2,13 @@
 
 import asyncio
 import json
+import sys
 from collections.abc import Awaitable, Callable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from io import StringIO
+from pathlib import Path
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -18,7 +20,7 @@ from anthropic.types import Message, MessageTokensCount, TextBlock, ToolUseBlock
 import rent_navigator.agent as agent_module
 from rent_navigator.agent import agent_config_hash, answer
 from rent_navigator.corpus import Corpus, load_corpus
-from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit
+from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit, build_index, search
 from rent_navigator.models import (
     ASK_REQUEST_ADAPTER,
     AskRequest,
@@ -777,6 +779,14 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(corp
         assert "temperature" not in count
     second = requests[3][1]
     assert second["tool_choice"] == {"type": "none"}
+    assert json.loads(second["messages"][-1]["content"][1]["text"]) == {
+        "money_display_cad": {
+            "current_rent_cad": "2000.00",
+            "proposed_rent_cad": "2048.00",
+            "exact_new_rent_ceiling_cad": "2042.00",
+        }
+    }
+    assert agent_module._RENT_MONEY_SYSTEM in second["system"]
     assert second["messages"][-1]["content"][0]["tool_use_id"] == TOOL_ID
     assert second["messages"][-2]["content"][0]["type"] == "tool_use"
     assert json.loads(second["messages"][-1]["content"][0]["content"]) == result.model_dump(
@@ -919,3 +929,273 @@ def test_config_identity_changes_when_fixed_policy_changes(monkeypatch: pytest.M
     original = agent_config_hash("rent", "production")
     monkeypatch.setitem(agent_module.REFUSAL_TEXT, "needs_confirmation", "Synthetic policy change.")
     assert agent_config_hash("rent", "production") != original
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+def test_captured_money_failure_has_exact_cad_context_after_native_result(
+    corpus: Corpus, arm: Literal["production", "baseline"], tmp_path: Path
+) -> None:
+    """Captured failure facts exercise request construction, not explanation quality."""
+    request = request_for()
+    result = expected_tool(request, corpus)
+    first = selection(request)
+    fake = RecordingMessages([first, final_message(sorted(rule_ids(result, corpus))[:1])])
+    harness = Harness(request, corpus, fake, arm=arm)
+    database = tmp_path / "captured-facts.sqlite"
+    build_index(database, corpus)
+    harness.hits = search(database, RENT_QUERY, expected_corpus_hash=corpus.corpus_hash)
+    response = asyncio.run(harness.run())
+    followup = fake.creates[1]["messages"][-1]["content"]
+    assert followup[0] == {
+        "type": "tool_result",
+        "tool_use_id": TOOL_ID,
+        "content": result.model_dump_json(),
+    }
+    assert followup[1] == {
+        "type": "text",
+        "text": json.dumps(
+            {
+                "money_display_cad": {
+                    "current_rent_cad": "2000.00",
+                    "proposed_rent_cad": "2048.00",
+                    "exact_new_rent_ceiling_cad": "2042.00",
+                }
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    }
+    assert response.tool_result == result
+    assert fake.creates[1]["messages"][-2]["content"] == [
+        block.model_dump(mode="json", exclude_none=True) for block in first.content
+    ]
+    assert_count_matches_generation(fake)
+
+    expected_ids = rule_ids(result, corpus) | {hit.chunk.id for hit in harness.hits}
+    assert len(harness.hits) == 5
+    assert len(expected_ids) == 20
+    texts = strings(fake.creates[1]["messages"])
+    if arm == "production":
+        assert len(followup) == 3
+        assert "evidence" in json.loads(followup[2]["text"])
+        for identifier in expected_ids:
+            assert texts.count(corpus.chunk(identifier).text) == 1
+    else:
+        assert len(followup) == 2
+        assert not harness.queries
+        assert all(chunk.text not in texts for chunk in corpus.chunks)
+        assert "evidence" not in json.dumps(fake.creates[1]["messages"])
+    assert agent_module._RENT_MONEY_SYSTEM in fake.creates[1]["system"]
+    assert agent_module._RENT_MONEY_SYSTEM not in fake.creates[0]["system"]
+    assert "money_display_cad" not in json.dumps(fake.creates[0]["messages"])
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (200000, "2000.00"),
+        (1, "0.01"),
+        ("204200", "2042.00"),
+        ("102101.021", "1021.01021"),
+        ("1.019", "0.01019"),
+        ("0", "0.00"),
+        ("-25", "-0.25"),
+        ("-0.001", "-0.00001"),
+        ("0.01", "0.0001"),
+        ("100.01", "1.0001"),
+        (1000000001, "10000000.01"),
+        (None, None),
+    ],
+)
+def test_cents_to_cad_is_an_exact_unit_shift(value: int | str | None, expected: str | None) -> None:
+    assert agent_module._cents_to_cad(value) == expected
+
+
+@pytest.mark.parametrize("value", [True, False, 0, -1, "-0", "1.0", "01", "1e2", "+1", "", 1.5])
+def test_cents_to_cad_rejects_values_outside_source_contract(value: Any) -> None:
+    with pytest.raises((ValueError, TypeError)):
+        agent_module._cents_to_cad(value)
+
+
+def test_cents_to_cad_preserves_large_integers_without_changing_digit_limit() -> None:
+    digit_limit = sys.get_int_max_str_digits()
+    value = 10**4300 + 123
+    expected = "1" + "0" * 4297 + "1.23"
+    assert agent_module._cents_to_cad(value) == expected
+    assert agent_module._cents_to_cad("1" + "0" * 4300 + ".001") == ("1" + "0" * 4298 + ".00001")
+    assert sys.get_int_max_str_digits() == digit_limit
+
+
+def test_cents_to_cad_does_not_depend_on_decimal_precision_or_traps() -> None:
+    with localcontext() as context:
+        context.prec = 1
+        for signal in context.traps:
+            context.traps[signal] = True
+        assert agent_module._cents_to_cad("102101.021") == "1021.01021"
+        assert agent_module._cents_to_cad(123456789) == "1234567.89"
+        assert agent_module._cents_to_cad("-0.001") == "-0.00001"
+        assert context.prec == 1
+        assert not any(context.flags.values())
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+@pytest.mark.parametrize(
+    ("current", "proposed", "expected", "rounding"),
+    [
+        (100001, 102102, ("1000.01", "1021.02", "1021.01021"), True),
+        (None, 204800, (None, "2048.00", None), False),
+        (200000, None, ("2000.00", None, "2042.00"), False),
+        (None, None, (None, None, None), False),
+    ],
+)
+def test_final_money_context_preserves_fractional_ceiling_and_unknown_facts(
+    corpus: Corpus,
+    arm: Literal["production", "baseline"],
+    current: int | None,
+    proposed: int | None,
+    expected: tuple[str | None, str | None, str | None],
+    rounding: bool,
+) -> None:
+    value = request_for().model_dump(mode="json")
+    value["facts"].update(current_cents=current, proposed_cents=proposed)
+    request = ASK_REQUEST_ADAPTER.validate_json(json.dumps(value))
+    result = expected_tool(request, corpus)
+    if rounding:
+        guideline = next(check for check in result.checks if check.id == "guideline")
+        assert (guideline.status, guideline.reason) == ("unknown", "rounding_uncertain")
+    fake = RecordingMessages(
+        [selection(request), final_message(sorted(rule_ids(result, corpus))[:1])]
+    )
+    response = asyncio.run(Harness(request, corpus, fake, arm=arm).run())
+    followup = fake.creates[1]["messages"][-1]["content"]
+    assert followup[0]["content"] == result.model_dump_json()
+    assert json.loads(followup[1]["text"]) == {
+        "money_display_cad": dict(
+            zip(
+                ("current_rent_cad", "proposed_rent_cad", "exact_new_rent_ceiling_cad"),
+                expected,
+                strict=True,
+            )
+        )
+    }
+    assert response.tool_result == result
+    assert_count_matches_generation(fake)
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+@pytest.mark.parametrize("mode", ["question", "notice"])
+def test_money_context_and_instruction_are_absent_from_other_modes(
+    corpus: Corpus, arm: Literal["production", "baseline"], mode: Literal["question", "notice"]
+) -> None:
+    request = request_for(mode)
+    replies = ([] if mode == "question" else [selection(request)]) + [
+        final_message([corpus.chunks[0].id] if arm == "production" else [])
+    ]
+    fake = RecordingMessages(replies)
+    asyncio.run(Harness(request, corpus, fake, arm=arm).run())
+    for payload in (*fake.counts, *fake.creates):
+        assert agent_module._RENT_MONEY_SYSTEM not in payload["system"]
+        assert "money_display_cad" not in json.dumps(payload["messages"])
+    assert_count_matches_generation(fake)
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    ["_MONEY_DISPLAY_KEY", "_MONEY_DISPLAY_FIELDS", "_MONEY_FORMAT_POLICY", "_RENT_MONEY_SYSTEM"],
+)
+def test_config_identity_covers_money_contract_and_formatter_policy(
+    monkeypatch: pytest.MonkeyPatch, attribute: str
+) -> None:
+    original = agent_config_hash("rent", "production")
+    changed: str | tuple[str, ...] = (
+        ("synthetic_key",) if attribute == "_MONEY_DISPLAY_FIELDS" else "synthetic policy mutation"
+    )
+    monkeypatch.setattr(agent_module, attribute, changed)
+    assert agent_config_hash("rent", "production") != original
+
+
+def test_config_money_manifest_contains_policy_but_no_request_amounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+    original = agent_module._json
+
+    def capture(value: object) -> str:
+        captured.append(deepcopy(value))
+        return original(value)
+
+    monkeypatch.setattr(agent_module, "_json", capture)
+    assert len(agent_config_hash("rent", "production")) == 64
+    assert len(captured) == 1
+    values = strings(captured[0])
+    assert agent_module._MONEY_DISPLAY_KEY in values
+    assert all(key in values for key in agent_module._MONEY_DISPLAY_FIELDS)
+    assert agent_module._MONEY_FORMAT_POLICY in values
+    assert agent_module._RENT_MONEY_SYSTEM in values
+    assert all(
+        amount not in values for amount in ("200000", "204800", "2000.00", "2048.00", "2042.00")
+    )
+
+
+def test_money_instruction_preserves_units_total_rent_and_uncertainty() -> None:
+    instruction = agent_module._RENT_MONEY_SYSTEM
+    for clause in (
+        "current_cents, proposed_cents, and cap_cents_exact are Canadian cents",
+        "Use only the supplied money_display_cad strings for monetary amounts",
+        "proposed_rent_cad is the proposed total new rent",
+        "exact_new_rent_ceiling_cad is the exact mathematical ceiling on total new rent",
+        "not the amount of an increase",
+        "Do not invent or calculate other monetary figures",
+        "Do not assume a monthly rental period",
+        "Null amounts remain unknown",
+        "rounding_uncertain conclusions without rounding",
+    ):
+        assert clause in instruction
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+@pytest.mark.parametrize("mode", ["question", "notice", "rent"])
+def test_section_citation_instruction_is_only_in_production_final_requests(
+    corpus: Corpus,
+    arm: Literal["production", "baseline"],
+    mode: Literal["question", "notice", "rent"],
+) -> None:
+    clause = (
+        "When a statement names a statutory section, cite the supplied statutory chunk for "
+        "that section; otherwise omit the specific section reference."
+    )
+    request = request_for(mode)
+    replies = ([] if mode == "question" else [selection(request)]) + [
+        final_message([corpus.chunks[0].id] if arm == "production" else [])
+    ]
+    fake = RecordingMessages(replies)
+    asyncio.run(Harness(request, corpus, fake, arm=arm).run())
+    assert (clause in fake.creates[-1]["system"]) == (arm == "production")
+    if mode != "question":
+        assert clause not in fake.creates[0]["system"]
+    assert_count_matches_generation(fake)
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+def test_known_money_does_not_invent_a_ceiling_for_unsupported_scope(
+    corpus: Corpus, arm: Literal["production", "baseline"]
+) -> None:
+    value = request_for().model_dump(mode="json")
+    value["facts"]["scope"]["ordinary"] = "excluded"
+    request = ASK_REQUEST_ADAPTER.validate_json(json.dumps(value))
+    result = expected_tool(request, corpus)
+    assert result.status == "unsupported"
+    assert result.cap_cents_exact is None
+    fake = RecordingMessages(
+        [selection(request), final_message(sorted(rule_ids(result, corpus))[:1])]
+    )
+    response = asyncio.run(Harness(request, corpus, fake, arm=arm).run())
+    assert json.loads(fake.creates[1]["messages"][-1]["content"][1]["text"]) == {
+        "money_display_cad": {
+            "current_rent_cad": "2000.00",
+            "proposed_rent_cad": "2048.00",
+            "exact_new_rent_ceiling_cad": None,
+        }
+    }
+    assert response.tool_result == result
+    assert_count_matches_generation(fake)

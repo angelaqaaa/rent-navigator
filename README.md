@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, bounded analysis orchestration, pattern redaction, and eight offline security fixtures. Development CLIs accept only fixed synthetic inputs. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, bounded analysis orchestration, pattern redaction, eight offline security fixtures, and an offline evaluation and synthetic collection harness. Development CLIs accept only fixed synthetic inputs. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -159,6 +159,37 @@ The subsequent money-context repair passed independent offline review. It change
 
 The owner has confirmed the additional US$5, bringing confirmed prepayment to **US$30**, with automatic replenishment disabled. Further paid work requires a new explicit authorization. The amended US$50 allocation remains hosting14, development/CI/measurement21, demo9 and contingency6. Future reservations total **US$20.313**, including **15 remaining development slots**; cumulative incurred cost is **US$0.045685**, leaving **US$0.641315** within development. These are budget calculations, not a queried provider balance; the full US$9 demo allocation remains protected. The documentation update does not change the measured source, and no live run was repeated for it.
 
+## Offline evaluation and collection
+
+Angela approved the 16 cases in `eval/gold.jsonl`, their prepared answers and official-source mappings at **2026-09-23T14:34:14.302Z**. The dataset SHA-256 is `575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb`. The approval file binds every dataset byte and the corpus hash. Read-only validation checks strict schemas and canonical evidence without calling calculators, searching, scoring or contacting a provider:
+
+```sh
+uv run --locked python -m rent_navigator.eval validate-gold --data-dir eval
+uv run --locked python -m rent_navigator.eval plan \
+  --data-dir eval --output-dir /tmp/rent-navigator-plan
+```
+
+Output directories must be new. `plan` only writes the fixed schedule: three warm-ups per arm, then five paired repetitions of the 16 cases, using one seed-42 random generator and alternating arm order. It makes no calls and does not approve the candidate.
+
+The offline command verifies approval for the exact hash, compares all ten tool results and their ordered checks, validates all sixteen cases, and measures deterministic MRR@5/NDCG@5 on the six questions. It requires passing evidence from the existing security suite:
+
+```sh
+uv run --locked pytest tests/test_security_pipeline.py \
+  --junitxml=/tmp/rent-navigator-security.xml
+uv run --locked python -m rent_navigator.eval offline \
+  --data-dir eval --output-dir /tmp/rent-navigator-offline \
+  --source-sha "$(git rev-parse HEAD)" --lockfile uv.lock \
+  --security-report /tmp/rent-navigator-security.xml
+```
+
+Missing or mismatched approval makes `offline` exit nonzero before tool or retrieval execution and preserve a failure artifact. Approval cannot be inferred from passing unit tests. `eval/activation.json` explicitly leaves the comparison baseline pending; this defers only the baseline comparison. No baseline numbers are bootstrapped by this package. `verify-offline --help` describes the required source, manifest digest and prerequisite conclusions for independent artifact verification.
+
+`eval.runner.run_attempt` uses the actual extraction and analysis operations through injected messages and judge ports. It preserves actual tool execution evidence, ranked retrieval IDs, failed attempts, separate serving/judge accounting, and distinct traces sharing one attempt ID. An extraction mismatch ends the attempt without correcting facts. Missing usage remains unknown, retains reservations and stops collection for budget reconciliation. Full-content recording is restricted to declared synthetic scenarios and prepared requests; ordinary trace records remain metadata-only.
+
+`eval.collection.collect_synthetic` exercises the serial collection protocol through injected ports. It writes the plan first, persists each attempt, and retains partial runs on interruption. Its seven artifacts are `plan.json`, `manifest.json`, `results.jsonl`, `warmups.jsonl`, `metadata.jsonl`, `raw-provider.jsonl`, and `summary.json`. Verification checks their hashes, planned entries, observations and trace accounting. Synthetic manifests always record `execution_mode=synthetic`, `reportable=false`, and `evaluation_complete=false`. These tests establish the harness protocol; their timing, costs and fake judgments are not project measurements. The future measured boundary is extraction plus analysis through trace completion inside the recorded image, excluding judge work, HTTP/browser transport and human delay.
+
+The evaluation CLI has no live mode and reads no API credentials. A real judge, paid evaluation composition, baseline activation and branch protection remain for WP9.
+
 ## Verify
 
 ```sh
@@ -172,7 +203,7 @@ uv build --no-sources
 
 `uv.lock` records exact dependency versions and distribution hashes. Strict mypy covers source and tests. Tests cover public JSON boundaries, synthetic trace accounting, source/chunk integrity, rule resolution, deterministic extraction, query tokenization, offline rebuilds, notice boundaries, calendar anniversaries, exact rent caps and form/status combinations. Synthetic timing/usage values are not serving measurements.
 
-The unfiltered PR workflow runs basic checks, installs the wheel outside the checkout with locked dependencies, and runs `tests/smoke_corpus.py`. This checks package data, citations, rules and two rebuilds with socket access disabled. Offline evaluation, live evaluation and branch protection remain future work; the workflow does not yet provide evaluation regression blocking.
+The unfiltered PR workflow runs basic checks, installs the wheel outside the checkout with locked dependencies, and runs `tests/smoke_corpus.py`. It also validates the evaluation data through the installed package. `offline-eval-run` executes approved offline checks and uploads complete or failed evidence. The always-running `offline-eval` summary requires successful checks, Docker and offline execution, then verifies the producer manifest digest, payload hashes, source/data/config identities, exact results, security XML and activation state. Missing, skipped, cancelled or stale prerequisites fail. Gold approval alone does not constitute offline acceptance; the current source must pass these checks. Live evaluation and merge protection are not configured yet.
 
 ## Docker
 
@@ -187,7 +218,7 @@ git archive --format=tar HEAD | docker build \
 docker run --rm --publish 127.0.0.1:8000:8000 rent-navigator:wp2
 ```
 
-The image runs as a non-root user with one worker and access logging disabled. CI checks health and the OCI revision against the full source SHA. It separately runs the installed-corpus smoke from `/tmp` with no network, a read-only root filesystem and writable temporary storage. No runtime source fetch is performed.
+The image runs as a non-root user with one worker and access logging disabled. CI checks health and the OCI revision against the full source SHA. It separately runs the installed-corpus smoke from `/tmp` with no network, a read-only root filesystem and writable temporary storage. Evaluation input files are mounted read-only for candidate validation; they are not copied into the service image. No runtime source fetch is performed.
 
 ## Stable interfaces
 
@@ -201,5 +232,7 @@ The image runs as a non-root user with one worker and access logging disabled. C
 - `agent.answer(...)` returns the existing `AskResponse` and owns analysis trace completion. `agent_config_hash(mode, arm)` supplies its configuration identity; extraction keeps its separate caller-owned trace contract.
 
 - `guards.redact_text(text)` applies the versioned free-text policy; `security_cases.load_security_cases(corpus=...)` returns the eight strict synthetic fixtures without executing them.
+- `eval.data.load_gold(data_dir, corpus, require_approved=True)` validates the complete dataset and approval identities before execution. `eval.models` defines gold, judgments and result rows; `eval.metrics` provides deterministic scoring and collection aggregates.
+- `eval.runner` provides `build_plan`, `run_attempt` and the injected `JudgePort`. `eval.collection` persists and verifies synthetic collections; `eval.offline` verifies exact offline artifacts and the frozen baseline schema.
 
-HTTP request integration, evaluation, real-model security verification and deployment remain future work.
+HTTP request integration, real-model evaluation and security verification, and deployment remain future work.

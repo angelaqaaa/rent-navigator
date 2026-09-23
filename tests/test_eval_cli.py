@@ -119,4 +119,4 @@ def test_ci_summary_runs_always_and_binds_exact_artifacts() -> None:
     assert upload["with"]["name"] == download["with"]["name"]
     assert download["with"]["digest-mismatch"] == "error"
     assert "SOURCE_COMMIT" in download["with"]["name"]
-    assert "live-eval-gate" not in workflow["jobs"]
+    assert workflow["jobs"]["live-eval-gate"]["if"] == "always()"

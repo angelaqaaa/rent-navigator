@@ -622,3 +622,33 @@ def test_invalid_optional_judge_metadata_preserves_known_accounting(corpus: Corp
     assert outcome.judge_accounting is not None
     assert outcome.judge_accounting.cost.actual_cost_usd == Decimal("0.0007")
     assert "unexpected/model-id" not in harness.metadata.getvalue() + harness.raw.getvalue()
+
+
+@pytest.mark.parametrize("missing_usage", [False, True])
+def test_typed_failed_judge_keeps_billed_accounting_without_a_judgment(
+    corpus: Corpus, missing_usage: bool
+) -> None:
+    from rent_navigator.eval.runner import JudgeAccounting, JudgeFailure
+
+    class FailedJudge(SyntheticJudge):
+        async def evaluate(self, value: JudgeInput, *, context: TraceContext) -> JudgeEvaluation:
+            evaluated = await super().evaluate(value, context=context)
+            accounting = JudgeAccounting.model_validate_json(
+                evaluated.model_dump_json(exclude={"judgment"})
+            )
+            raise JudgeFailure("invalid_generated_output", accounting)
+
+    harness = _harness(corpus, "Q01")
+    failed = FailedJudge(harness.clock)
+    failed.missing_usage = missing_usage
+    harness.judge = failed
+    outcome = harness.run()
+    assert outcome.row.classification == "error"
+    assert outcome.row.judge is None and outcome.judge_evaluation is None
+    assert outcome.judge_accounting is not None
+    assert outcome.row.judge_cost_usd == (None if missing_usage else Decimal("0.0007"))
+    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert "judge_invalid" in outcome.reasons
+    assert ("judge_usage_missing" in outcome.reasons) == missing_usage
+    assert outcome.row.serving_cost_usd == Decimal("0.0015")
+    assert all(record.phase != "judge" for record in outcome.records)

@@ -30,6 +30,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | Server-formatted CAD context for rent explanations | Leave cents conversion to generated prose | A real response confused cents with dollars and the rent ceiling with the increase; preserve exact amounts and meanings |
 | Pattern redaction of free text; additive test injection | Rewrite typed facts; replace corpus chunks | Preserve confirmed money and evidence identity while testing payload privacy and hostile context |
 | Owner-approved gold hash; shared-operation measurement | Implicit gold approval; a separate measurement service | Freeze the independent oracle before scoring and reuse serving behavior within the deadline |
+| One authorized live batch; verified evidence reuse for unchanged commits | Pay on every push or trust stale checks | Bound API spending while proving the tested behavior matches each required CI summary |
 
 These freshly justify adopted reference patterns; its domain, thresholds and schedule are discarded. Review amendments also freeze `max(28, B−2)`: the former N=16 formula reduced to a constant 28 and did not compare meaningfully with B.
 

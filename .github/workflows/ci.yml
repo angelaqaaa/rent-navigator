@@ -193,3 +193,167 @@ jobs:
             --source-sha "$SOURCE_COMMIT" --base-sha "$BASE_SHA" \
             --manifest-sha256 "$MANIFEST_SHA256" --prerequisites "$prerequisites" \
             --lockfile uv.lock
+
+  live-eval-plan:
+    needs: [checks, docker, offline-eval]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Select verified reuse or a protected funded execution
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+        run: uv run --locked python scripts/live_ci.py plan
+
+  live-eval-execute:
+    if: needs.live-eval-plan.outputs.mode == 'execute'
+    needs: [checks, docker, offline-eval, offline-eval-run, live-eval-plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: live-eval
+    concurrency:
+      group: rent-navigator-paid-live-eval
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      manifest-sha256: ${{ steps.identity.outputs.manifest-sha256 }}
+      batch-uuid: ${{ steps.permit.outputs.batch-uuid }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: offline-${{ env.SOURCE_COMMIT }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/offline-artifacts
+          digest-mismatch: error
+      - name: Validate protected environment, exact-run permit and required secret
+        id: permit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIVE_EVAL_PERMIT: ${{ secrets.LIVE_EVAL_PERMIT }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          uv run --locked python scripts/live_ci.py permit \
+            --permit-file "$RUNNER_TEMP/live-permit.json"
+      - name: Execute the single permitted complete live batch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OFFLINE_MANIFEST_SHA256: ${{ needs.offline-eval-run.outputs.manifest-sha256 }}
+          OFFLINE_PREREQUISITES: '{"checks":"${{ needs.checks.result }}","docker":"${{ needs.docker.result }}","offline-eval-run":"${{ needs.offline-eval-run.result }}"}'
+        run: |
+          uv run --locked python -m rent_navigator.eval live-gate \
+            --data-dir eval --output-dir "$RUNNER_TEMP/live-artifacts" \
+            --source-sha "$SOURCE_COMMIT" --offline-dir "$RUNNER_TEMP/offline-artifacts" \
+            --permit-file "$RUNNER_TEMP/live-permit.json" \
+            --repository "$GITHUB_REPOSITORY" --workflow .github/workflows/ci.yml \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --lockfile uv.lock
+      - name: Bind the producer manifest to this successful or failed job
+        id: identity
+        if: always() && steps.permit.outcome == 'success'
+        run: |
+          uv run --locked python scripts/live_ci.py identity \
+            --output-dir "$RUNNER_TEMP/live-artifacts"
+      - name: Preserve complete or partial paid evidence without replacement
+        if: always() && steps.permit.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: live-${{ env.SOURCE_COMMIT }}-${{ steps.permit.outputs.batch-uuid }}
+          path: ${{ runner.temp }}/live-artifacts/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+  live-eval-reuse:
+    if: needs.live-eval-plan.outputs.mode == 'reuse'
+    needs: [checks, docker, offline-eval, live-eval-plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Download and independently verify retained evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          uv run --locked python scripts/live_ci.py reuse \
+            --output-dir "$RUNNER_TEMP/reused-live-artifacts"
+
+  live-eval-gate:
+    if: always()
+    needs: [checks, docker, offline-eval, live-eval-plan, live-eval-execute, live-eval-reuse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Require current checks and verify the selected complete evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          PREREQUISITES: ${{ toJSON(needs) }}
+          SELECTED_PLAN: ${{ needs.live-eval-plan.outputs.plan }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          uv run --locked python scripts/live_ci.py summary \
+            --output-dir "$RUNNER_TEMP/verified-live-artifacts"

@@ -22,6 +22,7 @@ from rent_navigator.models import (
     AskRequest,
     CanonicalUUID,
     Extraction,
+    ExtractRequest,
     GeneratedResult,
     NoticeFacts,
     RentFacts,
@@ -30,6 +31,9 @@ from rent_navigator.models import (
     provider_tool_definitions,
 )
 from rent_navigator.provider import MessagesPort, ProviderFailure, _error_code
+from rent_navigator.security_cases import SecurityCase, load_security_cases
+
+RecordedCase = GoldCase | SecurityCase
 
 
 class RawProviderRecord(StrictModel):
@@ -50,10 +54,10 @@ class SyntheticAllowlist:
     cases: tuple[str, ...]
 
     @classmethod
-    def from_fixtures(cls, cases: Sequence[GoldCase]) -> "SyntheticAllowlist":
+    def from_fixtures(cls, cases: Sequence[RecordedCase]) -> "SyntheticAllowlist":
         return cls(tuple(case.model_dump_json() for case in cases))
 
-    def require(self, case: GoldCase) -> None:
+    def require(self, case: RecordedCase) -> None:
         if case.model_dump_json() not in self.cases:
             raise ValueError("Scenario is outside the declared synthetic allowlist")
 
@@ -65,7 +69,7 @@ class SyntheticRecorder:
         self,
         port: MessagesPort,
         *,
-        case: GoldCase,
+        case: RecordedCase,
         allowlist: SyntheticAllowlist,
         corpus: Corpus,
         stream: TextIO,
@@ -73,6 +77,8 @@ class SyntheticRecorder:
         attempt_id: UUID,
     ) -> None:
         allowlist.require(case)
+        if isinstance(case, SecurityCase) and case not in load_security_cases(corpus=corpus):
+            raise ValueError("Security recording requires an unchanged packaged fixture")
         self._port = port
         self._case = case
         self._corpus = corpus
@@ -87,6 +93,7 @@ class SyntheticRecorder:
         self._index = 0
         self.actual_tool_args: NoticeFacts | RentFacts | None = None
         self.actual_tool_result: ToolResult | None = None
+        self.expected_retrieved_ids: tuple[str, ...] | None = None
 
     def bind(
         self,
@@ -182,7 +189,11 @@ class SyntheticRecorder:
         if first["role"] != "user" or not isinstance(first["content"], str):
             raise ValueError("Invalid synthetic request")
         if self._phase == "extraction":
-            if self._case.letter is None or len(messages) != 1:
+            if (
+                not isinstance(self._case, GoldCase)
+                or self._case.letter is None
+                or len(messages) != 1
+            ):
                 raise ValueError("Invalid synthetic extraction")
             if first["content"] != redact_text(self._case.letter):
                 raise ValueError("Invalid synthetic extraction")
@@ -196,7 +207,21 @@ class SyntheticRecorder:
         else:
             expected.update(confirmed=True, facts=self._request.facts.model_dump(mode="json"))
         if "evidence" in initial:
-            self._evidence(initial.pop("evidence"))
+            if isinstance(self._case, SecurityCase) and self._arm == "baseline":
+                raise ValueError("Baseline cannot receive security evidence or a sidecar")
+            evidence = initial.pop("evidence")
+            self._evidence(evidence)
+            if (
+                self.expected_retrieved_ids is not None
+                and tuple(item["id"] for item in evidence) != self.expected_retrieved_ids
+            ):
+                raise ValueError("Synthetic retrieval differs from the observed canonical hits")
+        elif isinstance(self._case, SecurityCase) and self._arm == "production":
+            raise ValueError("Security production context requires canonical evidence")
+        if isinstance(self._case, SecurityCase):
+            sidecar = self._case.injected_retrieved_text
+            if self._arm == "production" and sidecar is not None:
+                expected["untrusted_retrieved_text"] = sidecar
         if initial != expected:
             raise ValueError("Invalid synthetic analysis")
         if len(messages) == 1:
@@ -340,9 +365,10 @@ class _VerificationOnly:
 def verify_synthetic_records(
     records: Sequence[RawProviderRecord],
     *,
-    case: GoldCase,
+    case: RecordedCase,
     corpus: Corpus,
     arm: Literal["production", "baseline"],
+    retrieved_ids: tuple[str, ...] | None = None,
 ) -> None:
     """Revalidate prepared data against the fixture; never invoke serving operations."""
     if not records:
@@ -359,11 +385,14 @@ def verify_synthetic_records(
         run_id=first.run_id,
         attempt_id=first.attempt_id,
     )
+    verifier.expected_retrieved_ids = retrieved_ids
     trace_id: UUID | None = None
     try:
         for record in records:
             if record.trace_id != trace_id:
                 trace_id = record.trace_id
+                if isinstance(case.request, ExtractRequest):
+                    raise ValueError("Extraction-only security is verified by the offline suite")
                 verifier.bind(trace_id, record.phase, case.request, arm=arm)
             if record.event == "request":
                 verifier._prepared(record.value, record.operation)

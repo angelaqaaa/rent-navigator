@@ -296,6 +296,13 @@ def test_question_retrieves_verbatim_and_sends_only_redacted_one_call(corpus: Co
     assert response.trace_id == harness.context.trace_id
     assert response.disclaimer == disclaimer_for(corpus.snapshot_date)
     assert response.citations == [corpus.citation(evidence)]
+    schema = harness.fake.creates[0]["output_config"]["format"]["schema"]
+    assert schema["$defs"]["Statement"]["properties"]["citation_ids"] == {
+        "type": "array",
+        "title": "Citation Ids",
+        "items": {"type": "string", "enum": [evidence]},
+        "minItems": 1,
+    }
     endpoint = harness.endpoint()
     assert endpoint.response_code == "answered"
     assert endpoint.tool_name is None
@@ -330,9 +337,12 @@ def test_fact_native_roundtrip_exact_tool_and_all_evidence(
     assert fake.creates[0]["tool_choice"] == {"type": "any", "disable_parallel_tool_use": True}
     assert "output_config" not in fake.creates[0]
     assert fake.creates[1]["tool_choice"] == {"type": "none"}
-    assert fake.creates[1]["output_config"]["format"]["schema"] == transform_schema(
-        GeneratedResult.model_json_schema()
+    schema = fake.creates[1]["output_config"]["format"]["schema"]
+    citation_schema = schema["$defs"]["Statement"]["properties"]["citation_ids"]
+    assert citation_schema["items"]["enum"] == sorted(
+        evidence | {hit.chunk.id for hit in harness.hits}
     )
+    assert citation_schema["minItems"] == 1
     history = fake.creates[1]["messages"]
     assistant = next(item for item in history if item["role"] == "assistant")
     assert assistant["content"] == [block.model_dump(exclude_none=True) for block in first.content]
@@ -434,6 +444,8 @@ def test_invalid_native_calls_never_execute_or_request_final(corpus: Corpus, mut
     [
         "missing",
         "forged",
+        "original_typo",
+        "uppercase",
         "unretrieved",
         "extra_url",
         "sequence",
@@ -455,6 +467,10 @@ def test_final_output_and_citations_fail_closed(corpus: Corpus, invalid: str) ->
         ids = []
     elif invalid == "forged":
         ids = ["f" * 64]
+    elif invalid == "original_typo":
+        ids = ["9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ee258082bfa41e"]
+    elif invalid == "uppercase":
+        ids = [ids[0].upper()]
     elif invalid == "unretrieved":
         ids = [next(chunk.id for chunk in corpus.chunks if chunk.id not in allowed)]
     response = final_message(ids)
@@ -541,7 +557,55 @@ def test_baseline_has_no_retrieval_or_passages_and_allows_empty_citations(
         }
         assert harness.fake.creates[1]["tool_choice"] == {"type": "none"}
     assert not harness.endpoint().retrieved_evidence_ids
+    assert harness.fake.creates[-1]["output_config"]["format"]["schema"] == transform_schema(
+        GeneratedResult.model_json_schema()
+    )
     assert_count_matches_generation(harness.fake)
+
+
+def test_final_schema_is_fresh_and_preserves_empty_and_refusal_branches(corpus: Corpus) -> None:
+    original = transform_schema(GeneratedResult.model_json_schema())
+    allowed = {corpus.chunks[0].id, corpus.chunks[1].id}
+    production = agent_module._final_schema("production", allowed)
+    assert production != original
+    assert "minItems" not in production["properties"]["statements"]
+    assert agent_module._final_schema("baseline", allowed) == original
+    assert agent_module._final_schema("production", set()) == original
+    production["$defs"]["Statement"]["properties"]["citation_ids"]["items"]["enum"].clear()
+    assert agent_module._final_schema("production", allowed)["$defs"]["Statement"]["properties"][
+        "citation_ids"
+    ]["items"]["enum"] == sorted(allowed)
+    request = request_for("question")
+    harness = Harness(
+        request, corpus, RecordingMessages([final_message([], reason="insufficient_evidence")])
+    )
+    harness.hits = ()
+    assert asyncio.run(harness.run()).status == "refused"
+    assert harness.fake.creates[0]["output_config"]["format"]["schema"] == original
+
+
+def test_citation_policy_hash_is_static_and_binds_construction(
+    corpus: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    before = agent_config_hash("rent")
+    agent_module._final_schema("production", {corpus.chunks[0].id})
+    agent_module._final_schema("production", {corpus.chunks[1].id})
+    assert agent_config_hash("rent") == before
+    policy = dict(agent_module._CITATION_SCHEMA_POLICY, version=2)
+    monkeypatch.setattr(agent_module, "_CITATION_SCHEMA_POLICY", policy)
+    assert agent_config_hash("rent") != before
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+def test_failed_tool_explanation_instruction_shared_between_arms(
+    arm: Literal["production", "baseline"],
+) -> None:
+    prompt = agent_module._system("rent", arm)
+    assert "that outcome alone is not insufficient_evidence" in prompt
+    assert "Refuse when the available information is truly insufficient" in prompt
+    assert "R03" not in prompt
+    if arm == "production":
+        assert "ID in citation_ids" in prompt
 
 
 @pytest.mark.parametrize("mode,valid", [("question", False), ("rent", True), ("rent", False)])

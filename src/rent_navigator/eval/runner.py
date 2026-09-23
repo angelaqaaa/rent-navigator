@@ -392,6 +392,11 @@ async def run_attempt(
             trace.finish(code)
             latency_ms += (clock() - started) * 1000
 
+    def observed_retrieve(query: str) -> tuple[SearchHit, ...]:
+        hits = retrieve(query)
+        recorder.expected_retrieved_ids = tuple(hit.chunk.id for hit in hits)
+        return hits
+
     if response is None and all(item.passed for item in assertions):
         ctx = context("analysis")
         analysis_started = True
@@ -401,7 +406,7 @@ async def run_attempt(
                 request,
                 provider=provider,
                 corpus=corpus,
-                retrieve=retrieve,
+                retrieve=observed_retrieve,
                 redact=redact_text,
                 deadline=Deadline.start(clock=clock),
                 context=ctx,

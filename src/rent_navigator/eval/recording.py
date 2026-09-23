@@ -12,7 +12,13 @@ from anthropic import transform_schema
 from anthropic.types import Message, MessageTokensCount
 from pydantic import Field
 
-from rent_navigator.agent import _FINAL_CHOICE, _SELECTION_CHOICE, _system
+from rent_navigator.agent import (
+    _FINAL_CHOICE,
+    _SELECTION_CHOICE,
+    _final_schema,
+    _system,
+    _tool_call,
+)
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.models import GoldCase
 from rent_navigator.extract import EXTRACTION_SYSTEM
@@ -23,7 +29,6 @@ from rent_navigator.models import (
     CanonicalUUID,
     Extraction,
     ExtractRequest,
-    GeneratedResult,
     NoticeFacts,
     RentFacts,
     StrictModel,
@@ -94,6 +99,7 @@ class SyntheticRecorder:
         self.actual_tool_args: NoticeFacts | RentFacts | None = None
         self.actual_tool_result: ToolResult | None = None
         self.expected_retrieved_ids: tuple[str, ...] | None = None
+        self._preflight: dict[str, Any] | None = None
 
     def bind(
         self,
@@ -107,11 +113,13 @@ class SyntheticRecorder:
         self._arm = arm
         self._index = 0
         self._returned = []
+        self._preflight = None
 
-    def _evidence(self, value: object) -> None:
+    def _evidence(self, value: object) -> tuple[str, ...]:
         if not isinstance(value, list) or len(value) > len(self._corpus.chunks):
             raise ValueError("Invalid synthetic evidence")
         seen: set[str] = set()
+        identifiers: list[str] = []
         for item in value:
             if not isinstance(item, dict) or set(item) != {"id", "heading", "text"}:
                 raise ValueError("Invalid synthetic evidence")
@@ -119,6 +127,8 @@ class SyntheticRecorder:
             if item["text"] != chunk.text or item["heading"] != chunk.heading or chunk.id in seen:
                 raise ValueError("Invalid synthetic evidence")
             seen.add(chunk.id)
+            identifiers.append(chunk.id)
+        return tuple(identifiers)
 
     def _prepared(self, payload: dict[str, Any], operation: str) -> None:
         allowed = {
@@ -140,6 +150,7 @@ class SyntheticRecorder:
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages:
             raise ValueError("Invalid synthetic request")
+        allowed_ids = self._context(messages)
         # Reuse fixed prompt/schema builders only; execution remains in the serving entry.
         expected_config: dict[str, Any] = {
             "model": ACTOR_MODEL,
@@ -151,7 +162,7 @@ class SyntheticRecorder:
             schema = transform_schema(Extraction.model_json_schema())
         elif self._request.mode == "question":
             expected_config["system"] = _system("question", self._arm)
-            schema = transform_schema(GeneratedResult.model_json_schema())
+            schema = _final_schema(self._arm, allowed_ids)
         else:
             selection = len(messages) == 1
             expected_config.update(
@@ -160,7 +171,7 @@ class SyntheticRecorder:
                 tool_choice=_SELECTION_CHOICE if selection else _FINAL_CHOICE,
             )
             if not selection:
-                schema = transform_schema(GeneratedResult.model_json_schema())
+                schema = _final_schema(self._arm, allowed_ids)
         if schema is not None:
             expected_config["output_config"] = {"format": {"type": "json_schema", "schema": schema}}
         if operation == "generation":
@@ -183,6 +194,10 @@ class SyntheticRecorder:
             or (timeout > 45 and not math.isclose(timeout, 45, rel_tol=0, abs_tol=1e-9))
         ):
             raise ValueError("Invalid synthetic timeout")
+
+    def _context(self, messages: list[Any]) -> set[str]:
+        if self._request is None:
+            raise ValueError("Missing bound synthetic request")
         first = messages[0]
         if not isinstance(first, dict) or set(first) != {"role", "content"}:
             raise ValueError("Invalid synthetic request")
@@ -197,7 +212,7 @@ class SyntheticRecorder:
                 raise ValueError("Invalid synthetic extraction")
             if first["content"] != redact_text(self._case.letter):
                 raise ValueError("Invalid synthetic extraction")
-            return
+            return set()
         initial = json.loads(first["content"])
         if not isinstance(initial, dict):
             raise ValueError("Invalid synthetic analysis")
@@ -206,18 +221,16 @@ class SyntheticRecorder:
             expected["question"] = redact_text(self._request.question)
         else:
             expected.update(confirmed=True, facts=self._request.facts.model_dump(mode="json"))
+        retrieved: tuple[str, ...] = ()
         if "evidence" in initial:
-            if isinstance(self._case, SecurityCase) and self._arm == "baseline":
-                raise ValueError("Baseline cannot receive security evidence or a sidecar")
-            evidence = initial.pop("evidence")
-            self._evidence(evidence)
-            if (
-                self.expected_retrieved_ids is not None
-                and tuple(item["id"] for item in evidence) != self.expected_retrieved_ids
-            ):
+            if self._arm != "production":
+                raise ValueError("Baseline cannot receive retrieved evidence")
+            retrieved = self._evidence(initial.pop("evidence"))
+            if self.expected_retrieved_ids is None or retrieved != self.expected_retrieved_ids:
                 raise ValueError("Synthetic retrieval differs from the observed canonical hits")
         elif self._arm == "production":
             raise ValueError("Production context requires canonical evidence")
+        allowed = set(retrieved)
         if isinstance(self._case, SecurityCase):
             sidecar = self._case.injected_retrieved_text
             if self._arm == "production" and sidecar is not None:
@@ -225,7 +238,7 @@ class SyntheticRecorder:
         if initial != expected:
             raise ValueError("Invalid synthetic analysis")
         if len(messages) == 1:
-            return
+            return allowed
         if len(messages) != 3 or self._request.mode == "question":
             raise ValueError("Invalid synthetic continuation")
         history, followup = messages[1:]
@@ -240,15 +253,22 @@ class SyntheticRecorder:
             or not isinstance(followup["content"], list)
         ):
             raise ValueError("Invalid synthetic continuation")
-        calls = [item for item in history["content"] if item.get("type") == "tool_use"]
-        if len(calls) != 1 or calls[0].get("input") != expected["facts"]:
-            raise ValueError("Unconfirmed synthetic tool arguments")
+        returned = next(value for value in self._returned if value["content"] == history["content"])
+        call = _tool_call(Message.model_validate(returned), self._request)
         results = [item for item in followup["content"] if item.get("type") == "tool_result"]
-        if len(results) != 1 or results[0].get("tool_use_id") != calls[0].get("id"):
+        if len(results) != 1 or results[0].get("tool_use_id") != call.id:
             raise ValueError("Missing synthetic tool execution evidence")
         result = ToolResult.model_validate_json(results[0]["content"])
-        if calls[0].get("name") != result.tool:
+        if call.name != result.tool:
             raise ValueError("Mismatched synthetic tool execution")
+        rule_ids = dict.fromkeys(
+            identifier
+            for rule in result.rule_ids
+            for identifier in self._corpus.rule(rule).evidence_ids
+        )
+        allowed.update(rule_ids)
+        expected_added = tuple(identifier for identifier in rule_ids if identifier not in retrieved)
+        added: list[tuple[str, ...]] = []
         for item in followup["content"]:
             if item.get("type") == "tool_result":
                 if set(item) != {"type", "tool_use_id", "content"}:
@@ -256,7 +276,7 @@ class SyntheticRecorder:
             elif item.get("type") == "text" and set(item) == {"type", "text"}:
                 extra = json.loads(item["text"])
                 if set(extra) == {"evidence"}:
-                    self._evidence(extra["evidence"])
+                    added.append(self._evidence(extra["evidence"]))
                 elif set(extra) == {"money_display_cad"}:
                     amounts = extra["money_display_cad"]
                     if not isinstance(amounts, dict) or set(amounts) != {
@@ -278,9 +298,13 @@ class SyntheticRecorder:
                     raise ValueError("Invalid synthetic followup")
             else:
                 raise ValueError("Invalid synthetic followup")
+        expected_blocks = [expected_added] if self._arm == "production" and expected_added else []
+        if added != expected_blocks:
+            raise ValueError("Extra context differs from actual executed rule evidence")
         # This outgoing native result proves execution, even if counting then fails.
         self.actual_tool_args = self._request.facts
         self.actual_tool_result = result
+        return allowed
 
     def _write(self, operation: str, event: str, value: object) -> None:
         self._stream.write(
@@ -304,7 +328,15 @@ class SyntheticRecorder:
 
     async def _call(self, operation: str, payload: dict[str, Any]) -> Message | MessageTokensCount:
         try:
+            comparable = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"timeout", "max_tokens", "stream", "service_tier", "extra_body"}
+            }
+            if operation == "generation" and comparable != self._preflight:
+                raise ValueError("Generation differs from its successful preflight")
             self._prepared(payload, operation)
+            self._preflight = None
         except Exception:
             raise ProviderFailure("provider_error") from None
         self._index += 1
@@ -319,6 +351,8 @@ class SyntheticRecorder:
             code = _error_code(error)
             self._write(operation, "failure", {"code": code})
             raise
+        if operation == "count_tokens" and isinstance(result, MessageTokensCount):
+            self._preflight = json.loads(json.dumps(comparable))
         if isinstance(result, Message):
             raw = result.model_dump(
                 mode="json",
@@ -397,6 +431,17 @@ def verify_synthetic_records(
                     raise ValueError("Extraction-only security is verified by the offline suite")
                 verifier.bind(trace_id, record.phase, case.request, arm=arm)
             if record.event == "request":
+                if (
+                    record.phase == "analysis"
+                    and arm == "production"
+                    and retrieved_ids is None
+                    and verifier.expected_retrieved_ids is None
+                ):
+                    initial = json.loads(record.value["messages"][0]["content"])
+                    observed = verifier._evidence(initial["evidence"])
+                    if len(observed) > 5:
+                        raise ValueError("Retained retrieval exceeds the actual retrieval bound")
+                    verifier.expected_retrieved_ids = observed
                 verifier._prepared(record.value, record.operation)
                 if record.operation == "count_tokens":
                     counted[(record.trace_id, record.operation_index)] = {

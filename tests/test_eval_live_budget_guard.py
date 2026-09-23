@@ -58,7 +58,7 @@ def test_model_mismatch_stops_before_any_following_generation(
     expected_cost = Decimal("0.0015") * (position - 1)
     assert Decimal(receipt["actual_usd"]) == expected_cost
     assert Decimal(receipt["unresolved_hold_usd"]) == (
-        Decimal("0.024") if mismatch_at == "judge" else Decimal("0.019")
+        Decimal("0.034") if mismatch_at == "judge" else Decimal("0.019")
     )
     assert not receipt["complete"]
     reconciled = [event for event in receipt["events"] if event["event"] == "reconciled"]
@@ -143,8 +143,8 @@ def test_receipt_retains_before_counts_and_permit_after_counts() -> None:
     grant = permit()
     budget = LiveBudget(grant, StringIO(), config_hash="5" * 64)
     receipt = budget.receipt()
-    assert receipt.future_live_batches_before == 4
-    assert receipt.permit.future_live_batches_remaining == 3
+    assert receipt.future_live_batches_before == 3
+    assert receipt.permit.future_live_batches_remaining == 2
     assert receipt.development_slots_before == 13
     assert receipt.permit.development_slots_remaining == 13
     assert receipt.permit.funded_slot == grant.funded_slot
@@ -261,8 +261,8 @@ def test_model_anomaly_keeps_prior_verified_cost_and_current_full_hold() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.0015")
-    assert receipt.unresolved_hold_usd == Decimal("0.024")
-    assert budget.ledger.committed_usd == Decimal("0.0255")
+    assert receipt.unresolved_hold_usd == Decimal("0.034")
+    assert budget.ledger.committed_usd == Decimal("0.0355")
     assert not receipt.complete
 
 

@@ -23,18 +23,18 @@ def permit_payload() -> dict[str, Any]:
         "batch_uuid": "00000000-0000-0000-0000-000000000019",
         "purpose": "bootstrap",
         "baseline_sha256": None,
-        "funded_slot": "wp9-bootstrap",
+        "funded_slot": "wp9_bootstrap_correction",
         "max_actor_calls": 77,
         "max_judge_calls": 39,
-        "reserved_usd": "2.399",
-        "incurred_usd": "0.069685",
+        "reserved_usd": "2.789",
+        "incurred_usd": "0.172127",
         "held_usd": "0",
-        "still_required_usd": "17.752",
+        "still_required_usd": "17.863",
         "development_cap_usd": "21",
         "provider_funding_usd": "30",
         "demo_reserved_usd": "9",
         "development_slots_remaining": 13,
-        "future_live_batches_remaining": 3,
+        "future_live_batches_remaining": 2,
         "prior_ledger_sha256": "b" * 64,
         "issued_at_utc": NOW.isoformat(),
         "expires_at_utc": (NOW + timedelta(hours=2)).isoformat(),
@@ -76,6 +76,7 @@ def test_one_run_permit_preserves_existing_budget_and_is_context_bound() -> None
         ("max_judge_calls", 40),
         ("reserved_usd", "2.4"),
         ("incurred_usd", "0"),
+        ("incurred_usd", "0.172126"),
         ("incurred_usd", "1"),
         ("held_usd", "0.001"),
         ("still_required_usd", "0"),
@@ -100,9 +101,9 @@ def regression_payload() -> dict[str, Any]:
         **permit_payload(),
         "purpose": "regression",
         "baseline_sha256": "c" * 64,
-        "future_live_batches_remaining": 2,
+        "future_live_batches_remaining": 1,
         "development_slots_remaining": 13,
-        "still_required_usd": "15.353",
+        "still_required_usd": "15.074",
         "incurred_usd": "0.5",
     }
 
@@ -124,11 +125,11 @@ def test_regression_preserves_release_future_gates_and_remaining_development_slo
     ("field", "value"),
     [
         ("baseline_sha256", None),
-        ("future_live_batches_remaining", 3),
+        ("future_live_batches_remaining", 2),
         ("future_live_batches_remaining", True),
         ("development_slots_remaining", -1),
-        ("still_required_usd", "9.502"),
-        ("still_required_usd", "15.352"),
+        ("still_required_usd", "11.102"),
+        ("still_required_usd", "15.073"),
         ("incurred_usd", "4"),
     ],
 )
@@ -140,11 +141,11 @@ def test_regression_cannot_invent_a_lower_reserve_or_more_funding(
 
 
 def test_exact_development_cap_is_accepted_but_not_one_cent_more() -> None:
-    value = {**permit_payload(), "incurred_usd": "0.849"}
+    value = {**permit_payload(), "incurred_usd": "0.348"}
     permit = LivePermit.model_validate_json(json.dumps(value))
     assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == 21
     with pytest.raises(ValidationError):
-        LivePermit.model_validate_json(json.dumps({**value, "incurred_usd": "0.859"}))
+        LivePermit.model_validate_json(json.dumps({**value, "incurred_usd": "0.358"}))
 
 
 @pytest.mark.parametrize("field", ["baseline_sha256", "future_live_batches_remaining", "held_usd"])
@@ -209,11 +210,11 @@ def test_permit_integer_fields_reject_numeric_coercion(field: str, form: str) ->
 def test_bootstrap_cannot_relabel_smaller_regression_reserves_with_correct_arithmetic() -> None:
     value = {
         **permit_payload(),
-        "future_live_batches_remaining": 2,
+        "future_live_batches_remaining": 1,
         "development_slots_remaining": 13,
-        "still_required_usd": "15.353",
+        "still_required_usd": "15.074",
     }
-    with pytest.raises(ValidationError, match="initial reserved allocation"):
+    with pytest.raises(ValidationError, match="correction reserved allocation"):
         LivePermit.model_validate_json(json.dumps(value))
 
 
@@ -240,23 +241,24 @@ def test_decimal_objects_remain_usable_internally_and_serialize_as_strings() -> 
 
 
 def test_tiny_positive_over_cap_cannot_round_down_into_a_valid_grant() -> None:
-    value = {**permit_payload(), "incurred_usd": "0.84900000000000000000000000001"}
+    value = {**permit_payload(), "incurred_usd": "0.34800000000000000000000000001"}
     with pytest.raises(ValidationError, match="funded budget"):
         LivePermit.model_validate_json(json.dumps(value))
 
 
-def test_conditional_post_smoke_bootstrap_preserves_thirteen_development_slots() -> None:
+def test_correction_bootstrap_preserves_exact_slot_and_remaining_allocations() -> None:
     permit = LivePermit.model_validate_json(json.dumps(permit_payload()))
     assert permit.development_slots_remaining == 13
-    assert permit.future_live_batches_remaining == 3
-    assert str(permit.still_required_usd) == "17.752"
+    assert permit.future_live_batches_remaining == 2
+    assert permit.funded_slot == "wp9_bootstrap_correction"
+    assert str(permit.still_required_usd) == "17.863"
 
 
 @pytest.mark.parametrize("slots", [*range(13), 14])
 def test_bootstrap_rejects_every_other_slot_count_even_with_correct_reserve(slots: int) -> None:
     from decimal import Decimal
 
-    required = Decimal("9.502") + 3 * Decimal("2.399") + slots * Decimal("0.081")
+    required = Decimal("11.102") + 2 * Decimal("2.789") + slots * Decimal("0.091")
     value = {
         **permit_payload(),
         "development_slots_remaining": slots,
@@ -270,7 +272,7 @@ def test_bootstrap_rejects_every_other_slot_count_even_with_correct_reserve(slot
 def test_regression_preserves_the_revised_development_slot_bounds(slots: int) -> None:
     from decimal import Decimal
 
-    required = Decimal("9.502") + 2 * Decimal("2.399") + slots * Decimal("0.081")
+    required = Decimal("11.102") + Decimal("2.789") + slots * Decimal("0.091")
     value = {
         **regression_payload(),
         "development_slots_remaining": slots,
@@ -283,7 +285,75 @@ def test_regression_cannot_restore_the_consumed_fourteenth_slot() -> None:
     value = {
         **regression_payload(),
         "development_slots_remaining": 14,
-        "still_required_usd": "15.434",
+        "still_required_usd": "15.165",
     }
     with pytest.raises(ValidationError):
         LivePermit.model_validate_json(json.dumps(value))
+
+
+@pytest.mark.parametrize("slot", ["wp9-bootstrap", "synthetic-fixture", "regression", "other"])
+def test_bootstrap_requires_the_named_existing_correction_slot(slot: str) -> None:
+    with pytest.raises(ValidationError, match="correction reserved allocation"):
+        LivePermit.model_validate_json(json.dumps({**permit_payload(), "funded_slot": slot}))
+
+
+@pytest.mark.parametrize("batches", [0, 1, 3])
+def test_bootstrap_rejects_other_future_counts_with_correct_arithmetic(batches: int) -> None:
+    from decimal import Decimal
+
+    required = Decimal("11.102") + batches * Decimal("2.789") + 13 * Decimal("0.091")
+    with pytest.raises(ValidationError):
+        LivePermit.model_validate_json(
+            json.dumps(
+                {
+                    **permit_payload(),
+                    "future_live_batches_remaining": batches,
+                    "still_required_usd": str(required),
+                }
+            )
+        )
+
+
+@pytest.mark.parametrize("batches", [0, 1])
+def test_regression_remaining_gate_bounds_preserve_exact_reserves(batches: int) -> None:
+    from decimal import Decimal
+
+    required = Decimal("11.102") + batches * Decimal("2.789") + 13 * Decimal("0.091")
+    value = {
+        **regression_payload(),
+        "future_live_batches_remaining": batches,
+        "still_required_usd": str(required),
+    }
+    permit = LivePermit.model_validate_json(json.dumps(value))
+    assert permit.future_live_batches_remaining == batches
+    assert permit.still_required_usd == required
+
+
+def test_regression_cannot_restore_consumed_correction_even_with_correct_arithmetic() -> None:
+    value = {
+        **regression_payload(),
+        "future_live_batches_remaining": 2,
+        "still_required_usd": "17.863",
+        "incurred_usd": "0.172127",
+    }
+    with pytest.raises(ValidationError, match="remaining gate allocation"):
+        LivePermit.model_validate_json(json.dumps(value))
+
+
+@pytest.mark.parametrize("baseline", [None, "c" * 64])
+def test_correction_allocation_cannot_be_relabelled_as_regression(baseline: str | None) -> None:
+    value = {**permit_payload(), "purpose": "regression", "baseline_sha256": baseline}
+    with pytest.raises(ValidationError, match="remaining gate allocation"):
+        LivePermit.model_validate_json(json.dumps(value))
+
+
+def test_correction_forecast_reconciles_without_consuming_or_refunding_a_slot() -> None:
+    from decimal import Decimal
+
+    permit = LivePermit.model_validate_json(json.dumps(permit_payload()))
+    assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == Decimal(
+        "20.824127"
+    )
+    assert permit.development_cap_usd - (
+        permit.incurred_usd + permit.reserved_usd + permit.still_required_usd
+    ) == Decimal("0.175873")

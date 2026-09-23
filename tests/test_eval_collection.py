@@ -454,7 +454,7 @@ def test_judge_unknown_usage_stops_after_first_measured_attempt(
     if failure == "missing_usage":
         accounting = manifest.judge_accounting[measured[0]["attempt_id"]]
         assert accounting.cost.actual_cost_usd is None
-        assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+        assert accounting.cost.reserved_cost_usd == Decimal("0.034")
         assert accounting.cost.usage_complete is False
     else:
         assert measured[0]["classification"] == "error"

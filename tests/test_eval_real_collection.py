@@ -162,7 +162,7 @@ def run(
             messages=port,
             budget=budget if budget is not None else SpendLedger(Decimal("20")),
             batch_ledger=RecordingBatchLedger([]),
-            forecast_usd=Decimal("9.502"),
+            forecast_usd=Decimal("11.102"),
             retrieve=lambda _: (SearchHit(corpus.chunks[0], -1.0),),
             plan=build_plan(),
         )
@@ -372,8 +372,8 @@ def test_first_judge_model_drift_stops_shared_collection_and_preserves_billed_re
     assert accounting.returned_model_id == ACTOR_MODEL
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
-    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.024")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.034")
+    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.034")
     row = ResultRow.model_validate_json((directory / "results.jsonl").read_text().strip())
     assert row.judge_cost_usd is None
     assert row.serving_cost_usd is not None and row.usage_complete
@@ -433,7 +433,7 @@ def test_complete_legacy_artifact_with_self_consistent_model_drift_is_rejected(
 
 
 @pytest.mark.parametrize(
-    "model,hold", [(ACTOR_MODEL, Decimal("0.019")), (JUDGE_MODEL, Decimal("0.024"))]
+    "model,hold", [(ACTOR_MODEL, Decimal("0.019")), (JUDGE_MODEL, Decimal("0.034"))]
 )
 def test_collection_model_anomaly_defensively_holds_full_reservation(
     model: str, hold: Decimal

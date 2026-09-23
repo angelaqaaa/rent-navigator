@@ -224,7 +224,7 @@ def assert_accounting(
 
 @pytest.mark.parametrize(
     ("model", "max_tokens", "actual", "reservation"),
-    [(ACTOR_MODEL, 600, "0.0015", "0.019"), (JUDGE_MODEL, 800, "0.003", "0.024")],
+    [(ACTOR_MODEL, 600, "0.0015", "0.019"), (JUDGE_MODEL, 800, "0.003", "0.034")],
 )
 def test_fixed_generation_settings_and_count_payload_parity(
     model: RequestedModel, max_tokens: int, actual: str, reservation: str
@@ -320,8 +320,8 @@ def test_no_optional_generation_features_are_inserted() -> None:
     [
         (ACTOR_MODEL, 15000, True, "0.0015", "0.019"),
         (ACTOR_MODEL, 15001, False, "0.0015", "0.019"),
-        (JUDGE_MODEL, 7000, True, "0.003", "0.024"),
-        (JUDGE_MODEL, 7001, False, "0.003", "0.024"),
+        (JUDGE_MODEL, 12000, True, "0.003", "0.034"),
+        (JUDGE_MODEL, 12001, False, "0.003", "0.034"),
     ],
 )
 def test_preflight_limit_rejects_before_any_paid_call(
@@ -362,7 +362,7 @@ def test_invalid_count_response_never_enters_generation(estimate: object) -> Non
         malformed_usage(input_tokens=-1, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.034")])
 def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
     usage: object,
     model: RequestedModel,
@@ -390,7 +390,7 @@ def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
         {"unrecognized_billed_tokens": 1},
     ],
 )
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.034")])
 def test_nonzero_unpriced_categories_make_entire_cost_unknown(
     extra: dict[str, Any], model: RequestedModel, reservation: str
 ) -> None:
@@ -430,8 +430,8 @@ def test_zero_categories_and_nonbilling_metadata_preserve_known_usage(
     [
         (ACTOR_MODEL, 16000, False, "0.0165", "0.019"),
         (ACTOR_MODEL, 16001, True, "0.016501", "0.019"),
-        (JUDGE_MODEL, 8000, False, "0.017", "0.024"),
-        (JUDGE_MODEL, 8001, True, "0.017002", "0.024"),
+        (JUDGE_MODEL, 13000, False, "0.027", "0.034"),
+        (JUDGE_MODEL, 13001, True, "0.027002", "0.034"),
     ],
 )
 def test_input_reservation_overage_keeps_exact_cost_and_stops_further_batches(
@@ -502,7 +502,7 @@ def test_unverified_returned_model_preserves_full_hold_and_raw_usage(
         )
     fake, ledger = RecordingMessages(response), SpendLedger(Decimal("1"))
     outcome = asyncio.run(perform(fake, ledger, model=model))
-    reservation = "0.019" if model == ACTOR_MODEL else "0.024"
+    reservation = "0.019" if model == ACTOR_MODEL else "0.034"
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
     generation = next(r for r in outcome.records if r.provider_operation == "generation")
@@ -527,7 +527,7 @@ def test_invalid_generation_outcomes_preserve_known_cost(stop: str) -> None:
 
 @pytest.mark.parametrize(
     ("model", "output", "actual", "reservation"),
-    [(ACTOR_MODEL, 601, "0.004005", "0.019"), (JUDGE_MODEL, 801, "0.01001", "0.024")],
+    [(ACTOR_MODEL, 601, "0.004005", "0.019"), (JUDGE_MODEL, 801, "0.01001", "0.034")],
 )
 def test_output_above_fixed_budget_is_invalid_but_not_free(
     model: RequestedModel, output: int, actual: str, reservation: str
@@ -715,7 +715,7 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.034")])
 def test_task_cancellation_records_inflight_generation_and_leaves_no_background_call(
     model: RequestedModel, reservation: str
 ) -> None:
@@ -778,7 +778,7 @@ def test_unpriced_service_tier_requires_reforecast(tier: str) -> None:
     assert_accounting(outcome, actual=None, reserved="0.019", complete=False)
 
 
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.034")])
 def test_zero_usage_is_known_free_and_reservation_refund_permits_the_next_call(
     model: RequestedModel, reservation: str
 ) -> None:

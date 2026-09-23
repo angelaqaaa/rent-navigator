@@ -45,7 +45,7 @@ class LivePermit(EvaluationModel):
     provider_funding_usd: PermitUsd
     demo_reserved_usd: PermitUsd
     development_slots_remaining: Annotated[int, Field(ge=0, le=13)]
-    future_live_batches_remaining: Annotated[int, Field(ge=0, le=3)]
+    future_live_batches_remaining: Annotated[int, Field(ge=0, le=2)]
     prior_ledger_sha256: Sha256
     issued_at_utc: Annotated[datetime, BeforeValidator(_utc_timestamp)]
     expires_at_utc: Annotated[datetime, BeforeValidator(_utc_timestamp)]
@@ -53,17 +53,17 @@ class LivePermit(EvaluationModel):
     @model_validator(mode="after")
     def funded_envelope(self) -> Self:
         if (
-            self.reserved_usd != Decimal("2.399")
+            self.reserved_usd != Decimal("2.789")
             or self.still_required_usd
             != (
-                Decimal("9.502")
-                + self.future_live_batches_remaining * Decimal("2.399")
-                + self.development_slots_remaining * Decimal("0.081")
+                Decimal("11.102")
+                + self.future_live_batches_remaining * Decimal("2.789")
+                + self.development_slots_remaining * Decimal("0.091")
             )
             or self.development_cap_usd != Decimal("21")
             or self.provider_funding_usd != Decimal("30")
             or self.demo_reserved_usd != Decimal("9")
-            or self.incurred_usd < Decimal("0.045685")
+            or self.incurred_usd < Decimal("0.172127")
             or self.held_usd != 0
             or sum(
                 Fraction(value)
@@ -80,11 +80,12 @@ class LivePermit(EvaluationModel):
         if self.purpose == "bootstrap":
             if (
                 self.baseline_sha256 is not None
-                or self.future_live_batches_remaining != 3
+                or self.funded_slot != "wp9_bootstrap_correction"
+                or self.future_live_batches_remaining != 2
                 or self.development_slots_remaining != 13
             ):
-                raise ValueError("bootstrap must preserve the initial reserved allocation")
-        elif self.baseline_sha256 is None or self.future_live_batches_remaining > 2:
+                raise ValueError("bootstrap must preserve the correction reserved allocation")
+        elif self.baseline_sha256 is None or self.future_live_batches_remaining > 1:
             raise ValueError(
                 "regression requires its frozen baseline and remaining gate allocation"
             )

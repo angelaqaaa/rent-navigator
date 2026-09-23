@@ -239,15 +239,18 @@ def test_safety_context_is_strict_preserves_confirmed_facts_and_expected_status(
     assert "Never invent a policy violation because a field is absent" in JUDGE_SYSTEM
 
 
+@pytest.mark.parametrize("estimate", [1000, 12000])
 def test_exact_judge_configuration_count_then_one_generation_and_separate_accounting(
     value: JudgeInput,
+    estimate: int,
 ) -> None:
     test = harness(value)
+    test.port.estimate = estimate
     evaluated = test.run()
     assert evaluated.judgment == result(value)
     validate_smoke_result(value, evaluated.judgment)
     assert evaluated.cost.actual_cost_usd == Decimal("0.003")
-    assert evaluated.cost.reserved_cost_usd == Decimal("0.024")
+    assert evaluated.cost.reserved_cost_usd == Decimal("0.034")
     assert test.budget.committed_usd == Decimal("0.003")
     assert len(test.port.counts) == len(test.port.creates) == 1
     count, create = test.port.counts[0], test.port.creates[0]
@@ -337,8 +340,8 @@ def test_missing_generation_usage_retains_reservation_and_safe_failure(
         test.run()
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
-    assert test.budget.committed_usd == Decimal("0.024") and test.budget.stopped
+    assert accounting.cost.reserved_cost_usd == Decimal("0.034")
+    assert test.budget.committed_usd == Decimal("0.034") and test.budget.stopped
     assert SENTINEL not in test.metadata.getvalue() + test.raw.getvalue() + str(caught.value)
     test.verify(accounting)
 
@@ -349,12 +352,12 @@ def test_absent_usage_on_returned_response_is_incomplete(value: JudgeInput) -> N
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.accounting.cost.actual_cost_usd is None
-    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.034")
     assert test.budget.stopped
     assert len(test.records()) == 4
 
 
-@pytest.mark.parametrize("estimate", [7001, RuntimeError(SENTINEL), TimeoutError(SENTINEL)])
+@pytest.mark.parametrize("estimate", [12001, RuntimeError(SENTINEL), TimeoutError(SENTINEL)])
 def test_count_failure_never_generates_or_reserves_paid_cost(
     value: JudgeInput, estimate: int | BaseException
 ) -> None:
@@ -467,7 +470,7 @@ def test_raw_judge_verifier_rejects_tampering(value: JudgeInput, mutation: str) 
     elif mutation == "duplicate":
         records.append(records[-1])
     else:
-        records[1].value["input_tokens"] = 7001
+        records[1].value["input_tokens"] = 12001
     with pytest.raises(ValueError):
         verify_judge_records(
             records,
@@ -578,7 +581,7 @@ def test_missing_usage_response_keeps_null_cost_during_partial_evidence_verifica
     test.verify(accounting)
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.034")
 
 
 def test_failure_audit_rejects_repriced_known_cost_for_mismatched_judge(value: JudgeInput) -> None:
@@ -622,8 +625,8 @@ def test_judge_model_anomaly_keeps_raw_tokens_but_unknown_pricing_and_full_hold(
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
-    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.024")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.034")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.034")
     assert len(test.port.counts) == len(test.port.creates) == 1
     generation = next(
         record for record in accounting.records if record.provider_operation == "generation"

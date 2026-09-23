@@ -48,14 +48,14 @@ def permit() -> LivePermit:
         batch_uuid=uuid4(),
         purpose="bootstrap",
         baseline_sha256=None,
-        future_live_batches_remaining=3,
-        funded_slot="synthetic-fixture",
+        future_live_batches_remaining=2,
+        funded_slot="wp9_bootstrap_correction",
         max_actor_calls=77,
         max_judge_calls=39,
-        reserved_usd=Decimal("2.399"),
-        incurred_usd=Decimal("0.045685"),
+        reserved_usd=Decimal("2.789"),
+        incurred_usd=Decimal("0.172127"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("17.752"),
+        still_required_usd=Decimal("17.863"),
         development_cap_usd=Decimal(21),
         provider_funding_usd=Decimal(30),
         demo_reserved_usd=Decimal(9),
@@ -392,7 +392,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("17.752")
+    assert receipt.permit.still_required_usd == Decimal("17.863")
 
 
 @pytest.mark.parametrize(

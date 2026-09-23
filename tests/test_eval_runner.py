@@ -603,7 +603,7 @@ def test_missing_judge_usage_retains_reservation_and_future_stop_reason(corpus: 
     assert outcome.row.judge_cost_usd is None
     assert "judge_usage_missing" in outcome.reasons
     assert outcome.judge_accounting is not None
-    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.034")
     assert not outcome.judge_accounting.cost.usage_complete
 
 
@@ -647,7 +647,7 @@ def test_typed_failed_judge_keeps_billed_accounting_without_a_judgment(
     assert outcome.row.judge is None and outcome.judge_evaluation is None
     assert outcome.judge_accounting is not None
     assert outcome.row.judge_cost_usd == (None if missing_usage else Decimal("0.0007"))
-    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.034")
     assert "judge_invalid" in outcome.reasons
     assert ("judge_usage_missing" in outcome.reasons) == missing_usage
     assert outcome.row.serving_cost_usd == Decimal("0.0015")

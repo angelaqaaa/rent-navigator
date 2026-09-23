@@ -84,7 +84,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     assert actor.actual_cost_usd == Decimal("0.004069")
     assert actor.reserved_cost_usd == Decimal("0.019")
     assert judge.actual_cost_usd == Decimal("0.008138")
-    assert judge.reserved_cost_usd == Decimal("0.024")
+    assert judge.reserved_cost_usd == Decimal("0.034")
     assert actor.usage_complete is True
     assert json.loads(actor.model_dump_json())["actual_cost_usd"] == "0.004069"
 
@@ -98,7 +98,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         Usage(input_tokens=None, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.034")])
 def test_synthetic_missing_usage_retains_reservation(
     usage: Usage | None, model: RequestedModel, reserved: str
 ) -> None:
@@ -119,15 +119,15 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
             "output_per_million": "5",
         },
         JUDGE_MODEL: {
-            "preflight_limit": 7000,
-            "reserved_input_tokens": 8000,
+            "preflight_limit": 12000,
+            "reserved_input_tokens": 13000,
             "max_output_tokens": 800,
             "input_per_million": "2",
             "output_per_million": "10",
         },
     }
     assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.019")
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.024")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.034")
     assert (
         PRICING_HASH
         == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -135,6 +135,21 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
     assert PRICING_HASH != "b36ccff4b6bc11e7343861e7400ba18a710b14659b6cb1a3d7eab72390897b4d"
     manifest[ACTOR_MODEL]["reserved_input_tokens"] = 8000
     assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 16000
+
+
+def test_current_capacity_forecast_preserves_exact_remaining_budget() -> None:
+    actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
+    judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
+    release = 298 * actor + 160 * judge
+    gate = 77 * actor + 39 * judge
+    development = 3 * actor + judge
+    assert (release, gate, development) == (Decimal("11.102"), Decimal("2.789"), Decimal("0.091"))
+    before_correction = release + 3 * gate + 13 * development
+    after_correction = release + 2 * gate + 13 * development
+    assert before_correction == Decimal("20.652")
+    assert after_correction == Decimal("17.863")
+    assert before_correction == gate + after_correction
+    assert Decimal("21") - Decimal("0.172127") - before_correction == Decimal("0.175873")
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:

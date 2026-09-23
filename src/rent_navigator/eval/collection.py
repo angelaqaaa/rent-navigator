@@ -59,6 +59,7 @@ from rent_navigator.trace import (
     CostSummary,
     TraceContext,
     TraceRecord,
+    cost_for_usage,
     provider_cost_totals,
 )
 
@@ -167,6 +168,8 @@ class _CollectionBudget:
     def reconcile(
         self, reservation: Reservation, cost: CostSummary, *, reforecast: bool = False
     ) -> None:
+        if self._reforecast:
+            cost = cost_for_usage(reservation.model, None)
         self._budget.reconcile(reservation, cost, reforecast=reforecast or self._reforecast)
 
 

@@ -64,6 +64,7 @@ class LiveBudget:
         self.attempt_id: UUID | None = None
         self.counts: dict[RequestedModel, int] = {ACTOR_MODEL: 0, JUDGE_MODEL: 0}
         self._stopped = False
+        self._model_anomaly = False
         _write(
             stream,
             json.dumps(
@@ -80,7 +81,8 @@ class LiveBudget:
         self.attempt_id = attempt_id
 
     def require_reforecast(self) -> None:
-        """Stop admission while allowing the current response to retain its usage."""
+        """Keep a model-anomalous response for audit without settling its charge."""
+        self._model_anomaly = True
         self._stopped = True
 
     @property
@@ -111,6 +113,8 @@ class LiveBudget:
     def reconcile(
         self, reservation: Reservation, cost: CostSummary, *, reforecast: bool = False
     ) -> None:
+        if self._model_anomaly:
+            cost = cost_for_usage(reservation.model, None)
         reforecast = reforecast or self._stopped
         self.ledger.reconcile(reservation, cost, reforecast=reforecast)
         original = next(

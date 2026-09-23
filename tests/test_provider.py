@@ -465,9 +465,9 @@ def test_invalid_returned_model_id_retains_accounting_without_leaking_metadata(
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert_accounting(
         outcome,
-        actual="0.0015" if usage is _DEFAULT_USAGE else None,
+        actual=None,
         reserved="0.019",
-        complete=usage is _DEFAULT_USAGE,
+        complete=False,
     )
     generation = next(
         record for record in outcome.records if record.provider_operation == "generation"
@@ -477,6 +477,43 @@ def test_invalid_returned_model_id_retains_accounting_without_leaking_metadata(
     assert invalid_model not in outcome.log
     assert "ValidationError" not in outcome.log
     assert "input_value" not in outcome.log
+
+
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+@pytest.mark.parametrize("fault", ["other", "missing", "null", "invalid", "bool", "number"])
+def test_unverified_returned_model_preserves_full_hold_and_raw_usage(
+    model: RequestedModel, fault: str
+) -> None:
+    response = reply(model=model)
+    other = JUDGE_MODEL if model == ACTOR_MODEL else ACTOR_MODEL
+    if fault == "missing":
+        del response.model
+    else:
+        response = response.model_copy(
+            update={
+                "model": {
+                    "other": other,
+                    "null": None,
+                    "invalid": "synthetic/invalid-model-id",
+                    "bool": True,
+                    "number": 123,
+                }[fault]
+            }
+        )
+    fake, ledger = RecordingMessages(response), SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
+    reservation = "0.019" if model == ACTOR_MODEL else "0.024"
+    assert outcome.failure is not None and outcome.failure.code == "provider_error"
+    assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
+    generation = next(r for r in outcome.records if r.provider_operation == "generation")
+    assert generation.returned_model_id == (other if fault == "other" else None)
+    assert generation.input_tokens is None and generation.output_tokens is None
+    assert response.usage.input_tokens == 1000 and response.usage.output_tokens == 100
+    assert ledger.committed_usd == Decimal(reservation)
+    assert ledger.stopped and ledger.reforecast_required
+    subsequent = asyncio.run(perform(fake, ledger, model=model, trace_number=2))
+    assert subsequent.failure is not None
+    assert len(fake.counts) == len(fake.creates) == 1
 
 
 @pytest.mark.parametrize("stop", ["refusal", "max_tokens", "model_context_window_exceeded"])

@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from anthropic import transform_schema
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
-from pydantic import Field
+from pydantic import Field, TypeAdapter, ValidationError
 
 from rent_navigator.corpus import SOURCE_URLS, Chunk, Corpus
 from rent_navigator.eval.models import GoldCase, JudgeResult
@@ -46,6 +46,7 @@ from rent_navigator.provider import (
 from rent_navigator.trace import (
     CostSummary,
     MetadataSink,
+    ReturnedModel,
     TraceContext,
     TraceRecord,
     TraceRecorder,
@@ -501,6 +502,31 @@ def verify_judge_records(
         else:
             if set(last.value) - _RESPONSE_FIELDS:
                 raise ValueError("Unexpected judge response fields")
+            try:
+                observed_model = TypeAdapter(ReturnedModel).validate_python(
+                    last.value.get("model"), strict=True
+                )
+            except ValidationError:
+                observed_model = None
+            if observed_model != detail.returned_model_id:
+                raise ValueError("Judge raw returned model differs from trace")
+            if observed_model != JUDGE_MODEL:
+                unknown = cost_for_usage(JUDGE_MODEL, None)
+                if (
+                    any(
+                        getattr(unknown, field) != getattr(detail, field)
+                        for field in CostSummary.model_fields
+                    )
+                    or detail.response_code != "provider_error"
+                    or judgment is not None
+                    or any(
+                        record.response_code != "provider_error"
+                        for record in accounting.records
+                        if record.record_kind == "endpoint"
+                    )
+                ):
+                    raise ValueError("Judge model anomaly requires unverified cost and failure")
+                continue
             raw_usage = last.value.get("usage")
             if detail.usage_complete and (
                 not isinstance(raw_usage, dict)

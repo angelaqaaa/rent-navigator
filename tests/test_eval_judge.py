@@ -282,7 +282,6 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
         "duplicate_statement",
         "missing_statement",
         "extra_field",
-        "wrong_model",
         "max_tokens",
         "tool_use",
     ],
@@ -303,8 +302,6 @@ def test_billed_invalid_judge_preserves_cost_trace_and_raw(
         payload["statements"].pop()
     elif mutation == "extra_field":
         payload["explanation"] = SENTINEL
-    elif mutation == "wrong_model":
-        kwargs["model"] = "claude-haiku-4-5-20251001"
     elif mutation == "max_tokens":
         kwargs["stop_reason"] = "max_tokens"
     elif mutation == "tool_use":
@@ -582,3 +579,62 @@ def test_missing_usage_response_keeps_null_cost_during_partial_evidence_verifica
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
     assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+
+
+def test_failure_audit_rejects_repriced_known_cost_for_mismatched_judge(value: JudgeInput) -> None:
+    test = harness(value)
+    evaluated = test.run()
+    records = test.records()
+    records[-1].value["model"] = "claude-haiku-4-5-20251001"
+    payload = json.loads(evaluated.model_dump_json(exclude={"judgment"}))
+    payload["returned_model_id"] = "claude-haiku-4-5-20251001"
+    for record in payload["records"]:
+        if record["provider_operation"] == "generation":
+            record["returned_model_id"] = "claude-haiku-4-5-20251001"
+            record["response_code"] = "provider_error"
+        elif record["record_kind"] == "endpoint":
+            record["response_code"] = "provider_error"
+    accounting = JudgeAccounting.model_validate_json(json.dumps(payload))
+    assert accounting.cost.actual_cost_usd == Decimal("0.003")
+    with pytest.raises(ValueError, match="model.*unverified"):
+        verify_judge_records(
+            records,
+            value=value,
+            context=test.context,
+            accounting=accounting,
+            judgment=None,
+            run_id=RUN_ID,
+        )
+
+
+@pytest.mark.parametrize("returned_model", ["claude-haiku-4-5-20251001", "unexpected/model", None])
+def test_judge_model_anomaly_keeps_raw_tokens_but_unknown_pricing_and_full_hold(
+    value: JudgeInput,
+    returned_model: str | None,
+) -> None:
+    test = harness(value)
+    test.port.response = message(value).model_copy(update={"model": returned_model})
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    failure = caught.value
+    assert failure.code == "provider_error"
+    accounting = failure.accounting
+    assert accounting.cost.actual_cost_usd is None
+    assert not accounting.cost.usage_complete
+    assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
+    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.024")
+    assert len(test.port.counts) == len(test.port.creates) == 1
+    generation = next(
+        record for record in accounting.records if record.provider_operation == "generation"
+    )
+    assert generation.response_code == "provider_error"
+    assert generation.returned_model_id == (
+        returned_model if returned_model == "claude-haiku-4-5-20251001" else None
+    )
+    raw_response = test.records()[-1].value
+    assert raw_response.get("model") == returned_model
+    assert raw_response["usage"] == {"input_tokens": 1000, "output_tokens": 100}
+    test.verify(accounting)
+    with pytest.raises(ValueError, match="model.*unverified"):
+        test.verify(accounting, result(value))

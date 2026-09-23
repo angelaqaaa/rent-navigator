@@ -327,13 +327,19 @@ def test_first_actor_model_drift_stops_before_any_later_provider_operation(tmp_p
     assert "provider_model_mismatch" in manifest.reasons
     assert "budget_reforecast_required" in manifest.reasons
     assert budget.stopped and budget.reforecast_required
+    assert budget.committed_usd == Decimal("0.019")
     metadata = [
         json.loads(line) for line in (directory / "metadata.jsonl").read_text().splitlines()
     ]
     generation = next(item for item in metadata if item["provider_operation"] == "generation")
     assert generation["requested_model_id"] == ACTOR_MODEL
     assert generation["returned_model_id"] == JUDGE_MODEL
-    assert generation["input_tokens"] == 1000 and generation["output_tokens"] == 100
+    assert generation["input_tokens"] is None and generation["output_tokens"] is None
+    assert generation["actual_cost_usd"] is None and not generation["usage_complete"]
+    assert generation["reserved_cost_usd"] == "0.019"
+    assert generation["response_code"] == "provider_error"
+    row = ResultRow.model_validate_json((directory / "warmups.jsonl").read_text().strip())
+    assert row.serving_cost_usd is None and not row.usage_complete
     raw = [json.loads(line) for line in (directory / "raw-provider.jsonl").read_text().splitlines()]
     assert raw[-1]["value"]["model"] == JUDGE_MODEL
     assert raw[-1]["value"]["usage"] == {"input_tokens": 1000, "output_tokens": 100}
@@ -364,7 +370,13 @@ def test_first_judge_model_drift_stops_shared_collection_and_preserves_billed_re
     assert budget.stopped and budget.reforecast_required
     accounting = next(iter(manifest.judge_accounting.values()))
     assert accounting.returned_model_id == ACTOR_MODEL
-    assert accounting.cost.input_tokens == 1000 and accounting.cost.output_tokens == 100
+    assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
+    assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
+    assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.024")
+    row = ResultRow.model_validate_json((directory / "results.jsonl").read_text().strip())
+    assert row.judge_cost_usd is None
+    assert row.serving_cost_usd is not None and row.usage_complete
     assert not manifest.judge_evaluations
     raw = [
         json.loads(line)
@@ -418,3 +430,25 @@ def test_complete_legacy_artifact_with_self_consistent_model_drift_is_rejected(
     manifest_path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="model mismatch requires reforecast"):
         verify(complete, directory)
+
+
+@pytest.mark.parametrize(
+    "model,hold", [(ACTOR_MODEL, Decimal("0.019")), (JUDGE_MODEL, Decimal("0.024"))]
+)
+def test_collection_model_anomaly_defensively_holds_full_reservation(
+    model: str, hold: Decimal
+) -> None:
+    from typing import cast
+
+    from rent_navigator.eval.collection import _CollectionBudget
+    from rent_navigator.model_policy import RequestedModel
+    from rent_navigator.trace import Usage, cost_for_usage
+
+    ledger = SpendLedger(Decimal("1"))
+    budget = _CollectionBudget(ledger)
+    requested = cast(RequestedModel, model)
+    ticket = budget.reserve(requested)
+    budget.require_reforecast()
+    budget.reconcile(ticket, cost_for_usage(requested, Usage(input_tokens=1000, output_tokens=100)))
+    assert ledger.committed_usd == hold
+    assert ledger.stopped and budget.stopped

@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from anthropic.types import Message
+from pydantic import TypeAdapter, ValidationError
 
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.collection import _verify_observations
@@ -13,7 +14,7 @@ from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_re
 from rent_navigator.eval.runner import config_map, row_config_hash
 from rent_navigator.models import ErrorResponse
 from rent_navigator.provider import ProviderFailure, _usage
-from rent_navigator.trace import PRICING_HASH, TraceRecord, provider_cost_totals
+from rent_navigator.trace import PRICING_HASH, ReturnedModel, TraceRecord, provider_cost_totals
 
 
 def verify_raw_links(
@@ -46,10 +47,21 @@ def verify_raw_links(
                 ):
                     raise ValueError("Invalid token count evidence")
             else:
-                if (
-                    call.returned_model_id is not None
-                    and item.value.get("model") != call.returned_model_id
+                if item.value.get("model") != call.requested_model_id and (
+                    call.usage_complete
+                    or call.actual_cost_usd is not None
+                    or call.input_tokens is not None
+                    or call.output_tokens is not None
+                    or call.response_code != "provider_error"
                 ):
+                    raise ValueError("Raw model anomaly requires unknown pricing and a safe error")
+                try:
+                    returned_model: str | None = TypeAdapter(ReturnedModel).validate_python(
+                        item.value.get("model"), strict=True
+                    )
+                except ValidationError:
+                    returned_model = None
+                if returned_model != call.returned_model_id:
                     raise ValueError("Raw model differs from returned identity")
                 if call.usage_complete:
                     raw_usage = item.value.get("usage")

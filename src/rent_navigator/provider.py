@@ -358,14 +358,6 @@ class ProviderAdapter:
                                 response = await self._messages.create(
                                     **generation, timeout=timeout
                                 )
-                                usage = _usage(response)
-                                call.usage = usage
-                                cost = cost_for_usage(model, usage)
-                                reforecast = not cost.usage_complete or (
-                                    usage is not None
-                                    and usage.input_tokens is not None
-                                    and usage.input_tokens > policy.reserved_input_tokens
-                                )
                                 with trace.stage("validation"):
                                     try:
                                         call.returned_model_id = TypeAdapter(
@@ -374,7 +366,23 @@ class ProviderAdapter:
                                             getattr(response, "model", None), strict=True
                                         )
                                     except ValidationError:
+                                        usage = None
+                                        call.usage = None
+                                        reforecast = True
                                         raise ProviderFailure("provider_error") from None
+                                    if call.returned_model_id != model:
+                                        usage = None
+                                        call.usage = None
+                                        reforecast = True
+                                        raise ProviderFailure("provider_error") from None
+                                    usage = _usage(response)
+                                    call.usage = usage
+                                    cost = cost_for_usage(model, usage)
+                                    reforecast = not cost.usage_complete or (
+                                        usage is not None
+                                        and usage.input_tokens is not None
+                                        and usage.input_tokens > policy.reserved_input_tokens
+                                    )
                                     if reforecast:
                                         raise ProviderFailure("provider_error")
                                     deadline.check()

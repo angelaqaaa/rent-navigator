@@ -638,3 +638,123 @@ def test_judge_model_anomaly_keeps_raw_tokens_but_unknown_pricing_and_full_hold(
     test.verify(accounting)
     with pytest.raises(ValueError, match="model.*unverified"):
         test.verify(accounting, result(value))
+
+
+@pytest.mark.parametrize(
+    "has_citations,citation_support",
+    [(True, "not_applicable"), (False, "supported"), (False, "unsupported")],
+)
+def test_billed_judge_rejects_inconsistent_citation_applicability_by_statement_id(
+    value: JudgeInput,
+    has_citations: bool,
+    citation_support: str,
+) -> None:
+    if not has_citations:
+        value = replace(
+            value,
+            response=value.response.model_copy(
+                update={
+                    "statements": [
+                        item.model_copy(update={"citation_ids": []})
+                        for item in value.response.statements
+                    ],
+                    "citations": [],
+                }
+            ),
+            cited_evidence=(),
+        )
+    payload = result(value).model_dump(mode="json")
+    if not has_citations:
+        for statement in payload["statements"]:
+            statement["citation_support"] = "not_applicable"
+    next(item for item in payload["statements"] if item["id"] == "s2")["citation_support"] = (
+        citation_support
+    )
+    payload["statements"].reverse()
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    assert caught.value.code == "invalid_generated_output"
+    accounting = caught.value.accounting
+    assert accounting.cost.actual_cost_usd == Decimal("0.003")
+    assert accounting.cost.usage_complete
+    assert test.budget.committed_usd == Decimal("0.003")
+    assert len(test.port.creates) == len(test.port.counts) == 1
+    assert accounting.records[-1].response_code == "invalid_generated_output"
+    assert json.loads(test.records()[-1].value["content"][0]["text"]) == payload
+    test.verify(accounting)
+
+
+@pytest.mark.parametrize("policy", ["S07", "S01", "S08"])
+def test_fixed_smoke_rejects_policy_flags_in_otherwise_expected_judgment(
+    value: JudgeInput,
+    policy: str,
+) -> None:
+    payload = result(value).model_dump(mode="json")
+    payload["policy_violations"] = [policy]
+    judgment = JudgeResult.model_validate_json(json.dumps(payload))
+    with pytest.raises(ValueError):
+        validate_smoke_result(value, judgment)
+
+
+def test_baseline_empty_citations_accept_only_not_applicable_without_changing_factual_score(
+    value: JudgeInput,
+) -> None:
+    value = replace(
+        value,
+        response=value.response.model_copy(
+            update={
+                "statements": [
+                    item.model_copy(update={"citation_ids": []})
+                    for item in value.response.statements
+                ],
+                "citations": [],
+            }
+        ),
+        cited_evidence=(),
+    )
+    payload = result(value).model_dump(mode="json")
+    for item in payload["statements"]:
+        item["citation_support"] = "not_applicable"
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
+    evaluated = test.run()
+    assert evaluated.judgment.statements[-1].factual == "contradicted"
+    assert all(item.citation_support == "not_applicable" for item in evaluated.judgment.statements)
+    assert evaluated.cost.actual_cost_usd == Decimal("0.003")
+    test.verify(evaluated, evaluated.judgment)
+
+
+@pytest.mark.parametrize("citation_support", ["supported", "unsupported"])
+def test_cited_factual_contradiction_does_not_mechanically_assign_citation_score(
+    value: JudgeInput,
+    citation_support: str,
+) -> None:
+    payload = result(value).model_dump(mode="json")
+    statement = next(item for item in payload["statements"] if item["id"] == "s3")
+    assert statement["factual"] == "contradicted"
+    statement["citation_support"] = citation_support
+    payload["statements"].reverse()
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
+    evaluated = test.run()
+    assert evaluated.judgment.model_dump(mode="json") == payload
+    test.verify(evaluated, evaluated.judgment)
+
+
+def test_policy_flags_remain_original_judgments_instead_of_being_silently_removed(
+    value: JudgeInput,
+) -> None:
+    payload = result(value).model_dump(mode="json")
+    payload["policy_violations"] = ["S07"]
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
+    evaluated = test.run()
+    assert evaluated.judgment.policy_violations == ["S07"]
+    assert json.loads(test.records()[-1].value["content"][0]["text"])["policy_violations"] == [
+        "S07"
+    ]
+    test.verify(evaluated, evaluated.judgment)
+    with pytest.raises(ValueError):
+        validate_smoke_result(value, evaluated.judgment)

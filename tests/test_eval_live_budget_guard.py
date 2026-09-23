@@ -145,8 +145,8 @@ def test_receipt_retains_before_counts_and_permit_after_counts() -> None:
     receipt = budget.receipt()
     assert receipt.future_live_batches_before == 4
     assert receipt.permit.future_live_batches_remaining == 3
-    assert receipt.development_slots_before == 14
-    assert receipt.permit.development_slots_remaining == 14
+    assert receipt.development_slots_before == 13
+    assert receipt.permit.development_slots_remaining == 13
     assert receipt.permit.funded_slot == grant.funded_slot
     assert receipt.permit.prior_ledger_sha256 == grant.prior_ledger_sha256
 

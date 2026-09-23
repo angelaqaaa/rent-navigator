@@ -55,11 +55,11 @@ def permit() -> LivePermit:
         reserved_usd=Decimal("2.399"),
         incurred_usd=Decimal("0.045685"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("17.833"),
+        still_required_usd=Decimal("17.752"),
         development_cap_usd=Decimal(21),
         provider_funding_usd=Decimal(30),
         demo_reserved_usd=Decimal(9),
-        development_slots_remaining=14,
+        development_slots_remaining=13,
         prior_ledger_sha256="4" * 64,
         issued_at_utc=datetime.now(UTC),
         expires_at_utc=datetime.now(UTC) + timedelta(hours=1),
@@ -392,7 +392,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("17.833")
+    assert receipt.permit.still_required_usd == Decimal("17.752")
 
 
 @pytest.mark.parametrize(

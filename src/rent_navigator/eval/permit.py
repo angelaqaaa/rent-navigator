@@ -44,7 +44,7 @@ class LivePermit(EvaluationModel):
     development_cap_usd: PermitUsd
     provider_funding_usd: PermitUsd
     demo_reserved_usd: PermitUsd
-    development_slots_remaining: Annotated[int, Field(ge=0, le=14)]
+    development_slots_remaining: Annotated[int, Field(ge=0, le=13)]
     future_live_batches_remaining: Annotated[int, Field(ge=0, le=3)]
     prior_ledger_sha256: Sha256
     issued_at_utc: Annotated[datetime, BeforeValidator(_utc_timestamp)]
@@ -81,7 +81,7 @@ class LivePermit(EvaluationModel):
             if (
                 self.baseline_sha256 is not None
                 or self.future_live_batches_remaining != 3
-                or self.development_slots_remaining != 14
+                or self.development_slots_remaining != 13
             ):
                 raise ValueError("bootstrap must preserve the initial reserved allocation")
         elif self.baseline_sha256 is None or self.future_live_batches_remaining > 2:

@@ -665,8 +665,11 @@ def test_rehashed_preflight_context_must_match_generation_and_retrieval(
 
 
 def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixture) -> None:
+    from anthropic import transform_schema
+
     from rent_navigator.eval.critical import native_observation
     from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_records
+    from rent_navigator.models import GeneratedResult
 
     rows = [
         json.loads(line) for line in (complete.directory / "results.jsonl").read_text().splitlines()
@@ -684,6 +687,9 @@ def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixtu
     packet = json.loads(empty[0]["value"]["messages"][0]["content"])
     packet["evidence"] = []
     empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
+    empty[0]["value"]["output_config"]["format"]["schema"] = transform_schema(
+        GeneratedResult.model_json_schema()
+    )
     records = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]
     verify_synthetic_records(
         records, case=case, corpus=complete.corpus, arm="production", retrieved_ids=()
@@ -704,7 +710,8 @@ def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixtu
     changed = [
         RawProviderRecord.model_validate_json(json.dumps(item)) for item in [*empty, *original]
     ]
-    assert not native_observation(case, changed, complete.corpus).complete
+    with pytest.raises(ValueError):
+        native_observation(case, changed, complete.corpus)
     del packet["evidence"]
     empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
     missing = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]

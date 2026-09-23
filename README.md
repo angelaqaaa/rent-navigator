@@ -161,7 +161,7 @@ The owner has confirmed the additional US$5, bringing confirmed prepayment to **
 
 ## Offline evaluation and collection
 
-The 16-case candidate in `eval/gold.jsonl` is **draft, awaiting owner approval**. Its SHA-256 is `575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb`. The approval file binds every dataset byte and the corpus hash. Draft validation checks strict schemas and canonical evidence without calling calculators, searching, scoring or contacting a provider:
+Angela approved the 16 cases in `eval/gold.jsonl`, their prepared answers and official-source mappings at **2026-09-23T14:34:14.302Z**. The dataset SHA-256 is `575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb`. The approval file binds every dataset byte and the corpus hash. Read-only validation checks strict schemas and canonical evidence without calling calculators, searching, scoring or contacting a provider:
 
 ```sh
 uv run --locked python -m rent_navigator.eval validate-gold --data-dir eval
@@ -171,7 +171,7 @@ uv run --locked python -m rent_navigator.eval plan \
 
 Output directories must be new. `plan` only writes the fixed schedule: three warm-ups per arm, then five paired repetitions of the 16 cases, using one seed-42 random generator and alternating arm order. It makes no calls and does not approve the candidate.
 
-After explicit approval is recorded for the exact hash, the offline command compares all ten tool results and their ordered checks, validates all sixteen cases, and measures deterministic MRR@5/NDCG@5 on the six questions. It requires passing evidence from the existing security suite:
+The offline command verifies approval for the exact hash, compares all ten tool results and their ordered checks, validates all sixteen cases, and measures deterministic MRR@5/NDCG@5 on the six questions. It requires passing evidence from the existing security suite:
 
 ```sh
 uv run --locked pytest tests/test_security_pipeline.py \
@@ -182,7 +182,7 @@ uv run --locked python -m rent_navigator.eval offline \
   --security-report /tmp/rent-navigator-security.xml
 ```
 
-With the current draft, `offline` exits nonzero before tool or retrieval execution and preserves a failure artifact. Approval cannot be inferred from passing unit tests. `eval/activation.json` explicitly leaves the comparison baseline pending; this defers only the baseline comparison. No baseline numbers are bootstrapped by this package. `verify-offline --help` describes the required source, manifest digest and prerequisite conclusions for independent artifact verification.
+Missing or mismatched approval makes `offline` exit nonzero before tool or retrieval execution and preserve a failure artifact. Approval cannot be inferred from passing unit tests. `eval/activation.json` explicitly leaves the comparison baseline pending; this defers only the baseline comparison. No baseline numbers are bootstrapped by this package. `verify-offline --help` describes the required source, manifest digest and prerequisite conclusions for independent artifact verification.
 
 `eval.runner.run_attempt` uses the actual extraction and analysis operations through injected messages and judge ports. It preserves actual tool execution evidence, ranked retrieval IDs, failed attempts, separate serving/judge accounting, and distinct traces sharing one attempt ID. An extraction mismatch ends the attempt without correcting facts. Missing usage remains unknown, retains reservations and stops collection for budget reconciliation. Full-content recording is restricted to declared synthetic scenarios and prepared requests; ordinary trace records remain metadata-only.
 
@@ -203,7 +203,7 @@ uv build --no-sources
 
 `uv.lock` records exact dependency versions and distribution hashes. Strict mypy covers source and tests. Tests cover public JSON boundaries, synthetic trace accounting, source/chunk integrity, rule resolution, deterministic extraction, query tokenization, offline rebuilds, notice boundaries, calendar anniversaries, exact rent caps and form/status combinations. Synthetic timing/usage values are not serving measurements.
 
-The unfiltered PR workflow runs basic checks, installs the wheel outside the checkout with locked dependencies, and runs `tests/smoke_corpus.py`. It also validates the evaluation data through the installed package. `offline-eval-run` executes approved offline checks and uploads complete or failed evidence. The always-running `offline-eval` summary requires successful checks, Docker and offline execution, then verifies the producer manifest digest, payload hashes, source/data/config identities, exact results, security XML and activation state. Missing, skipped, cancelled or stale prerequisites fail. While gold approval is pending, these offline acceptance jobs remain nonpassing. Live evaluation and merge protection are not configured yet.
+The unfiltered PR workflow runs basic checks, installs the wheel outside the checkout with locked dependencies, and runs `tests/smoke_corpus.py`. It also validates the evaluation data through the installed package. `offline-eval-run` executes approved offline checks and uploads complete or failed evidence. The always-running `offline-eval` summary requires successful checks, Docker and offline execution, then verifies the producer manifest digest, payload hashes, source/data/config identities, exact results, security XML and activation state. Missing, skipped, cancelled or stale prerequisites fail. Gold approval alone does not constitute offline acceptance; the current source must pass these checks. Live evaluation and merge protection are not configured yet.
 
 ## Docker
 

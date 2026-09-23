@@ -4,7 +4,7 @@ import json
 import os
 from decimal import Decimal
 from io import UnsupportedOperation
-from typing import Any, Literal, TextIO
+from typing import Any, Literal, Protocol, TextIO
 from uuid import UUID
 
 from anthropic.types import Message, MessageTokensCount
@@ -135,10 +135,17 @@ class LiveBudget:
         return receipt_from_events(self.permit, self.config_hash, self.events)
 
 
+class ReforecastBudget(Protocol):
+    @property
+    def stopped(self) -> bool: ...
+
+    def require_reforecast(self) -> None: ...
+
+
 class FundedMessages:
     """Preserve mismatched responses but stop every subsequent provider operation."""
 
-    def __init__(self, port: MessagesPort, *, budget: LiveBudget) -> None:
+    def __init__(self, port: MessagesPort, *, budget: ReforecastBudget) -> None:
         self._port, self._budget = port, budget
 
     async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:

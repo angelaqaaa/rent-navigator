@@ -144,7 +144,12 @@ class Fixture:
 
 
 def run(
-    directory: Path, dataset: GoldDataset, corpus: Corpus, port: SyntheticRealCompositionPort
+    directory: Path,
+    dataset: GoldDataset,
+    corpus: Corpus,
+    port: SyntheticRealCompositionPort,
+    *,
+    budget: SpendLedger | None = None,
 ) -> RealCollectionManifest:
     return asyncio.run(
         collect_real(
@@ -155,7 +160,7 @@ def run(
             lock_hash=TOY_HASH,
             environment=_environment(),
             messages=port,
-            budget=SpendLedger(Decimal("20")),
+            budget=budget if budget is not None else SpendLedger(Decimal("20")),
             batch_ledger=RecordingBatchLedger([]),
             forecast_usd=Decimal("9.502"),
             retrieve=lambda _: (SearchHit(corpus.chunks[0], -1.0),),
@@ -274,4 +279,142 @@ def test_invalid_billed_judge_or_infrastructure_failure_stops_before_next_paid_a
         )
         assert not manifest.judge_evaluations
     with pytest.raises(ValueError):
+        verify(complete, directory)
+
+
+class ModelDriftPort(SyntheticRealCompositionPort):
+    """Stop the old implementation after its first forbidden extra generation."""
+
+    def __init__(self, *, drift_model: str = ACTOR_MODEL) -> None:
+        super().__init__()
+        self.drift_model = drift_model
+        self.drift_seen = False
+        self.count_calls = 0
+        self.extra_operations = 0
+
+    async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+        self.count_calls += 1
+        if self.drift_seen:
+            self.extra_operations += 1
+        return await super().count_tokens(**kwargs)
+
+    async def create(self, **kwargs: Any) -> Message:
+        if self.drift_seen:
+            self.extra_operations += 1
+            self.actor_calls += kwargs["model"] == ACTOR_MODEL
+            self.judge_calls += kwargs["model"] == JUDGE_MODEL
+            raise RuntimeError("Synthetic probe stopped an unauthorized later generation")
+        response = await super().create(**kwargs)
+        if kwargs["model"] == self.drift_model:
+            self.drift_seen = True
+            return response.model_copy(
+                update={"model": JUDGE_MODEL if self.drift_model == ACTOR_MODEL else ACTOR_MODEL}
+            )
+        return response
+
+
+def test_first_actor_model_drift_stops_before_any_later_provider_operation(tmp_path: Path) -> None:
+    corpus = load_corpus()
+    dataset = load_gold(write_toy_data(tmp_path / "data", corpus), corpus)
+    port = ModelDriftPort()
+    directory = tmp_path / "drift"
+    budget = SpendLedger(Decimal("20"))
+    manifest = run(directory, dataset, corpus, port, budget=budget)
+    assert port.actor_calls == 1
+    assert port.judge_calls == 0
+    assert port.count_calls == 1 and port.extra_operations == 0
+    assert not manifest.collection_complete and not manifest.evaluation_complete
+    assert "provider_model_mismatch" in manifest.reasons
+    assert "budget_reforecast_required" in manifest.reasons
+    assert budget.stopped and budget.reforecast_required
+    metadata = [
+        json.loads(line) for line in (directory / "metadata.jsonl").read_text().splitlines()
+    ]
+    generation = next(item for item in metadata if item["provider_operation"] == "generation")
+    assert generation["requested_model_id"] == ACTOR_MODEL
+    assert generation["returned_model_id"] == JUDGE_MODEL
+    assert generation["input_tokens"] == 1000 and generation["output_tokens"] == 100
+    raw = [json.loads(line) for line in (directory / "raw-provider.jsonl").read_text().splitlines()]
+    assert raw[-1]["value"]["model"] == JUDGE_MODEL
+    assert raw[-1]["value"]["usage"] == {"input_tokens": 1000, "output_tokens": 100}
+    with pytest.raises(ValueError):
+        verify_real_collection(
+            directory,
+            dataset=dataset,
+            corpus=corpus,
+            source_sha=TOY_SOURCE_SHA,
+            lock_hash=TOY_HASH,
+            manifest_sha256=sha256((directory / "manifest.json").read_bytes()).hexdigest(),
+        )
+
+
+def test_first_judge_model_drift_stops_shared_collection_and_preserves_billed_response(
+    tmp_path: Path,
+) -> None:
+    corpus = load_corpus()
+    dataset = load_gold(write_toy_data(tmp_path / "data", corpus), corpus)
+    port = ModelDriftPort(drift_model=JUDGE_MODEL)
+    directory = tmp_path / "judge-drift"
+    budget = SpendLedger(Decimal("20"))
+    manifest = run(directory, dataset, corpus, port, budget=budget)
+    assert port.judge_calls == 1 and port.extra_operations == 0
+    assert len(manifest.started_attempts) == 7
+    assert not manifest.collection_complete and not manifest.evaluation_complete
+    assert {"provider_model_mismatch", "budget_reforecast_required"} <= set(manifest.reasons)
+    assert budget.stopped and budget.reforecast_required
+    accounting = next(iter(manifest.judge_accounting.values()))
+    assert accounting.returned_model_id == ACTOR_MODEL
+    assert accounting.cost.input_tokens == 1000 and accounting.cost.output_tokens == 100
+    assert not manifest.judge_evaluations
+    raw = [
+        json.loads(line)
+        for line in (directory / "judge-raw-provider.jsonl").read_text().splitlines()
+    ]
+    assert raw[-1]["value"]["model"] == ACTOR_MODEL
+    assert raw[-1]["value"]["usage"] == {"input_tokens": 1000, "output_tokens": 100}
+
+
+@pytest.mark.parametrize("stream", ["actor", "judge"])
+def test_complete_legacy_artifact_with_self_consistent_model_drift_is_rejected(
+    complete: Fixture,
+    tmp_path: Path,
+    stream: str,
+) -> None:
+    directory = tmp_path / "legacy-model-drift"
+    shutil.copytree(complete.directory, directory)
+    raw_name = "raw-provider.jsonl" if stream == "actor" else "judge-raw-provider.jsonl"
+    metadata_name = "metadata.jsonl" if stream == "actor" else "judge-metadata.jsonl"
+    raw = [json.loads(line) for line in (directory / raw_name).read_text().splitlines()]
+    metadata = [json.loads(line) for line in (directory / metadata_name).read_text().splitlines()]
+    response = next(
+        item for item in raw if item["operation"] == "generation" and item["event"] == "response"
+    )
+    drift = JUDGE_MODEL if stream == "actor" else ACTOR_MODEL
+    response["value"]["model"] = drift
+    matching = next(
+        item
+        for item in metadata
+        if item["trace_id"] == response["trace_id"]
+        and item["provider_call_index"] == response["operation_index"]
+    )
+    matching["returned_model_id"] = drift
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    if stream == "judge":
+        attempt = response["attempt_id"]
+        for field in ("judge_accounting", "judge_evaluations"):
+            manifest[field][attempt]["returned_model_id"] = drift
+            entry = next(
+                item
+                for item in manifest[field][attempt]["records"]
+                if item["provider_call_index"] == response["operation_index"]
+            )
+            entry["returned_model_id"] = drift
+    for name, records in ((raw_name, raw), (metadata_name, metadata)):
+        path = directory / name
+        path.write_text("".join(json.dumps(item) + "\n" for item in records))
+        manifest["files"][name] = sha256(path.read_bytes()).hexdigest()
+    assert manifest["evaluation_complete"] and manifest["collection_complete"]
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="model mismatch requires reforecast"):
         verify(complete, directory)

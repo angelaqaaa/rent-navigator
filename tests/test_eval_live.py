@@ -636,3 +636,79 @@ def test_refused_attempt_cannot_hide_unaccounted_judge_raw(
     rehash(fixture.directory)
     with pytest.raises(ValueError, match="Unlinked provider or judge evidence"):
         verify(fixture)
+
+
+@pytest.mark.parametrize("change", ["count_empty", "both_empty", "count_serialization"])
+def test_rehashed_preflight_context_must_match_generation_and_retrieval(
+    complete: GateFixture, tmp_path: Path, change: str
+) -> None:
+    directory = tmp_path / "copy"
+    shutil.copytree(complete.directory, directory)
+    rows = [json.loads(line) for line in (directory / "results.jsonl").read_text().splitlines()]
+    target = next(row for row in rows if row["case_id"] == "Q01" and row["repeat"] == 0)
+    assert len(target["retrieved_ids"]) == 5
+    path = directory / "raw-provider.jsonl"
+    raw = [json.loads(line) for line in path.read_text().splitlines()]
+    for record in raw:
+        if record["attempt_id"] != target["attempt_id"] or record["event"] != "request":
+            continue
+        if change != "both_empty" and record["operation"] != "count_tokens":
+            continue
+        packet = json.loads(record["value"]["messages"][0]["content"])
+        if change != "count_serialization":
+            packet["evidence"] = []
+        record["value"]["messages"][0]["content"] = json.dumps(packet, indent=2)
+    path.write_text("".join(json.dumps(record) + "\n" for record in raw))
+    rehash(directory)
+    with pytest.raises(ValueError):
+        verify(complete, directory)
+
+
+def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixture) -> None:
+    from rent_navigator.eval.critical import native_observation
+    from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_records
+
+    rows = [
+        json.loads(line) for line in (complete.directory / "results.jsonl").read_text().splitlines()
+    ]
+    row = next(item for item in rows if item["case_id"] == "Q01" and item["repeat"] == 0)
+    case = next(item for item in complete.dataset.cases if item.id == "Q01")
+    original = [
+        json.loads(line)
+        for line in (complete.directory / "raw-provider.jsonl").read_text().splitlines()
+        if json.loads(line)["attempt_id"] == row["attempt_id"]
+        and json.loads(line)["operation"] == "count_tokens"
+    ]
+    assert len(original) == 2
+    empty = json.loads(json.dumps(original))
+    packet = json.loads(empty[0]["value"]["messages"][0]["content"])
+    packet["evidence"] = []
+    empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
+    records = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]
+    verify_synthetic_records(
+        records, case=case, corpus=complete.corpus, arm="production", retrieved_ids=()
+    )
+    observed = native_observation(case, records, complete.corpus)
+    assert observed.complete and observed.retrieved_ids == () and observed.actor_responses == 0
+    with pytest.raises(ValueError):
+        verify_synthetic_records(
+            records,
+            case=case,
+            corpus=complete.corpus,
+            arm="production",
+            retrieved_ids=tuple(row["retrieved_ids"]),
+        )
+    # An initialized empty context cannot be replaced by a later nonempty count.
+    for item in original:
+        item["operation_index"] = 2
+    changed = [
+        RawProviderRecord.model_validate_json(json.dumps(item)) for item in [*empty, *original]
+    ]
+    assert not native_observation(case, changed, complete.corpus).complete
+    del packet["evidence"]
+    empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
+    missing = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]
+    with pytest.raises(ValueError):
+        verify_synthetic_records(
+            missing, case=case, corpus=complete.corpus, arm="production", retrieved_ids=()
+        )

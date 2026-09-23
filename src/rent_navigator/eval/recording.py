@@ -216,8 +216,8 @@ class SyntheticRecorder:
                 and tuple(item["id"] for item in evidence) != self.expected_retrieved_ids
             ):
                 raise ValueError("Synthetic retrieval differs from the observed canonical hits")
-        elif isinstance(self._case, SecurityCase) and self._arm == "production":
-            raise ValueError("Security production context requires canonical evidence")
+        elif self._arm == "production":
+            raise ValueError("Production context requires canonical evidence")
         if isinstance(self._case, SecurityCase):
             sidecar = self._case.injected_retrieved_text
             if self._arm == "production" and sidecar is not None:
@@ -387,6 +387,8 @@ def verify_synthetic_records(
     )
     verifier.expected_retrieved_ids = retrieved_ids
     trace_id: UUID | None = None
+    counted: dict[tuple[UUID, int], dict[str, Any]] = {}
+    count_responses: set[tuple[UUID, int]] = set()
     try:
         for record in records:
             if record.trace_id != trace_id:
@@ -396,6 +398,25 @@ def verify_synthetic_records(
                 verifier.bind(trace_id, record.phase, case.request, arm=arm)
             if record.event == "request":
                 verifier._prepared(record.value, record.operation)
+                if record.operation == "count_tokens":
+                    counted[(record.trace_id, record.operation_index)] = {
+                        key: value for key, value in record.value.items() if key != "timeout"
+                    }
+                else:
+                    preflight = (record.trace_id, record.operation_index - 1)
+                    generation_input = {
+                        key: value
+                        for key, value in record.value.items()
+                        if key
+                        not in {"timeout", "max_tokens", "stream", "service_tier", "extra_body"}
+                    }
+                    if (
+                        preflight not in count_responses
+                        or counted.get(preflight) != generation_input
+                    ):
+                        raise ValueError("Generation input differs from its completed preflight")
+            elif record.event == "response" and record.operation == "count_tokens":
+                count_responses.add((record.trace_id, record.operation_index))
             elif record.event == "response" and record.operation == "generation":
                 if set(record.value) - {
                     "id",

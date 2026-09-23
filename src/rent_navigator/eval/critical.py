@@ -61,7 +61,7 @@ def native_observation(
     requests: dict[tuple[UUID, int], RawProviderRecord] = {}
     terminals: set[tuple[UUID, int]] = set()
     complete = bool(records)
-    retrieved: tuple[str, ...] = ()
+    retrieved: tuple[str, ...] | None = None
     result: ToolResult | None = None
     args: NoticeFacts | RentFacts | None = None
     proposals: list[NativeProposal] = []
@@ -80,7 +80,7 @@ def native_observation(
             messages = record.value["messages"]
             initial = json.loads(messages[0]["content"])
             current = tuple(item["id"] for item in initial.get("evidence", []))
-            if retrieved and current != retrieved:
+            if retrieved is not None and current != retrieved:
                 complete = False
             retrieved = current
             if len(messages) == 3:
@@ -160,7 +160,7 @@ def native_observation(
         if (item.trace_id, item.operation_index, item.block.get("id")) not in executed_proposals
     )
     return NativeObservation(
-        complete, responses, retrieved, args, result, blocked, generated, tool_violation
+        complete, responses, retrieved or (), args, result, blocked, generated, tool_violation
     )
 
 

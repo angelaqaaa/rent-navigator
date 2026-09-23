@@ -138,6 +138,12 @@ def verify_gold_observations(
             or row.response.error.message != ProviderFailure(row.response.error.code).message
         ):
             raise ValueError("Safe error disagrees with actual endpoint failure")
-    verify_synthetic_records(raw, case=case, corpus=corpus, arm=row.arm)
+    verify_synthetic_records(
+        raw,
+        case=case,
+        corpus=corpus,
+        arm=row.arm,
+        retrieved_ids=tuple(row.retrieved_ids) if row.arm == "production" else None,
+    )
     values: list[dict[str, Any]] = [json.loads(r.model_dump_json()) for r in raw]
     _verify_observations(row, case, records, values, corpus)

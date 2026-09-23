@@ -39,6 +39,7 @@ from rent_navigator.eval.runner import (
     validate_judge_accounting,
 )
 from rent_navigator.index import SearchHit
+from rent_navigator.model_policy import RequestedModel
 from rent_navigator.models import (
     AskResponse,
     CanonicalUUID,
@@ -51,9 +52,15 @@ from rent_navigator.models import (
     StrictModel,
     ToolResult,
 )
-from rent_navigator.provider import MessagesPort, SpendBudget, _usage
+from rent_navigator.provider import MessagesPort, ProviderFailure, Reservation, SpendBudget, _usage
 from rent_navigator.security_cases import security_cases_hash
-from rent_navigator.trace import PRICING_HASH, TraceContext, TraceRecord, provider_cost_totals
+from rent_navigator.trace import (
+    PRICING_HASH,
+    CostSummary,
+    TraceContext,
+    TraceRecord,
+    provider_cost_totals,
+)
 
 ARTIFACT_FILES = (
     "plan.json",
@@ -134,6 +141,35 @@ class BatchLedger(Protocol):
     def reserve_batch(self, forecast_usd: Decimal) -> None: ...
 
 
+class _CollectionBudget:
+    """Share a model-anomaly stop while preserving the current call's usage."""
+
+    def __init__(self, budget: SpendBudget) -> None:
+        self._budget = budget
+        self._reforecast = False
+
+    @property
+    def stopped(self) -> bool:
+        return self._reforecast or self._budget.stopped
+
+    def require_reforecast(self) -> None:
+        self._reforecast = True
+
+    @property
+    def model_anomaly(self) -> bool:
+        return self._reforecast
+
+    def reserve(self, model: RequestedModel) -> Reservation:
+        if self.stopped:
+            raise ProviderFailure("provider_error")
+        return self._budget.reserve(model)
+
+    def reconcile(
+        self, reservation: Reservation, cost: CostSummary, *, reforecast: bool = False
+    ) -> None:
+        self._budget.reconcile(reservation, cost, reforecast=reforecast or self._reforecast)
+
+
 async def collect_synthetic(
     dataset: GoldDataset,
     output_dir: Path,
@@ -195,6 +231,10 @@ async def collect_real(
     can mark a partial collection complete.
     """
     from rent_navigator.eval.judge import judge_config_hash
+    from rent_navigator.eval.live_budget import FundedMessages
+
+    guarded_budget = _CollectionBudget(budget)
+    guarded_messages = FundedMessages(messages, budget=guarded_budget)
 
     manifest = await _collect(
         dataset,
@@ -203,14 +243,14 @@ async def collect_real(
         source_sha=source_sha,
         lock_hash=lock_hash,
         environment=environment,
-        messages_factory=lambda case, entry, warmup: messages,
-        budget=budget,
+        messages_factory=lambda case, entry, warmup: guarded_messages,
+        budget=guarded_budget,
         batch_ledger=batch_ledger,
         forecast_usd=forecast_usd,
         retrieve=retrieve,
         judge_config_hash=judge_config_hash(),
         plan=plan,
-        real_messages=messages,
+        real_messages=guarded_messages,
     )
     assert isinstance(manifest, RealCollectionManifest)
     return manifest
@@ -369,6 +409,11 @@ async def _collect(
                     manifest.reasons.extend(
                         f"{outcome.row.attempt_id}:{reason}" for reason in outcome.reasons
                     )
+                    if isinstance(budget, _CollectionBudget) and budget.model_anomaly:
+                        manifest.reasons.extend(
+                            ("provider_model_mismatch", "budget_reforecast_required")
+                        )
+                        return manifest
                     save()
                     if real_messages is not None and (
                         any(
@@ -575,6 +620,12 @@ def _verify_collection(
         RawProviderRecord.model_validate_json(line)
         for line in (directory / "raw-provider.jsonl").read_text().splitlines()
     ]
+    if real and any(
+        record.provider_operation == "generation"
+        and record.returned_model_id != record.requested_model_id
+        for record in records
+    ):
+        raise ValueError("Real collection provider model mismatch requires reforecast")
     raw = [item.model_dump(mode="json") for item in raw_records]
     expected_calls = {
         (
@@ -660,6 +711,7 @@ def _verify_collection(
             case=cases[row.case_id],
             corpus=corpus,
             arm=row.arm,
+            retrieved_ids=tuple(row.retrieved_ids) if row.arm == "production" else None,
         )
         _verify_observations(row, cases[row.case_id], records, raw, corpus)
         accounting = manifest.judge_accounting.get(str(row.attempt_id))
@@ -804,6 +856,12 @@ def _verify_real_judges(
         TraceRecord.model_validate_json(line)
         for line in (directory / "judge-metadata.jsonl").read_text().splitlines()
     ]
+    if any(
+        record.provider_operation == "generation"
+        and record.returned_model_id != record.requested_model_id
+        for record in judge_records
+    ):
+        raise ValueError("Real collection judge model mismatch requires reforecast")
     raw = [
         RawJudgeRecord.model_validate_json(line)
         for line in (directory / "judge-raw-provider.jsonl").read_text().splitlines()

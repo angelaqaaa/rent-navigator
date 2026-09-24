@@ -5,16 +5,20 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
 from anthropic.types import Message
-from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA
+from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, canonical_hits
+from pydantic import ValidationError
 from test_agent import final_message, message, selection
 from test_eval_runner import JUDGE_CONFIG, Clock, ScriptedMessages, SyntheticJudge, _harness
 
+import rent_navigator.agent as agent_module
+from rent_navigator.context import ContextProvenance, context_provenance, query_for_request
 from rent_navigator.corpus import Corpus, load_corpus
-from rent_navigator.eval.critical import critical_gold
+from rent_navigator.eval.critical import critical_gold, native_observation
 from rent_navigator.eval.recording import (
     RawProviderRecord,
     SyntheticAllowlist,
@@ -25,10 +29,10 @@ from rent_navigator.eval.runner import AttemptIdentity
 from rent_navigator.eval.safety_execution import (
     SECURITY_IDS,
     SecurityOutcome,
+    SecurityResultRow,
     run_security_attempt,
     verify_security_outcome,
 )
-from rent_navigator.index import SearchHit
 from rent_navigator.models import ExtractRequest, NoticeRequest, RentRequest
 from rent_navigator.provider import ProviderFailure, SpendLedger
 from rent_navigator.security_cases import SecurityCase, load_security_cases
@@ -49,6 +53,14 @@ class SafetyHarness:
     raw: StringIO
     metadata: StringIO
 
+    def provenance(self) -> ContextProvenance:
+        assert not isinstance(self.case.request, ExtractRequest)
+        seeds = tuple(
+            hit.chunk.id
+            for hit in canonical_hits(self.corpus, query_for_request(self.case.request))
+        )
+        return context_provenance(self.case.request.mode, "production", seeds, self.corpus)
+
     def run(self) -> SecurityOutcome:
         return asyncio.run(
             run_security_attempt(
@@ -60,10 +72,7 @@ class SafetyHarness:
                 messages=self.fake,
                 budget=SpendLedger(Decimal("1")),
                 allowlist=SyntheticAllowlist.from_fixtures((self.case,)),
-                retrieve=lambda _: tuple(
-                    SearchHit(chunk, -float(i + 1))
-                    for i, chunk in enumerate(self.corpus.chunks[:5])
-                ),
+                retrieve=lambda query: canonical_hits(self.corpus, query),
                 metadata=self.metadata,
                 raw_provider=self.raw,
                 judge=self.judge,
@@ -93,7 +102,9 @@ def safety(corpus: Corpus, case_id: str) -> SafetyHarness:
     replies = []
     if isinstance(case.request, NoticeRequest | RentRequest):
         replies.append(selection(case.request))
-    replies.append(final_message([corpus.chunks[0].id]))
+    seeds = tuple(hit.chunk.id for hit in canonical_hits(corpus, query_for_request(case.request)))
+    initial = context_provenance(case.request.mode, "production", seeds, corpus)
+    replies.append(final_message(initial.initial_context_evidence_ids[:1]))
     clock = Clock()
     return SafetyHarness(
         corpus,
@@ -120,6 +131,32 @@ def test_seven_attempts_use_actual_boundaries_and_rederive(corpus: Corpus, case_
     assert packet.safety_context is not None
     assert packet.safety_context.policy_claims
     assert outcome.row.blocked_native_proposals == []
+    provenance = harness.provenance()
+    assert outcome.row.retrieved_ids == provenance.retrieved_evidence_ids
+    assert outcome.row.foundation_evidence_ids == provenance.foundation_evidence_ids
+    assert outcome.row.initial_context_evidence_ids == provenance.initial_context_evidence_ids
+    raw = [
+        RawProviderRecord.model_validate_json(line) for line in harness.raw.getvalue().splitlines()
+    ]
+    assert all(record.context_provenance == provenance for record in raw)
+    observation = native_observation(harness.case, raw, corpus)
+    assert observation.analysis_context_observed
+    assert observation.retrieved_ids == tuple(provenance.retrieved_evidence_ids)
+    assert observation.foundation_evidence_ids == tuple(provenance.foundation_evidence_ids)
+    assert observation.initial_context_evidence_ids == tuple(
+        provenance.initial_context_evidence_ids
+    )
+    for record in outcome.records:
+        applicable = record.record_kind == "endpoint" and record.phase == "analysis"
+        assert record.retrieved_evidence_ids == (
+            tuple(provenance.retrieved_evidence_ids) if applicable else ()
+        )
+        assert record.foundation_evidence_ids == (
+            tuple(provenance.foundation_evidence_ids) if applicable else ()
+        )
+        assert record.initial_context_evidence_ids == (
+            tuple(provenance.initial_context_evidence_ids) if applicable else ()
+        )
     if case_id in {"S04", "S07"}:
         assert isinstance(harness.case.request, RentRequest)
         assert outcome.row.actual_tool_args == harness.case.request.facts
@@ -132,7 +169,7 @@ def test_seven_attempts_use_actual_boundaries_and_rederive(corpus: Corpus, case_
         initial = json.loads(request["messages"][0]["content"])
         assert initial["evidence"] == [
             {"id": chunk.id, "heading": chunk.heading, "text": chunk.text}
-            for chunk in corpus.chunks[:5]
+            for chunk in (corpus.chunk(i) for i in provenance.initial_context_evidence_ids)
         ]
         if case_id in {"S04", "S05"}:
             assert initial["untrusted_retrieved_text"] == harness.case.injected_retrieved_text
@@ -213,7 +250,51 @@ def test_preflight_failure_after_no_actor_response_is_not_safe(corpus: Corpus) -
     assert not outcome.row.safe_pass
     assert not harness.fake.creates
     assert outcome.row.serving_cost_usd == Decimal(0)
+    raw = [
+        RawProviderRecord.model_validate_json(line) for line in harness.raw.getvalue().splitlines()
+    ]
+    assert {record.operation for record in raw} == {"count_tokens"}
+    assert native_observation(harness.case, raw, corpus).analysis_context_observed
+    assert outcome.row.foundation_evidence_ids == harness.provenance().foundation_evidence_ids
     harness.verify(outcome)
+
+
+def test_failure_before_count_preserves_prepared_context_without_observation(
+    corpus: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = safety(corpus, "S01")
+    monkeypatch.setattr(
+        agent_module, "_final_schema", Mock(side_effect=ProviderFailure("deadline_exceeded"))
+    )
+    outcome = harness.run()
+    provenance = harness.provenance()
+    assert not outcome.row.safe_pass and outcome.row.disposition == "incomplete"
+    assert not harness.fake.counts and not harness.fake.creates
+    assert harness.raw.getvalue() == ""
+    assert outcome.row.retrieved_ids == provenance.retrieved_evidence_ids
+    assert outcome.row.foundation_evidence_ids == provenance.foundation_evidence_ids
+    assert outcome.row.initial_context_evidence_ids == provenance.initial_context_evidence_ids
+    observation = native_observation(harness.case, [], corpus)
+    assert not observation.analysis_context_observed
+    assert observation.retrieved_ids == observation.foundation_evidence_ids == ()
+    assert observation.initial_context_evidence_ids == ()
+    harness.verify(outcome)
+
+
+@pytest.mark.parametrize("field", ["foundation_evidence_ids", "initial_context_evidence_ids"])
+def test_safety_context_fields_are_required_on_result_and_raw_json(
+    corpus: Corpus, field: str
+) -> None:
+    harness = safety(corpus, "S01")
+    outcome = harness.run()
+    row = outcome.row.model_dump(mode="json")
+    del row[field]
+    with pytest.raises(ValidationError):
+        SecurityResultRow.model_validate_json(json.dumps(row))
+    raw = json.loads(harness.raw.getvalue().splitlines()[0])
+    del raw["context_provenance"][field]
+    with pytest.raises(ValidationError):
+        RawProviderRecord.model_validate_json(json.dumps(raw))
 
 
 @pytest.mark.parametrize("failure", ["missing_usage", "invalid_coverage", "error"])
@@ -325,8 +406,15 @@ def test_no_proposal_or_malformed_output_is_only_task_failure(corpus: Corpus, ca
 
 def test_expected_rule_evidence_cannot_rescue_unexecuted_citation(corpus: Corpus) -> None:
     harness = _harness(corpus)
-    # A real canonical chunk absent from actual retrieval is still unavailable.
-    harness.fake.responses = [final_message([corpus.chunks[-1].id])]
+    seeds = tuple(
+        hit.chunk.id for hit in canonical_hits(corpus, query_for_request(harness.case.request))
+    )
+    context = context_provenance(harness.case.request.mode, "production", seeds, corpus)
+    # A canonical chunk outside the entire initial context remains unavailable.
+    unavailable = next(
+        chunk.id for chunk in corpus.chunks if chunk.id not in context.initial_context_evidence_ids
+    )
+    harness.fake.responses = [final_message([unavailable])]
     outcome = harness.run()
     raw = [
         RawProviderRecord.model_validate_json(line) for line in harness.raw.getvalue().splitlines()
@@ -374,7 +462,10 @@ def test_billed_invalid_judge_keeps_cost_and_blocks_safety(corpus: Corpus) -> No
     harness.verify(outcome)
 
 
-@pytest.mark.parametrize("field", ["assertions", "cost", "blocked", "request", "retrieved"])
+@pytest.mark.parametrize(
+    "field",
+    ["assertions", "cost", "blocked", "request", "retrieved", "foundation", "initial_context"],
+)
 def test_safety_artifact_cannot_forge_a_pass(corpus: Corpus, field: str) -> None:
     from rent_navigator.eval.models import DeterministicAssertion
 
@@ -398,6 +489,10 @@ def test_safety_artifact_cannot_forge_a_pass(corpus: Corpus, field: str) -> None
         }
     elif field == "request":
         updates = {"request": row.request.model_copy(update={"question": "undeclared"})}
+    elif field == "foundation":
+        updates = {"foundation_evidence_ids": []}
+    elif field == "initial_context":
+        updates = {"initial_context_evidence_ids": []}
     else:
         updates = {"retrieved_ids": []}
     changed = row.model_copy(update=updates)

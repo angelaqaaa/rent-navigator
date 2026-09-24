@@ -18,9 +18,18 @@ from anthropic.types import (
 )
 from pydantic import TypeAdapter, ValidationError
 
+from rent_navigator.context import (
+    CONTEXT_POLICY,
+    NOTICE_QUERY,
+    RENT_QUERY,
+    context_provenance,
+    query_for_request,
+)
+from rent_navigator.context import Arm as Arm
+from rent_navigator.context import Mode as Mode
 from rent_navigator.corpus import Chunk, Corpus
 from rent_navigator.guards import REDACTION_POLICY_HASH
-from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit
+from rent_navigator.index import SearchHit
 from rent_navigator.models import (
     ASK_REQUEST_ADAPTER,
     DISCLAIMER_TEMPLATE,
@@ -56,8 +65,6 @@ from rent_navigator.trace import (
     TraceRecorder,
 )
 
-Arm = Literal["production", "baseline"]
-Mode = Literal["question", "notice", "rent"]
 REFUSAL_TEXT: Final[dict[RefusalReason, str]] = {
     "needs_confirmation": (
         "Case-specific calculations require confirmed facts. Use the structured form to "
@@ -109,6 +116,7 @@ _FINAL_SYSTEM: Final = (
     "status; generated text cannot replace the result. Explain definite failures, applicable "
     "limits, and missing facts. A failed or unknown checked condition can be explained from "
     "the supplied result and evidence; that outcome alone is not insufficient_evidence. "
+    "Prioritize failures, uncertainty, exemption conditions and material qualifications. "
     "Refuse when the available information is truly insufficient. Do not call any tool again."
 )
 _RENT_MONEY_SYSTEM: Final = (
@@ -135,8 +143,12 @@ _CENTS_DECIMAL: Final = TypeAdapter(DecimalString)
 _RESULT_SYSTEM: Final = (
     "Return only the structured result: kind answer or refusal, refusal_reason null for an "
     "answer or needs_confirmation/out_of_scope/insufficient_evidence for a refusal, and "
-    "statements. An answer has one to four statements with sequential IDs s1 to s4, each "
-    "at most 240 characters and one factual proposition; a refusal has no statements."
+    "statements. An answer has one to six statements with sequential IDs s1 to s6, each "
+    "1 to 600 characters; a refusal has no statements. Each statement expresses one "
+    "independently checkable point with its necessary qualifications. Answer the actual "
+    "question, avoid repetition and use only as many statements as needed. Six statements "
+    "and 600 characters are upper bounds, not writing targets. Do not expand unrelated "
+    "exceptions or service methods when the confirmed scenario does not need them."
 )
 _CITATION_SYSTEM: Final = (
     "Every answer statement must include at least one ID in citation_ids naming a supplied "
@@ -158,7 +170,7 @@ _RETRIEVAL_SIDECAR_POLICY: Final = {
 }
 _CITATION_SCHEMA_POLICY: Final = {
     "version": 1,
-    "sources": ["actual retrieved chunk IDs", "actual executed ToolResult rule evidence IDs"],
+    "sources": ["actual initial context chunk IDs", "actual executed ToolResult rule evidence IDs"],
     "order": "sorted unique exact chunk IDs",
     "production_nonempty": "Statement.citation_ids items string enum and minItems 1",
     "baseline": "unchanged transformed schema",
@@ -239,6 +251,7 @@ def agent_config_hash(mode: Mode, arm: Arm = "production") -> str:
         "redaction_hash": REDACTION_POLICY_HASH,
         "retrieval_sidecar_policy": _RETRIEVAL_SIDECAR_POLICY,
         "citation_schema_policy": _CITATION_SCHEMA_POLICY,
+        "context_policy": CONTEXT_POLICY,
         "prompts": {
             "base": _BASE_SYSTEM,
             "question": _QUESTION_SYSTEM,
@@ -402,6 +415,8 @@ async def answer(
     trace = TraceRecorder(context, sink)
     code: ResponseCode = "provider_error"
     retrieved_ids: tuple[str, ...] = ()
+    foundation_evidence_ids: tuple[str, ...] = ()
+    initial_context_evidence_ids: tuple[str, ...] = ()
     cited_ids: tuple[str, ...] = ()
     tool_result: ToolResult | None = None
     cancelled = False
@@ -437,21 +452,22 @@ async def answer(
             if arm == "production":
                 with trace.stage("retrieval"):
                     deadline.check()
-                    query = (
-                        request.question
-                        if request.mode == "question"
-                        else NOTICE_QUERY
-                        if request.mode == "notice"
-                        else RENT_QUERY
-                    )
-                    chunks, sidecar = _retrieve(query, retrieve, corpus)
+                    chunks, sidecar = _retrieve(query_for_request(request), retrieve, corpus)
                     retrieved_ids = tuple(chunk.id for chunk in chunks)
-                    payload["evidence"] = _passages(chunks)
+                    provenance = context_provenance(request.mode, arm, retrieved_ids, corpus)
+                    context_chunks = tuple(
+                        corpus.chunk(identifier)
+                        for identifier in provenance.initial_context_evidence_ids
+                    )
+                    passages = _passages(context_chunks)
+                    foundation_evidence_ids = tuple(provenance.foundation_evidence_ids)
+                    initial_context_evidence_ids = tuple(provenance.initial_context_evidence_ids)
+                    payload["evidence"] = passages
                     if sidecar is not None:
                         payload["untrusted_retrieved_text"] = sidecar
                     deadline.check()
             messages: list[MessageParam] = [{"role": "user", "content": _json(payload)}]
-            allowed = set(retrieved_ids)
+            allowed = set(initial_context_evidence_ids)
             if request.mode == "question":
                 response = await provider.generate(
                     model=ACTOR_MODEL,
@@ -594,6 +610,8 @@ async def answer(
                 if tool_result is not None
                 else (),
                 retrieved_evidence_ids=retrieved_ids,
+                foundation_evidence_ids=foundation_evidence_ids,
+                initial_context_evidence_ids=initial_context_evidence_ids,
                 cited_evidence_ids=cited_ids,
             )
         except Exception:

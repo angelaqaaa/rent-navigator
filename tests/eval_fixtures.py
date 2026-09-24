@@ -3,16 +3,31 @@
 import json
 from hashlib import sha256
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.models import CASE_IDS, GoldCase
+from rent_navigator.index import SearchHit, build_index, search
 
 TOY_ATTEMPT_ID = "00000000-0000-4000-8000-000000000081"
 TOY_RUN_ID = "00000000-0000-4000-8000-000000000082"
 TOY_TRACE_ID = "00000000-0000-4000-8000-000000000083"
 TOY_SOURCE_SHA = "1" * 40
 TOY_HASH = "2" * 64
+
+_RETRIEVAL_FIXTURES: dict[tuple[str, str], tuple[SearchHit, ...]] = {}
+
+
+def canonical_hits(corpus: Corpus, query: str) -> tuple[SearchHit, ...]:
+    """Use the real fixed index for tests exercising accepted-evidence verification."""
+    key = (corpus.corpus_hash, query)
+    if key not in _RETRIEVAL_FIXTURES:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "index.sqlite"
+            build_index(path, corpus)
+            _RETRIEVAL_FIXTURES[key] = search(path, query, expected_corpus_hash=corpus.corpus_hash)
+    return _RETRIEVAL_FIXTURES[key]
 
 
 def toy_gold_rows(corpus: Corpus) -> list[dict[str, Any]]:

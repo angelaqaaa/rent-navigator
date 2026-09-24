@@ -12,8 +12,9 @@ from uuid import UUID
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
-from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, toy_cases
+from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, canonical_hits, toy_cases
 
+from rent_navigator.context import context_provenance, query_for_request
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.eval.models import (
     Arm,
@@ -239,7 +240,7 @@ class Harness:
 
     def retrieve(self, question: str) -> tuple[SearchHit, ...]:
         self.queries.append(question)
-        return (SearchHit(self.corpus.chunks[0], -1.0),)
+        return canonical_hits(self.corpus, question)
 
     def run(
         self, *, warmup: bool = False, allowlist: SyntheticAllowlist | None = None
@@ -294,7 +295,19 @@ def test_actual_pipeline_synthetic_cases_and_arm_fairness(
     assert outcome.row.serving_cost_usd == call_count * Decimal("0.0015")
     assert outcome.row.judge_cost_usd == Decimal("0.0007")
     assert outcome.row.latency_ms == pytest.approx(call_count * 300)
-    assert outcome.row.retrieved_ids == ([corpus.chunks[0].id] if arm == "production" else [])
+    expected = context_provenance(
+        harness.case.request.mode,
+        arm,
+        tuple(
+            hit.chunk.id for hit in canonical_hits(corpus, query_for_request(harness.case.request))
+        )
+        if arm == "production"
+        else (),
+        corpus,
+    )
+    assert outcome.row.retrieved_ids == expected.retrieved_evidence_ids
+    assert outcome.row.foundation_evidence_ids == expected.foundation_evidence_ids
+    assert outcome.row.initial_context_evidence_ids == expected.initial_context_evidence_ids
     assert len(harness.queries) == (1 if arm == "production" else 0)
     assert outcome.row.attempt_id != harness.case.request.attempt_id
     assert outcome.row.actual_tool_args == harness.case.expected_tool_args
@@ -341,7 +354,7 @@ def test_extraction_mismatch_stops_without_replacing_observations(
 
 def test_tool_result_is_observed_before_failed_second_preflight(corpus: Corpus) -> None:
     harness = _harness(corpus, "R01")
-    harness.fake.estimates[1] = 16001
+    harness.fake.estimates[1] = 20001
     outcome = harness.run()
     assert outcome.row.classification == "error"
     assert isinstance(outcome.row.response, ErrorResponse)
@@ -384,7 +397,11 @@ def test_retrieval_ids_are_not_rule_union_or_citation_union(corpus: Corpus) -> N
     harness.fake.responses[-1] = Message.model_validate(payload)
     outcome = harness.run()
     assert isinstance(outcome.row.response, AskResponse)
-    assert outcome.row.retrieved_ids == [corpus.chunks[0].id]
+    assert outcome.row.retrieved_ids == [
+        hit.chunk.id for hit in canonical_hits(corpus, query_for_request(harness.case.request))
+    ]
+    assert outcome.row.foundation_evidence_ids == []
+    assert outcome.row.initial_context_evidence_ids == outcome.row.retrieved_ids
     assert [citation.id for citation in outcome.row.response.citations] == [chosen]
 
 
@@ -399,7 +416,7 @@ def test_missing_usage_preserves_unknown_cost_and_reservation(corpus: Corpus) ->
     assert outcome.row.serving_cost_usd is None
     totals = provider_cost_totals(outcome.records)
     assert totals.actual_cost_usd is None
-    assert totals.reserved_cost_usd == Decimal("0.019")
+    assert totals.reserved_cost_usd == Decimal("0.027")
     assert harness.budget.stopped
     assert "serving_usage_missing" in outcome.reasons
 
@@ -502,6 +519,7 @@ def test_recorder_rejects_extra_prepared_payload_before_logging(corpus: Corpus) 
         attempt_id=UUID(int=901),
     )
     recorder.bind(UUID(int=902), "analysis", harness.case.request)
+    recorder.observe_retrieval(canonical_hits(corpus, query_for_request(harness.case.request)))
     payload = deepcopy(harness.fake.counts[0])
     payload["private_headers"] = ERROR_SENTINEL
     with pytest.raises(ProviderFailure):
@@ -543,6 +561,7 @@ def test_recorder_rejects_unapproved_configuration_before_logging(
         attempt_id=UUID(int=903),
     )
     recorder.bind(UUID(int=904), "analysis", harness.case.request)
+    recorder.observe_retrieval(canonical_hits(corpus, query_for_request(harness.case.request)))
     payload = deepcopy(harness.fake.counts[0])
     payload[field] = value
     with pytest.raises(ProviderFailure):
@@ -560,7 +579,7 @@ def test_cancelled_attempt_is_preserved_with_cost_reservation(corpus: Corpus) ->
     assert isinstance(outcome.row.response, ErrorResponse)
     assert outcome.row.response.error.code == "deadline_exceeded"
     assert outcome.row.serving_cost_usd is None
-    assert provider_cost_totals(outcome.records).reserved_cost_usd == Decimal("0.019")
+    assert provider_cost_totals(outcome.records).reserved_cost_usd == Decimal("0.027")
     assert any(record.record_kind == "endpoint" for record in outcome.records)
 
 
@@ -603,7 +622,7 @@ def test_missing_judge_usage_retains_reservation_and_future_stop_reason(corpus: 
     assert outcome.row.judge_cost_usd is None
     assert "judge_usage_missing" in outcome.reasons
     assert outcome.judge_accounting is not None
-    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.034")
+    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.058")
     assert not outcome.judge_accounting.cost.usage_complete
 
 
@@ -647,7 +666,7 @@ def test_typed_failed_judge_keeps_billed_accounting_without_a_judgment(
     assert outcome.row.judge is None and outcome.judge_evaluation is None
     assert outcome.judge_accounting is not None
     assert outcome.row.judge_cost_usd == (None if missing_usage else Decimal("0.0007"))
-    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.034")
+    assert outcome.judge_accounting.cost.reserved_cost_usd == Decimal("0.058")
     assert "judge_invalid" in outcome.reasons
     assert ("judge_usage_missing" in outcome.reasons) == missing_usage
     assert outcome.row.serving_cost_usd == Decimal("0.0015")

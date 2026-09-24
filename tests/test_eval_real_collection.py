@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
-from eval_fixtures import TOY_HASH, TOY_SOURCE_SHA, write_toy_data
+from eval_fixtures import TOY_HASH, TOY_SOURCE_SHA, canonical_hits, write_toy_data
 from test_eval_collection import RecordingBatchLedger, _environment
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -25,7 +25,6 @@ from rent_navigator.eval.collection import (
 from rent_navigator.eval.data import GoldDataset, load_gold
 from rent_navigator.eval.models import ResultRow
 from rent_navigator.eval.runner import build_plan
-from rent_navigator.index import SearchHit
 from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL
 from rent_navigator.provider import SpendLedger
 
@@ -49,19 +48,18 @@ class SyntheticRealCompositionPort:
             self.judge_calls += 1
             packet = json.loads(kwargs["messages"][0]["content"])
             value = {
-                "required_claims": [
-                    {"id": claim["id"], "result": "met"} for claim in packet["required_claims"]
-                ],
-                "statements": [
-                    {
-                        "id": statement["id"],
+                "required_claims": {
+                    claim["id"]: {"result": "met"} for claim in packet["required_claims"]
+                },
+                "statements": {
+                    statement["id"]: {
                         "factual": "supported",
                         "citation_support": "supported"
                         if statement["citation_ids"]
                         else "not_applicable",
                     }
                     for statement in packet["statements"]
-                ],
+                },
                 "false_pass": False,
                 "policy_violations": [],
             }
@@ -162,8 +160,8 @@ def run(
             messages=port,
             budget=budget if budget is not None else SpendLedger(Decimal("20")),
             batch_ledger=RecordingBatchLedger([]),
-            forecast_usd=Decimal("11.102"),
-            retrieve=lambda _: (SearchHit(corpus.chunks[0], -1.0),),
+            forecast_usd=Decimal("17.326"),
+            retrieve=lambda query: canonical_hits(corpus, query),
             plan=build_plan(),
         )
     )
@@ -327,7 +325,7 @@ def test_first_actor_model_drift_stops_before_any_later_provider_operation(tmp_p
     assert "provider_model_mismatch" in manifest.reasons
     assert "budget_reforecast_required" in manifest.reasons
     assert budget.stopped and budget.reforecast_required
-    assert budget.committed_usd == Decimal("0.019")
+    assert budget.committed_usd == Decimal("0.027")
     metadata = [
         json.loads(line) for line in (directory / "metadata.jsonl").read_text().splitlines()
     ]
@@ -336,7 +334,7 @@ def test_first_actor_model_drift_stops_before_any_later_provider_operation(tmp_p
     assert generation["returned_model_id"] == JUDGE_MODEL
     assert generation["input_tokens"] is None and generation["output_tokens"] is None
     assert generation["actual_cost_usd"] is None and not generation["usage_complete"]
-    assert generation["reserved_cost_usd"] == "0.019"
+    assert generation["reserved_cost_usd"] == "0.027"
     assert generation["response_code"] == "provider_error"
     row = ResultRow.model_validate_json((directory / "warmups.jsonl").read_text().strip())
     assert row.serving_cost_usd is None and not row.usage_complete
@@ -372,8 +370,8 @@ def test_first_judge_model_drift_stops_shared_collection_and_preserves_billed_re
     assert accounting.returned_model_id == ACTOR_MODEL
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.034")
-    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.034")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.058")
+    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.058")
     row = ResultRow.model_validate_json((directory / "results.jsonl").read_text().strip())
     assert row.judge_cost_usd is None
     assert row.serving_cost_usd is not None and row.usage_complete
@@ -433,7 +431,7 @@ def test_complete_legacy_artifact_with_self_consistent_model_drift_is_rejected(
 
 
 @pytest.mark.parametrize(
-    "model,hold", [(ACTOR_MODEL, Decimal("0.019")), (JUDGE_MODEL, Decimal("0.034"))]
+    "model,hold", [(ACTOR_MODEL, Decimal("0.027")), (JUDGE_MODEL, Decimal("0.058"))]
 )
 def test_collection_model_anomaly_defensively_holds_full_reservation(
     model: str, hold: Decimal

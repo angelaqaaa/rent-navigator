@@ -19,6 +19,7 @@ from anthropic.types import Message, MessageTokensCount, TextBlock, ToolUseBlock
 
 import rent_navigator.agent as agent_module
 from rent_navigator.agent import agent_config_hash, answer
+from rent_navigator.context import CONTEXT_POLICY, context_provenance, foundation_ids
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit, build_index, search
 from rent_navigator.models import (
@@ -272,7 +273,7 @@ def assert_count_matches_generation(fake: RecordingMessages) -> None:
             assert count.get(field) == create.get(field)
         assert "max_tokens" not in count
         assert create["model"] == ACTOR_MODEL
-        assert create["max_tokens"] == 600
+        assert create["max_tokens"] == 1200
         assert create["thinking"] == {"type": "disabled"}
         assert create["extra_body"] == {"temperature": 0}
 
@@ -300,7 +301,7 @@ def test_question_retrieves_verbatim_and_sends_only_redacted_one_call(corpus: Co
     assert schema["$defs"]["Statement"]["properties"]["citation_ids"] == {
         "type": "array",
         "title": "Citation Ids",
-        "items": {"type": "string", "enum": [evidence]},
+        "items": {"type": "string", "enum": sorted(set(foundation_ids(corpus)) | {evidence})},
         "minItems": 1,
     }
     endpoint = harness.endpoint()
@@ -308,6 +309,12 @@ def test_question_retrieves_verbatim_and_sends_only_redacted_one_call(corpus: Co
     assert endpoint.tool_name is None
     assert not any(stage.stage == "tool_execution" for stage in endpoint.stage_durations)
     assert endpoint.retrieved_evidence_ids == (evidence,)
+    assert endpoint.foundation_evidence_ids == foundation_ids(corpus)
+    assert endpoint.initial_context_evidence_ids == tuple(
+        context_provenance(
+            "question", "production", (evidence,), corpus
+        ).initial_context_evidence_ids
+    )
     assert endpoint.cited_evidence_ids == (evidence,)
     assert endpoint.actual_cost_usd == Decimal("0.0015")
     assert RAW not in harness.stream.getvalue()
@@ -365,9 +372,11 @@ def test_fact_native_roundtrip_exact_tool_and_all_evidence(
         (check.id, check.status) for check in result.checks
     ]
     assert endpoint.retrieved_evidence_ids == tuple(hit.chunk.id for hit in harness.hits)
+    assert endpoint.foundation_evidence_ids == ()
+    assert endpoint.initial_context_evidence_ids == endpoint.retrieved_evidence_ids
     assert sum(stage.stage == "tool_execution" for stage in endpoint.stage_durations) == 1
     assert endpoint.actual_cost_usd == Decimal("0.003")
-    assert endpoint.reserved_cost_usd == Decimal("0.038")
+    assert endpoint.reserved_cost_usd == Decimal("0.054")
     assert "SYNTHETIC SELECTION NARRATION" not in harness.stream.getvalue()
 
 
@@ -481,7 +490,7 @@ def test_final_output_and_citations_fail_closed(corpus: Corpus, invalid: str) ->
     elif invalid == "sequence":
         data["statements"][0]["id"] = "s2"
     elif invalid == "too_long":
-        data["statements"][0]["text"] = "x" * 241
+        data["statements"][0]["text"] = "x" * 601
     elif invalid == "invalid_json":
         text.text = "SYNTHETIC MALFORMED JSON"
     elif invalid == "native_citation":
@@ -557,6 +566,8 @@ def test_baseline_has_no_retrieval_or_passages_and_allows_empty_citations(
         }
         assert harness.fake.creates[1]["tool_choice"] == {"type": "none"}
     assert not harness.endpoint().retrieved_evidence_ids
+    assert not harness.endpoint().foundation_evidence_ids
+    assert not harness.endpoint().initial_context_evidence_ids
     assert harness.fake.creates[-1]["output_config"]["format"]["schema"] == transform_schema(
         GeneratedResult.model_json_schema()
     )
@@ -581,7 +592,9 @@ def test_final_schema_is_fresh_and_preserves_empty_and_refusal_branches(corpus: 
     )
     harness.hits = ()
     assert asyncio.run(harness.run()).status == "refused"
-    assert harness.fake.creates[0]["output_config"]["format"]["schema"] == original
+    assert harness.fake.creates[0]["output_config"]["format"][
+        "schema"
+    ] == agent_module._final_schema("production", set(foundation_ids(corpus)))
 
 
 def test_citation_policy_hash_is_static_and_binds_construction(
@@ -603,6 +616,12 @@ def test_failed_tool_explanation_instruction_shared_between_arms(
     prompt = agent_module._system("rent", arm)
     assert "that outcome alone is not insufficient_evidence" in prompt
     assert "Refuse when the available information is truly insufficient" in prompt
+    assert "160" not in prompt
+    assert "upper bounds, not writing targets" in prompt
+    assert "unrelated exceptions or service methods" in prompt
+    assert "one to six statements with sequential IDs s1 to s6" in prompt
+    assert "1 to 600 characters" in prompt
+    assert "necessary qualifications" in prompt
     assert "R03" not in prompt
     if arm == "production":
         assert "ID in citation_ids" in prompt
@@ -644,7 +663,7 @@ def test_second_call_failure_retains_first_tool_retrieval_and_accounting(
         second = message([{"type": "text", "text": "not json"}])
     fake = RecordingMessages([selection(request), second])
     if failure == "budget":
-        fake.estimates = [1000, 15001]
+        fake.estimates = [1000, 20001]
     harness = Harness(request, corpus, fake)
     with pytest.raises(ProviderFailure) as caught:
         asyncio.run(harness.run())
@@ -661,7 +680,7 @@ def test_second_call_failure_retains_first_tool_retrieval_and_accounting(
     if failure in {"provider", "missing_usage"}:
         assert endpoint.actual_cost_usd is None
         assert not endpoint.usage_complete
-        assert endpoint.reserved_cost_usd == Decimal("0.038")
+        assert endpoint.reserved_cost_usd == Decimal("0.054")
         assert harness.ledger.stopped
     else:
         assert endpoint.actual_cost_usd == Decimal("0.0015" if failure == "budget" else "0.003")
@@ -738,7 +757,7 @@ def test_cancellation_propagates_and_finishes_once_with_inflight_reservation(
     endpoint = harness.endpoint()
     assert endpoint.response_code == "deadline_exceeded"
     assert endpoint.actual_cost_usd is None
-    assert endpoint.reserved_cost_usd == Decimal("0.019") * call_number
+    assert endpoint.reserved_cost_usd == Decimal("0.027") * call_number
     assert endpoint.tool_name == ("rent_increase_check" if call_number == 2 else None)
     assert harness.ledger.stopped
 
@@ -845,7 +864,7 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(corp
             assert count.get(field) == create.get(field)
         assert create["temperature"] == 0
         assert create["thinking"] == {"type": "disabled"}
-        assert create["max_tokens"] == 600
+        assert create["max_tokens"] == 1200
         assert create["stream"] is False
         assert "temperature" not in count
     second = requests[3][1]
@@ -1006,6 +1025,119 @@ def test_config_identity_changes_when_fixed_policy_changes(monkeypatch: pytest.M
     original = agent_config_hash("rent", "production")
     monkeypatch.setitem(agent_module.REFUSAL_TEXT, "needs_confirmation", "Synthetic policy change.")
     assert agent_config_hash("rent", "production") != original
+
+
+def test_context_policy_changes_all_analysis_configuration_identities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    modes: tuple[Literal["question", "notice", "rent"], ...] = ("question", "notice", "rent")
+    arms: tuple[Literal["production", "baseline"], ...] = ("production", "baseline")
+    original = {(mode, arm): agent_config_hash(mode, arm) for mode in modes for arm in arms}
+    monkeypatch.setitem(CONTEXT_POLICY, "version", 99)
+    assert all(agent_config_hash(mode, arm) != old for (mode, arm), old in original.items())
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "redaction",
+        "retrieval",
+        "assembly",
+        "passages",
+        "after_assembly",
+        "count",
+        "over_limit",
+        "generation",
+        "missing_usage",
+    ],
+)
+def test_question_prepared_context_survives_exact_failure_boundary(
+    corpus: Corpus, boundary: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = RecordingMessages([final_message([corpus.chunks[0].id])])
+    harness = Harness(request_for("question"), corpus, fake)
+    clock = Clock()
+    overrides: dict[str, Any] = {}
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("private synthetic preparation failure")
+
+    async def fail_count(_: int) -> None:
+        fail()
+
+    if boundary in {"redaction", "retrieval"}:
+        overrides["redact" if boundary == "redaction" else "retrieve"] = fail
+    elif boundary == "assembly":
+        monkeypatch.setattr(agent_module, "context_provenance", fail)
+    elif boundary == "passages":
+        monkeypatch.setattr(agent_module, "_passages", fail)
+    elif boundary == "after_assembly":
+
+        def retrieve(query: str) -> tuple[SearchHit, ...]:
+            hits = harness.retrieve(query)
+            clock.now += 45
+            return hits
+
+        overrides.update(retrieve=retrieve, deadline=Deadline.start(clock=clock))
+    elif boundary == "count":
+        fake.before_count = fail_count
+    elif boundary == "over_limit":
+        fake.estimates = [20001]
+    elif boundary == "generation":
+        fake.responses = [RuntimeError("private synthetic generation failure")]
+    else:
+        fake.responses[0].usage = cast(Any, None)  # type: ignore[union-attr]
+    with pytest.raises(ProviderFailure):
+        asyncio.run(harness.run(**overrides))
+    endpoint = harness.endpoint()
+    seeds_ready = boundary not in {"redaction", "retrieval"}
+    assembled = seeds_ready and boundary not in {"assembly", "passages"}
+    assert endpoint.retrieved_evidence_ids == ((corpus.chunks[0].id,) if seeds_ready else ())
+    assert endpoint.foundation_evidence_ids == (foundation_ids(corpus) if assembled else ())
+    assert endpoint.initial_context_evidence_ids == (foundation_ids(corpus) if assembled else ())
+    details = [record for record in harness.records() if record.record_kind == "provider_call"]
+    assert len(details) == (
+        2
+        if boundary in {"generation", "missing_usage"}
+        else 1
+        if boundary in {"count", "over_limit"}
+        else 0
+    )
+    for record in details:
+        assert (
+            record.retrieved_evidence_ids
+            == record.foundation_evidence_ids
+            == record.initial_context_evidence_ids
+            == ()
+        )
+    assert endpoint.tool_name is None and endpoint.check_statuses == ()
+    if boundary in {"generation", "missing_usage"}:
+        assert endpoint.actual_cost_usd is None and not endpoint.usage_complete
+        assert endpoint.reserved_cost_usd == Decimal("0.027")
+    else:
+        assert endpoint.actual_cost_usd == 0 and endpoint.reserved_cost_usd == 0
+    assert "private synthetic" not in harness.stream.getvalue()
+
+
+def test_zero_hit_question_can_cite_foundation_without_executing_tools(corpus: Corpus) -> None:
+    foundation = foundation_ids(corpus)
+    harness = Harness(
+        request_for("question"), corpus, RecordingMessages([final_message([foundation[-1]])])
+    )
+    harness.hits = ()
+    response = asyncio.run(harness.run())
+    endpoint = harness.endpoint()
+    assert response.status == "answered" and response.tool_result is None
+    assert endpoint.retrieved_evidence_ids == ()
+    assert endpoint.foundation_evidence_ids == endpoint.initial_context_evidence_ids == foundation
+    assert endpoint.tool_name is None and not endpoint.check_statuses
+    assert not any(stage.stage == "tool_execution" for stage in endpoint.stage_durations)
+    assert "tools" not in harness.fake.creates[0]
+    initial = json.loads(harness.fake.creates[0]["messages"][0]["content"])
+    assert initial["evidence"] == agent_module._passages(
+        tuple(corpus.chunk(identifier) for identifier in foundation)
+    )
+    assert_count_matches_generation(harness.fake)
 
 
 @pytest.mark.parametrize("arm", ["production", "baseline"])
@@ -1276,3 +1408,62 @@ def test_known_money_does_not_invent_a_ceiling_for_unsupported_scope(
     }
     assert response.tool_result == result
     assert_count_matches_generation(fake)
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+@pytest.mark.parametrize("length", [241, 600, 601])
+def test_expanded_length_contract_preserves_qualifications_without_truncation(
+    corpus: Corpus, arm: Literal["production", "baseline"], length: int
+) -> None:
+    request = request_for()
+    identifier = sorted(rule_ids(expected_tool(request, corpus), corpus))[0]
+    response = final_message([identifier])
+    block = cast(TextBlock, response.content[0])
+    data = json.loads(block.text)
+    data["statements"][0]["text"] = "x" * length
+    block.text = json.dumps(data)
+    harness = Harness(request, corpus, RecordingMessages([selection(request), response]), arm=arm)
+    if length <= 600:
+        output = asyncio.run(harness.run())
+        assert output.statements[0].text == "x" * length
+    else:
+        with pytest.raises(ProviderFailure) as caught:
+            asyncio.run(harness.run())
+        assert caught.value.code == "invalid_generated_output"
+    assert json.loads(block.text)["statements"][0]["text"] == "x" * length
+
+
+@pytest.mark.parametrize("arm", ["production", "baseline"])
+@pytest.mark.parametrize("count", [6, 7])
+def test_expanded_statement_count_and_provider_schema_stay_bound(
+    corpus: Corpus, arm: Literal["production", "baseline"], count: int
+) -> None:
+    request = request_for()
+    identifier = sorted(rule_ids(expected_tool(request, corpus), corpus))[0]
+    response = final_message([identifier])
+    block = cast(TextBlock, response.content[0])
+    data = json.loads(block.text)
+    data["statements"] = [
+        {
+            "id": f"s{i}",
+            "text": f"Synthetic checked point {i} with its necessary qualification.",
+            "citation_ids": [identifier],
+        }
+        for i in range(1, count + 1)
+    ]
+    block.text = json.dumps(data)
+    fake = RecordingMessages([selection(request), response])
+    harness = Harness(request, corpus, fake, arm=arm)
+    if count == 6:
+        output = asyncio.run(harness.run())
+        assert [statement.model_dump(mode="json") for statement in output.statements] == data[
+            "statements"
+        ]
+    else:
+        with pytest.raises(ProviderFailure) as caught:
+            asyncio.run(harness.run())
+        assert caught.value.code == "invalid_generated_output"
+    assert_count_matches_generation(fake)
+    assert fake.creates[-1]["output_config"]["format"]["schema"]["$defs"]["Statement"][
+        "properties"
+    ]["id"]["enum"] == [f"s{i}" for i in range(1, 7)]

@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 
 from rent_navigator.agent import REFUSAL_TEXT, RetrievalContext, agent_config_hash, answer
 from rent_navigator.corpus import Corpus
+from rent_navigator.eval.collection import verify_prepared_context
 from rent_navigator.eval.critical import NativeProposal, native_observation
 from rent_navigator.eval.models import Claim, DeterministicAssertion, EvaluationModel, JudgeResult
 from rent_navigator.eval.recording import (
@@ -89,6 +90,8 @@ class SecurityResultRow(EvaluationModel):
     trace_ids: Annotated[list[CanonicalUUID], Field(min_length=1, max_length=1)]
     request: AskRequest
     retrieved_ids: Annotated[list[Sha256], Field(max_length=5)]
+    foundation_evidence_ids: list[Sha256]
+    initial_context_evidence_ids: list[Sha256]
     response: AskResponse | ErrorResponse | None
     actual_tool_args: NoticeFacts | RentFacts | None
     actual_tool_result: ToolResult | None
@@ -118,6 +121,8 @@ class SecurityResultRow(EvaluationModel):
             raise ValueError("Safety disposition and pass disagree")
         for ids in (
             self.retrieved_ids,
+            self.foundation_evidence_ids,
+            self.initial_context_evidence_ids,
             [item.id for item in self.deterministic_assertions],
             self.reasons,
         ):
@@ -181,19 +186,27 @@ def _assess(
 ) -> SecurityDecision:
     observation = native_observation(case, raw_records, corpus)
     endpoints = [item for item in records if item.record_kind == "endpoint"]
-    complete = observation.complete and len(endpoints) == 1
+    complete = (
+        observation.complete and observation.analysis_context_observed and len(endpoints) == 1
+    )
     reasons: list[str] = []
     cost = provider_cost_totals(records)
     if not cost.usage_complete:
         complete = False
         reasons.append("serving_usage_missing")
-    if not observation.complete or len(endpoints) != 1:
+    if not observation.complete or not observation.analysis_context_observed or len(endpoints) != 1:
         reasons.append("observation_missing")
     endpoint = endpoints[0] if len(endpoints) == 1 else None
     if endpoint is not None and (
         endpoint.tool_name
         != (observation.actual_tool_result.tool if observation.actual_tool_result else None)
-        or tuple(endpoint.retrieved_evidence_ids) != observation.retrieved_ids
+        or observation.analysis_context_observed
+        and (
+            tuple(endpoint.retrieved_evidence_ids) != observation.retrieved_ids
+            or tuple(endpoint.foundation_evidence_ids) != observation.foundation_evidence_ids
+            or tuple(endpoint.initial_context_evidence_ids)
+            != observation.initial_context_evidence_ids
+        )
         or endpoint.response_code
         != (
             response.status
@@ -211,7 +224,7 @@ def _assess(
         isinstance(case.request, NoticeRequest | RentRequest)
         and observation.actual_tool_args == case.request.facts
     )
-    allowed = set(observation.retrieved_ids)
+    allowed = set(observation.initial_context_evidence_ids)
     if result is not None:
         for rule_id in result.rule_ids:
             allowed.update(corpus.rule(rule_id).evidence_ids)
@@ -405,13 +418,27 @@ def verify_security_outcome(
         case=case,
         corpus=corpus,
         arm="production",
-        retrieved_ids=tuple(row.retrieved_ids),
+    )
+    verify_prepared_context(
+        records,
+        raw_records,
+        mode=row.request.mode,
+        arm="production",
+        corpus=corpus,
+        retrieved_ids=row.retrieved_ids,
+        foundation_evidence_ids=row.foundation_evidence_ids,
+        initial_context_evidence_ids=row.initial_context_evidence_ids,
     )
     observation = native_observation(case, raw_records, corpus)
     if (
         row.actual_tool_args != observation.actual_tool_args
         or row.actual_tool_result != observation.actual_tool_result
-        or row.retrieved_ids != list(observation.retrieved_ids)
+        or observation.analysis_context_observed
+        and (
+            row.retrieved_ids != list(observation.retrieved_ids)
+            or row.foundation_evidence_ids != list(observation.foundation_evidence_ids)
+            or row.initial_context_evidence_ids != list(observation.initial_context_evidence_ids)
+        )
         or row.blocked_native_proposals != list(observation.blocked_proposals)
     ):
         raise ValueError("Safety native observation mismatch")
@@ -506,7 +533,7 @@ async def run_security_attempt(
 
     def injected(query: str) -> RetrievalContext:
         hits = retrieve(query)
-        recorder.expected_retrieved_ids = tuple(hit.chunk.id for hit in hits)
+        recorder.observe_retrieval(hits)
         return RetrievalContext(hits, case.injected_retrieved_text)
 
     def failure(error: ProviderFailure) -> ErrorResponse:
@@ -591,6 +618,11 @@ async def run_security_attempt(
         accounting=accounting,
     )
     cost = provider_cost_totals(records)
+    analysis_endpoints = [
+        record
+        for record in records
+        if record.record_kind == "endpoint" and record.phase == "analysis"
+    ]
     row = SecurityResultRow(
         run_id=identity.run_id,
         case_id=case.id,
@@ -603,7 +635,13 @@ async def run_security_attempt(
         attempt_id=identifier,
         trace_ids=[trace_id],
         request=request,
-        retrieved_ids=list(observation.retrieved_ids),
+        retrieved_ids=[i for record in analysis_endpoints for i in record.retrieved_evidence_ids],
+        foundation_evidence_ids=[
+            i for record in analysis_endpoints for i in record.foundation_evidence_ids
+        ],
+        initial_context_evidence_ids=[
+            i for record in analysis_endpoints for i in record.initial_context_evidence_ids
+        ],
         response=response,
         actual_tool_args=observation.actual_tool_args,
         actual_tool_result=observation.actual_tool_result,

@@ -12,8 +12,9 @@ import pytest
 from anthropic.types import Message, MessageTokensCount
 from test_eval_live import ScriptedGatePort, make_fixture, permit
 
+from rent_navigator.context import ContextProvenance
 from rent_navigator.eval.live_budget import FundedMessages, LiveBudget
-from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL
+from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL, RequestedModel
 from rent_navigator.provider import ProviderFailure
 from rent_navigator.trace import PRICING_HASH, Usage, cost_for_usage
 
@@ -58,7 +59,7 @@ def test_model_mismatch_stops_before_any_following_generation(
     expected_cost = Decimal("0.0015") * (position - 1)
     assert Decimal(receipt["actual_usd"]) == expected_cost
     assert Decimal(receipt["unresolved_hold_usd"]) == (
-        Decimal("0.034") if mismatch_at == "judge" else Decimal("0.019")
+        Decimal("0.058") if mismatch_at == "judge" else Decimal("0.027")
     )
     assert not receipt["complete"]
     reconciled = [event for event in receipt["events"] if event["event"] == "reconciled"]
@@ -125,8 +126,8 @@ def test_guard_returns_original_response_then_rejects_counts_and_generations() -
         reservation, cost_for_usage(ACTOR_MODEL, Usage(input_tokens=1000, output_tokens=100))
     )
     assert budget.receipt().actual_usd == Decimal(0)
-    assert budget.receipt().unresolved_hold_usd == Decimal("0.019")
-    assert budget.ledger.committed_usd == Decimal("0.019")
+    assert budget.receipt().unresolved_hold_usd == Decimal("0.027")
+    assert budget.ledger.committed_usd == Decimal("0.027")
     assert budget.events[-1].cost is not None
     assert budget.events[-1].cost.actual_cost_usd is None
     assert not budget.receipt().complete
@@ -145,8 +146,8 @@ def test_receipt_retains_before_counts_and_permit_after_counts() -> None:
     receipt = budget.receipt()
     assert receipt.future_live_batches_before == 3
     assert receipt.permit.future_live_batches_remaining == 2
-    assert receipt.development_slots_before == 13
-    assert receipt.permit.development_slots_remaining == 13
+    assert receipt.development_slots_before == 7
+    assert receipt.permit.development_slots_remaining == 7
     assert receipt.permit.funded_slot == grant.funded_slot
     assert receipt.permit.prior_ledger_sha256 == grant.prior_ledger_sha256
 
@@ -195,6 +196,11 @@ def test_actor_raw_verifier_rejects_known_cost_for_model_anomaly() -> None:
             operation="generation",
             operation_index=1,
             event=event,
+            context_provenance=ContextProvenance(
+                retrieved_evidence_ids=[],
+                foundation_evidence_ids=[],
+                initial_context_evidence_ids=[],
+            ),
             value=value,
         )
         for event, value in zip(events, values, strict=True)
@@ -261,8 +267,8 @@ def test_model_anomaly_keeps_prior_verified_cost_and_current_full_hold() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.0015")
-    assert receipt.unresolved_hold_usd == Decimal("0.034")
-    assert budget.ledger.committed_usd == Decimal("0.0355")
+    assert receipt.unresolved_hold_usd == Decimal("0.058")
+    assert budget.ledger.committed_usd == Decimal("0.0595")
     assert not receipt.complete
 
 
@@ -320,3 +326,50 @@ def test_exact_model_normal_cost_is_still_settled() -> None:
     assert receipt.unresolved_hold_usd == 0
     assert receipt.complete
     assert not budget.events[-1].reforecast
+
+
+@pytest.mark.parametrize(
+    "model,input_tokens,output_tokens,expected,overage",
+    [
+        (ACTOR_MODEL, 21000, 1200, "0.027", False),
+        (ACTOR_MODEL, 21001, 1200, "0.027001", True),
+        (ACTOR_MODEL, 21000, 1201, "0.027005", True),
+        (JUDGE_MODEL, 25000, 800, "0.058", False),
+        (JUDGE_MODEL, 25001, 800, "0.058002", True),
+        (JUDGE_MODEL, 25000, 801, "0.058010", True),
+    ],
+)
+def test_full_reservation_and_overage_keep_exact_known_billing(
+    model: RequestedModel, input_tokens: int, output_tokens: int, expected: str, overage: bool
+) -> None:
+    budget = LiveBudget(permit(), StringIO(), config_hash="5" * 64)
+    budget.bind(uuid4())
+    current = budget.reserve(model)
+    budget.reconcile(
+        current,
+        cost_for_usage(model, Usage(input_tokens=input_tokens, output_tokens=output_tokens)),
+    )
+    receipt = budget.receipt()
+    assert receipt.actual_usd == budget.ledger.committed_usd == Decimal(expected)
+    assert receipt.unresolved_hold_usd == 0
+    assert receipt.complete is not overage
+    assert budget.stopped is overage
+    if overage:
+        with pytest.raises(ProviderFailure):
+            budget.reserve(model)
+
+
+@pytest.mark.parametrize("model,expected", [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.058")])
+def test_missing_usage_preserves_full_new_hold_and_stops(
+    model: RequestedModel, expected: str
+) -> None:
+    budget = LiveBudget(permit(), StringIO(), config_hash="5" * 64)
+    budget.bind(uuid4())
+    current = budget.reserve(model)
+    budget.reconcile(current, cost_for_usage(model, None))
+    receipt = budget.receipt()
+    assert receipt.actual_usd == 0
+    assert receipt.unresolved_hold_usd == budget.ledger.committed_usd == Decimal(expected)
+    assert not receipt.complete and budget.stopped
+    with pytest.raises(ProviderFailure):
+        budget.reserve(model)

@@ -26,7 +26,7 @@ from rent_navigator.eval.models import (
     JudgeResult,
     ResultRow,
 )
-from rent_navigator.eval.recording import SyntheticAllowlist, SyntheticRecorder
+from rent_navigator.eval.recording import RawProviderRecord, SyntheticAllowlist, SyntheticRecorder
 from rent_navigator.extract import extract_letter, extraction_config_hash
 from rent_navigator.guards import redact_text
 from rent_navigator.index import SearchHit
@@ -149,6 +149,8 @@ def protocol_hash() -> str:
             "warmups": [entry.model_dump() for entry in warmups],
             "measured": [entry.model_dump() for entry in measured],
             "result_schema": ResultRow.model_json_schema(),
+            "raw_provider_schema": RawProviderRecord.model_json_schema(),
+            "trace_schema": TraceRecord.model_json_schema(),
             "judge_schema": JudgeResult.model_json_schema(),
             "rules": {
                 "latency": "sum of serving calls through trace completion; no judge",
@@ -160,6 +162,7 @@ def protocol_hash() -> str:
                 "classification": "exact, claims, factual, false_pass, policy",
                 "citation_gate": "separate production condition",
                 "retrieval": "macro MRR@5 and gain(2**grade-1) NDCG@5 over six QA",
+                "context": "required R/F/C; accepted analysis seeds independently recomputed",
             },
         }
     )
@@ -394,7 +397,7 @@ async def run_attempt(
 
     def observed_retrieve(query: str) -> tuple[SearchHit, ...]:
         hits = retrieve(query)
-        recorder.expected_retrieved_ids = tuple(hit.chunk.id for hit in hits)
+        recorder.observe_retrieval(hits)
         return hits
 
     if response is None and all(item.passed for item in assertions):
@@ -458,6 +461,18 @@ async def run_attempt(
         for record in records
         if record.record_kind == "endpoint" and record.phase == "analysis"
         for identifier in record.retrieved_evidence_ids
+    ]
+    foundation_ids = [
+        identifier
+        for record in records
+        if record.record_kind == "endpoint" and record.phase == "analysis"
+        for identifier in record.foundation_evidence_ids
+    ]
+    initial_context_ids = [
+        identifier
+        for record in records
+        if record.record_kind == "endpoint" and record.phase == "analysis"
+        for identifier in record.initial_context_evidence_ids
     ]
     cost = provider_cost_totals(records)
     if not cost.usage_complete:
@@ -553,6 +568,8 @@ async def run_attempt(
         attempt_id=attempt_id,
         trace_ids=trace_ids,
         retrieved_ids=retrieved_ids,
+        foundation_evidence_ids=foundation_ids,
+        initial_context_evidence_ids=initial_context_ids,
         response=response,
         actual_extract=actual_extract,
         actual_tool_args=actual_args,

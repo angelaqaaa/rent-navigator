@@ -161,6 +161,8 @@ def _row(case_id: CaseId, arm: Arm, repeat: int, index: int) -> ResultRow:
         attempt_id=response.attempt_id,
         trace_ids=[response.trace_id],
         retrieved_ids=[],
+        foundation_evidence_ids=[],
+        initial_context_evidence_ids=[],
         response=response,
         actual_extract=None,
         actual_tool_args=None,

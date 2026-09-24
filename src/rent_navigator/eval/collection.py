@@ -1,7 +1,7 @@
 """Append-only synthetic collection artifacts and strict integrity verification."""
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import ExitStack
 from dataclasses import asdict
 from decimal import Decimal
@@ -13,6 +13,7 @@ from uuid import UUID
 from anthropic.types import Message
 
 from rent_navigator.agent import _ANSWER_SEPARATOR, REFUSAL_TEXT, _generated
+from rent_navigator.context import Arm, Mode, context_provenance
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.data import GoldDataset
 from rent_navigator.eval.metrics import aggregate, classify
@@ -601,14 +602,19 @@ def _verify_collection(
                 totals.usage_complete,
             ) != (row.input_tokens, row.output_tokens, row.serving_cost_usd, row.usage_complete):
                 raise ValueError("Result serving accounting mismatch")
-            retrieved = [
-                identifier
-                for endpoint in endpoints
-                if endpoint.phase == "analysis"
-                for identifier in endpoint.retrieved_evidence_ids
-            ]
-            if row.retrieved_ids != retrieved:
-                raise ValueError("Result retrieval observations mismatch")
+            for row_field, trace_field in (
+                ("retrieved_ids", "retrieved_evidence_ids"),
+                ("foundation_evidence_ids", "foundation_evidence_ids"),
+                ("initial_context_evidence_ids", "initial_context_evidence_ids"),
+            ):
+                prepared = [
+                    identifier
+                    for endpoint in endpoints
+                    if endpoint.phase == "analysis"
+                    for identifier in getattr(endpoint, trace_field)
+                ]
+                if getattr(row, row_field) != prepared:
+                    raise ValueError("Result context observations mismatch")
             if row.response is not None and (
                 row.response.attempt_id != row.attempt_id
                 or row.response.trace_id != row.trace_ids[-1]
@@ -652,6 +658,7 @@ def _verify_collection(
             "operation",
             "operation_index",
             "event",
+            "context_provenance",
             "value",
         }:
             raise ValueError("Invalid raw provider record")
@@ -714,7 +721,6 @@ def _verify_collection(
             case=cases[row.case_id],
             corpus=corpus,
             arm=row.arm,
-            retrieved_ids=tuple(row.retrieved_ids) if row.arm == "production" else None,
         )
         _verify_observations(row, cases[row.case_id], records, raw, corpus)
         accounting = manifest.judge_accounting.get(str(row.attempt_id))
@@ -928,6 +934,65 @@ def _verify_real_judges(
         raise ValueError("Real collection serving usage is incomplete")
 
 
+def verify_prepared_context(
+    records: Sequence[TraceRecord],
+    raw: Sequence[RawProviderRecord],
+    *,
+    mode: Mode,
+    arm: Arm,
+    corpus: Corpus,
+    retrieved_ids: Sequence[str],
+    foundation_evidence_ids: Sequence[str],
+    initial_context_evidence_ids: Sequence[str],
+) -> None:
+    """Cross-link prepared endpoints without inventing an observed analysis request."""
+    endpoints = {record.trace_id: record for record in records if record.record_kind == "endpoint"}
+    analysis = [record for record in endpoints.values() if record.phase == "analysis"]
+    if len(analysis) > 1:
+        raise ValueError("An attempt cannot have multiple analysis contexts")
+    fields = (
+        "retrieved_evidence_ids",
+        "foundation_evidence_ids",
+        "initial_context_evidence_ids",
+    )
+    row_values = (
+        list(retrieved_ids),
+        list(foundation_evidence_ids),
+        list(initial_context_evidence_ids),
+    )
+    if not analysis:
+        if any(row_values):
+            raise ValueError("Unstarted analysis cannot have prepared context")
+    else:
+        endpoint = analysis[0]
+        if row_values != tuple(list(getattr(endpoint, field)) for field in fields):
+            raise ValueError("Row context differs from the prepared analysis endpoint")
+        complete = context_provenance(mode, arm, tuple(retrieved_ids), corpus)
+        assembled = (complete.foundation_evidence_ids, complete.initial_context_evidence_ids)
+        # Validated seeds can precede a failed assembly. An absent raw request
+        # must not erase that prepared R or falsely establish zero retrieval.
+        if row_values[1:] not in (assembled, ([], [])):
+            raise ValueError("Prepared context does not match its mode and canonical seeds")
+        if any(record.phase == "analysis" for record in raw) and row_values[1:] != assembled:
+            raise ValueError("Observed analysis requires complete assembled context")
+    for record in raw:
+        matching_endpoint = endpoints.get(record.trace_id)
+        if (
+            matching_endpoint is None
+            or matching_endpoint.phase != record.phase
+            or matching_endpoint.attempt_id != record.attempt_id
+        ):
+            raise ValueError("Raw context is not linked to its matching endpoint")
+        values = tuple(list(getattr(record.context_provenance, field)) for field in fields)
+        expected = (
+            tuple(list(getattr(matching_endpoint, field)) for field in fields)
+            if record.phase == "analysis"
+            else ([], [], [])
+        )
+        if values != expected:
+            raise ValueError("Raw event context differs from the matching endpoint")
+
+
 def _verify_observations(
     row: ResultRow,
     case: GoldCase,
@@ -959,6 +1024,16 @@ def _verify_observations(
     ):
         raise ValueError("Serving phases do not match the scenario")
     attempts = [item for item in raw if item["attempt_id"] == str(row.attempt_id)]
+    verify_prepared_context(
+        [record for record in records if record.attempt_id == row.attempt_id],
+        [RawProviderRecord.model_validate_json(json.dumps(item)) for item in attempts],
+        mode=case.request.mode,
+        arm=row.arm,
+        corpus=corpus,
+        retrieved_ids=row.retrieved_ids,
+        foundation_evidence_ids=row.foundation_evidence_ids,
+        initial_context_evidence_ids=row.initial_context_evidence_ids,
+    )
     if isinstance(row.response, AskResponse):
         final_events = [
             item

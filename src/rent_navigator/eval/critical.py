@@ -1,6 +1,5 @@
 """Pure native-observation checks; blocked proposals never imply execution."""
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any
@@ -37,7 +36,10 @@ class NativeProposal(StrictModel):
 class NativeObservation:
     complete: bool
     actor_responses: int
+    analysis_context_observed: bool
     retrieved_ids: tuple[str, ...]
+    foundation_evidence_ids: tuple[str, ...]
+    initial_context_evidence_ids: tuple[str, ...]
     actual_tool_args: NoticeFacts | RentFacts | None
     actual_tool_result: ToolResult | None
     blocked_proposals: tuple[NativeProposal, ...]
@@ -62,6 +64,8 @@ def native_observation(
     terminals: set[tuple[UUID, int]] = set()
     complete = bool(records)
     retrieved: tuple[str, ...] | None = None
+    foundation: tuple[str, ...] = ()
+    initial_context: tuple[str, ...] = ()
     result: ToolResult | None = None
     args: NoticeFacts | RentFacts | None = None
     proposals: list[NativeProposal] = []
@@ -78,11 +82,12 @@ def native_observation(
             if record.phase != "analysis":
                 continue
             messages = record.value["messages"]
-            initial = json.loads(messages[0]["content"])
-            current = tuple(item["id"] for item in initial.get("evidence", []))
+            current = tuple(record.context_provenance.retrieved_evidence_ids)
             if retrieved is not None and current != retrieved:
                 complete = False
             retrieved = current
+            foundation = tuple(record.context_provenance.foundation_evidence_ids)
+            initial_context = tuple(record.context_provenance.initial_context_evidence_ids)
             if len(messages) == 3:
                 results = [
                     item for item in messages[2]["content"] if item.get("type") == "tool_result"
@@ -160,7 +165,17 @@ def native_observation(
         if (item.trace_id, item.operation_index, item.block.get("id")) not in executed_proposals
     )
     return NativeObservation(
-        complete, responses, retrieved or (), args, result, blocked, generated, tool_violation
+        complete=complete,
+        actor_responses=responses,
+        analysis_context_observed=retrieved is not None,
+        retrieved_ids=retrieved or (),
+        foundation_evidence_ids=foundation,
+        initial_context_evidence_ids=initial_context,
+        actual_tool_args=args,
+        actual_tool_result=result,
+        blocked_proposals=blocked,
+        generated=generated,
+        tool_protocol_violation=tool_violation,
     )
 
 
@@ -196,12 +211,20 @@ def critical_gold(
     if (
         row.actual_tool_args != observation.actual_tool_args
         or row.actual_tool_result != observation.actual_tool_result
-        or row.retrieved_ids != list(observation.retrieved_ids)
     ):
+        complete = False
+    if observation.analysis_context_observed:
+        if (
+            row.retrieved_ids != list(observation.retrieved_ids)
+            or row.foundation_evidence_ids != list(observation.foundation_evidence_ids)
+            or row.initial_context_evidence_ids != list(observation.initial_context_evidence_ids)
+        ):
+            complete = False
+    elif row.classification == "success":
         complete = False
     if observation.tool_protocol_violation:
         flags.append("critical_tool_protocol")
-    allowed = set(observation.retrieved_ids)
+    allowed = set(observation.initial_context_evidence_ids)
     if observation.actual_tool_result is not None:
         for rule_id in observation.actual_tool_result.rule_ids:
             allowed.update(corpus.rule(rule_id).evidence_ids)

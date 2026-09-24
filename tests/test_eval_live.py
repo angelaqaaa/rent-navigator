@@ -15,6 +15,8 @@ import pytest
 from anthropic.types import Message, MessageTokensCount
 from test_eval_security import synthetic_security_xml
 
+from rent_navigator.agent import _final_schema
+from rent_navigator.context import context_provenance
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.eval.data import GoldDataset, load_gold
 from rent_navigator.eval.live import (
@@ -39,7 +41,7 @@ SOURCE = "3" * 40
 
 def permit() -> LivePermit:
     return LivePermit(
-        schema_version=1,
+        schema_version=2,
         repository="angelaqaaa/rent-navigator",
         workflow=".github/workflows/ci.yml",
         source_sha=SOURCE,
@@ -49,17 +51,17 @@ def permit() -> LivePermit:
         purpose="bootstrap",
         baseline_sha256=None,
         future_live_batches_remaining=2,
-        funded_slot="wp9_bootstrap_correction",
+        funded_slot="wp9_bootstrap_savings_repair",
         max_actor_calls=77,
         max_judge_calls=39,
-        reserved_usd=Decimal("2.789"),
-        incurred_usd=Decimal("0.172127"),
+        reserved_usd=Decimal("4.341"),
+        incurred_usd=Decimal("0.232356"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("17.863"),
-        development_cap_usd=Decimal(21),
-        provider_funding_usd=Decimal(30),
+        still_required_usd=Decimal("26.981"),
+        development_cap_usd=Decimal(36),
+        provider_funding_usd=Decimal(45),
         demo_reserved_usd=Decimal(9),
-        development_slots_remaining=13,
+        development_slots_remaining=7,
         prior_ledger_sha256="4" * 64,
         issued_at_utc=datetime.now(UTC),
         expires_at_utc=datetime.now(UTC) + timedelta(hours=1),
@@ -89,13 +91,11 @@ class ScriptedGatePort:
             self.judges += 1
             packet = json.loads(kwargs["messages"][0]["content"])
             result = {
-                "required_claims": [
-                    {"id": c["id"], "result": "met"} for c in packet["required_claims"]
-                ],
-                "statements": [
-                    {"id": s["id"], "factual": "supported", "citation_support": "supported"}
+                "required_claims": {c["id"]: {"result": "met"} for c in packet["required_claims"]},
+                "statements": {
+                    s["id"]: {"factual": "supported", "citation_support": "supported"}
                     for s in packet["statements"]
-                ],
+                },
                 "false_pass": False,
                 "policy_violations": [],
             }
@@ -358,7 +358,7 @@ def test_unknown_actor_usage_is_held_and_stops(tmp_path: Path) -> None:
     fixture = make_fixture(tmp_path, fail_first=True)
     assert len(fixture.manifest.started_attempts) == 1 and not fixture.manifest.passed
     receipt = json.loads((fixture.directory / "receipt.json").read_text())
-    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.019")
+    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.027")
     assert not receipt["complete"] and receipt["actor_calls"] == 1
     assert "private-synthetic-exception" not in "".join(
         p.read_text() for p in fixture.directory.rglob("*") if p.is_file()
@@ -372,7 +372,7 @@ def test_budget_persists_before_generation_unknown_and_exact_once() -> None:
     budget.bind(uuid4())
     ticket = budget.reserve(ACTOR_MODEL)
     assert json.loads(stream.getvalue().splitlines()[-1])["event"] == "generation_start"
-    assert budget.receipt().unresolved_hold_usd == Decimal("0.019")
+    assert budget.receipt().unresolved_hold_usd == Decimal("0.027")
     budget.reconcile(ticket, cost_for_usage(ACTOR_MODEL, None))
     assert budget.stopped
     with pytest.raises(ProviderFailure):
@@ -392,7 +392,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("17.863")
+    assert receipt.permit.still_required_usd == Decimal("26.981")
 
 
 @pytest.mark.parametrize(
@@ -664,18 +664,20 @@ def test_rehashed_preflight_context_must_match_generation_and_retrieval(
         verify(complete, directory)
 
 
-def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixture) -> None:
-    from anthropic import transform_schema
-
-    from rent_navigator.eval.critical import native_observation
+@pytest.mark.parametrize("candidate_ids", [None, ()])
+def test_forged_empty_retrieval_cannot_override_independent_rank(
+    complete: GateFixture, candidate_ids: tuple[str, ...] | None
+) -> None:
     from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_records
-    from rent_navigator.models import GeneratedResult
 
     rows = [
         json.loads(line) for line in (complete.directory / "results.jsonl").read_text().splitlines()
     ]
     row = next(item for item in rows if item["case_id"] == "Q01" and item["repeat"] == 0)
     case = next(item for item in complete.dataset.cases if item.id == "Q01")
+    assert case.request.mode == "question"
+    expected_seeds = tuple(hit.chunk.id for hit in search(complete.index, case.request.question))
+    assert expected_seeds == tuple(row["retrieved_ids"]) and len(expected_seeds) == 5
     original = [
         json.loads(line)
         for line in (complete.directory / "raw-provider.jsonl").read_text().splitlines()
@@ -684,38 +686,124 @@ def test_explicit_empty_retrieval_is_valid_and_remains_bound(complete: GateFixtu
     ]
     assert len(original) == 2
     empty = json.loads(json.dumps(original))
+    provenance = context_provenance("question", "production", (), complete.corpus)
+    for item in empty:
+        item["context_provenance"] = provenance.model_dump(mode="json")
     packet = json.loads(empty[0]["value"]["messages"][0]["content"])
-    packet["evidence"] = []
-    empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
-    empty[0]["value"]["output_config"]["format"]["schema"] = transform_schema(
-        GeneratedResult.model_json_schema()
+    packet["evidence"] = [
+        {"id": chunk.id, "heading": chunk.heading, "text": chunk.text}
+        for chunk in (complete.corpus.chunk(i) for i in provenance.initial_context_evidence_ids)
+    ]
+    empty[0]["value"]["messages"][0]["content"] = json.dumps(
+        packet, sort_keys=True, separators=(",", ":")
+    )
+    empty[0]["value"]["output_config"]["format"]["schema"] = _final_schema(
+        "production", set(provenance.initial_context_evidence_ids)
     )
     records = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]
-    verify_synthetic_records(
-        records, case=case, corpus=complete.corpus, arm="production", retrieved_ids=()
-    )
-    observed = native_observation(case, records, complete.corpus)
-    assert observed.complete and observed.retrieved_ids == () and observed.actor_responses == 0
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Raw provider content does not match") as caught:
         verify_synthetic_records(
             records,
             case=case,
             corpus=complete.corpus,
             arm="production",
-            retrieved_ids=tuple(row["retrieved_ids"]),
+            retrieved_ids=candidate_ids,
         )
-    # An initialized empty context cannot be replaced by a later nonempty count.
-    for item in original:
-        item["operation_index"] = 2
-    changed = [
-        RawProviderRecord.model_validate_json(json.dumps(item)) for item in [*empty, *original]
+    assert isinstance(caught.value.__context__, ValueError)
+    assert "independent" in str(caught.value.__context__)
+
+
+@pytest.mark.parametrize("change", ["swap", "substitute"])
+def test_jointly_rehashed_foundation_seed_tampering_rejected_by_independent_rank(
+    complete: GateFixture, tmp_path: Path, change: str
+) -> None:
+    directory = tmp_path / "copy"
+    shutil.copytree(complete.directory, directory)
+    row_path = directory / "results.jsonl"
+    rows = [json.loads(line) for line in row_path.read_text().splitlines()]
+    target = next(
+        row
+        for row in rows
+        if row["case_id"] == "Q01" and row["repeat"] == 0 and row["arm"] == "production"
+    )
+    original_seeds = target["retrieved_ids"].copy()
+    foundation = target["foundation_evidence_ids"].copy()
+    initial = target["initial_context_evidence_ids"].copy()
+    indices = [i for i, identifier in enumerate(original_seeds) if identifier in foundation]
+    assert len(indices) >= 2
+    forged_seeds = original_seeds.copy()
+    if change == "swap":
+        first, second = indices[:2]
+        forged_seeds[first], forged_seeds[second] = forged_seeds[second], forged_seeds[first]
+    else:
+        replacement = next(
+            identifier for identifier in foundation if identifier not in original_seeds
+        )
+        forged_seeds[indices[0]] = replacement
+    assert forged_seeds != original_seeds and len(set(forged_seeds)) == 5
+    forged_context = context_provenance(
+        "question", "production", tuple(forged_seeds), complete.corpus
+    )
+    assert forged_context.foundation_evidence_ids == foundation
+    assert forged_context.initial_context_evidence_ids == initial
+    target["retrieved_ids"] = forged_seeds
+    row_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    raw_path = directory / "raw-provider.jsonl"
+    raw = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    analysis = [
+        record
+        for record in raw
+        if record["attempt_id"] == target["attempt_id"] and record["phase"] == "analysis"
     ]
+    assert len(analysis) == 4
+    original_values = json.dumps([record["value"] for record in analysis], sort_keys=True)
+    for record in analysis:
+        assert record["context_provenance"]["retrieved_evidence_ids"] == original_seeds
+        record["context_provenance"]["retrieved_evidence_ids"] = forged_seeds
+        assert record["context_provenance"] == forged_context.model_dump(mode="json")
+    assert json.dumps([record["value"] for record in analysis], sort_keys=True) == original_values
+    raw_path.write_text("".join(json.dumps(record) + "\n" for record in raw))
+
+    metadata_path = directory / "metadata.jsonl"
+    metadata = [json.loads(line) for line in metadata_path.read_text().splitlines()]
+    endpoints = [
+        record
+        for record in metadata
+        if record["attempt_id"] == target["attempt_id"]
+        and record["record_kind"] == "endpoint"
+        and record["phase"] == "analysis"
+    ]
+    assert len(endpoints) == 1
+    endpoint = endpoints[0]
+    assert endpoint["retrieved_evidence_ids"] == original_seeds
+    assert endpoint["foundation_evidence_ids"] == foundation
+    assert endpoint["initial_context_evidence_ids"] == initial
+    endpoint["retrieved_evidence_ids"] = forged_seeds
+    metadata_path.write_text("".join(json.dumps(record) + "\n" for record in metadata))
+    rehash(directory)
+    with pytest.raises(ValueError, match="Raw provider content does not match") as caught:
+        verify(complete, directory)
+    assert isinstance(caught.value.__context__, ValueError)
+    assert "independent" in str(caught.value.__context__)
+
+
+@pytest.mark.parametrize("field", ["foundation_evidence_ids", "initial_context_evidence_ids"])
+@pytest.mark.parametrize("change", ["missing", "empty"])
+def test_rehashed_result_context_provenance_is_required_and_bound(
+    complete: GateFixture, tmp_path: Path, field: str, change: str
+) -> None:
+    directory = tmp_path / "copy"
+    shutil.copytree(complete.directory, directory)
+    path = directory / "results.jsonl"
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    target = next(row for row in rows if row["case_id"] == "Q01" and row["repeat"] == 0)
+    assert target[field]
+    if change == "missing":
+        del target[field]
+    else:
+        target[field] = []
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    rehash(directory)
     with pytest.raises(ValueError):
-        native_observation(case, changed, complete.corpus)
-    del packet["evidence"]
-    empty[0]["value"]["messages"][0]["content"] = json.dumps(packet)
-    missing = [RawProviderRecord.model_validate_json(json.dumps(item)) for item in empty]
-    with pytest.raises(ValueError):
-        verify_synthetic_records(
-            missing, case=case, corpus=complete.corpus, arm="production", retrieved_ids=()
-        )
+        verify(complete, directory)

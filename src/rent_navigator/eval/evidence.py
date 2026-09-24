@@ -131,14 +131,19 @@ def verify_gold_observations(
         row.usage_complete,
     ):
         raise ValueError("Serving accounting mismatch")
-    retrieved = [
-        identifier
-        for r in endpoints
-        if r.phase == "analysis"
-        for identifier in r.retrieved_evidence_ids
-    ]
-    if row.retrieved_ids != retrieved:
-        raise ValueError("Retrieval observation mismatch")
+    for row_field, trace_field in (
+        ("retrieved_ids", "retrieved_evidence_ids"),
+        ("foundation_evidence_ids", "foundation_evidence_ids"),
+        ("initial_context_evidence_ids", "initial_context_evidence_ids"),
+    ):
+        prepared = [
+            identifier
+            for r in endpoints
+            if r.phase == "analysis"
+            for identifier in getattr(r, trace_field)
+        ]
+        if getattr(row, row_field) != prepared:
+            raise ValueError("Context observation mismatch")
     if row.response is not None and (
         row.response.attempt_id != row.attempt_id or row.response.trace_id != row.trace_ids[-1]
     ):
@@ -155,7 +160,6 @@ def verify_gold_observations(
         case=case,
         corpus=corpus,
         arm=row.arm,
-        retrieved_ids=tuple(row.retrieved_ids) if row.arm == "production" else None,
     )
     values: list[dict[str, Any]] = [json.loads(r.model_dump_json()) for r in raw]
     _verify_observations(row, case, records, values, corpus)

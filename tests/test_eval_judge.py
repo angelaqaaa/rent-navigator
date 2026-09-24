@@ -1146,10 +1146,12 @@ def test_independent_required_maps_bind_count_generation_and_lossless_mapping(
             assert set(leaf["properties"]) == leaf_keys
             assert set(leaf["required"]) == leaf_keys
             for key in leaf_keys:
-                assert (
-                    leaf["properties"][key]["enum"]
-                    == original["$defs"][definition]["properties"][key]["enum"]
+                expected_domain = (
+                    ["supported", "unsupported"]
+                    if key == "citation_support"
+                    else original["$defs"][definition]["properties"][key]["enum"]
                 )
+                assert leaf["properties"][key]["enum"] == expected_domain
     assert test.records()[-1].value["content"][0]["text"] == raw_text
     test.verify(evaluated, expected)
 
@@ -1220,7 +1222,17 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
         ),
         cited_evidence=(),
     )
-    assert judge_schema(build_judge_packet(baseline)) == first
+    uncited = judge_schema(build_judge_packet(baseline))
+    assert uncited != first
+    assert first["$defs"] == uncited["$defs"]
+    for schema, definition in (
+        (first, "JudgeCitedStatementResult"),
+        (uncited, "JudgeUncitedStatementResult"),
+    ):
+        assert all(
+            node == {"$ref": f"#/$defs/{definition}"}
+            for node in schema["properties"]["statements"]["properties"].values()
+        )
     serialized = json.dumps(first)
     for secret in [
         str(value.response.attempt_id),
@@ -1235,7 +1247,17 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
     assert '"arm"' not in serialized and '"case_id"' not in serialized
 
 
-@pytest.mark.parametrize("changed_part", ["wire_policy", "grade_schema", "structural_rubric"])
+@pytest.mark.parametrize(
+    "changed_part",
+    [
+        "wire_policy",
+        "citation_selection",
+        "grade_schema",
+        "cited_schema",
+        "uncited_schema",
+        "structural_rubric",
+    ],
+)
 def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     monkeypatch: pytest.MonkeyPatch, changed_part: str
 ) -> None:
@@ -1244,18 +1266,181 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     identity = judge_config_hash()
     if changed_part == "wire_policy":
         monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": "different"})
-    elif changed_part == "grade_schema":
-        template = deepcopy(module._wire_schema_template())
-        grade_definition = next(
-            definition
-            for definition in template["$defs"].values()
-            if "result" in definition.get("properties", {})
+    elif changed_part == "citation_selection":
+        assert module._WIRE_POLICY["version"] == 2
+        assert "citation_applicability" in module._WIRE_POLICY
+        monkeypatch.setattr(
+            module,
+            "_WIRE_POLICY",
+            {**module._WIRE_POLICY, "citation_applicability": "different selection rule"},
         )
-        grade_definition["properties"]["result"]["enum"].append("different_grade")
+    elif changed_part in {"grade_schema", "cited_schema", "uncited_schema"}:
+        template = deepcopy(module._wire_schema_template())
+        definition_name = {
+            "grade_schema": "JudgeClaimResult",
+            "cited_schema": "JudgeCitedStatementResult",
+            "uncited_schema": "JudgeUncitedStatementResult",
+        }[changed_part]
+        template["$defs"][definition_name]["properties"][
+            "result" if changed_part == "grade_schema" else "citation_support"
+        ]["enum"].append("different_grade")
         monkeypatch.setattr(module, "_wire_schema_template", lambda: deepcopy(template))
     else:
         monkeypatch.setattr(module, "JUDGE_SYSTEM", JUDGE_SYSTEM + "\nDifferent wire contract.")
     assert judge_config_hash() != identity
+
+
+def with_citation_presence(value: JudgeInput, presence: tuple[bool, ...]) -> JudgeInput:
+    assert len(presence) == len(value.response.statements)
+    statements = [
+        item.model_copy(update={"citation_ids": item.citation_ids if cited else []})
+        for item, cited in zip(value.response.statements, presence, strict=True)
+    ]
+    cited_ids = {identifier for item in statements for identifier in item.citation_ids}
+    return replace(
+        value,
+        response=value.response.model_copy(
+            update={
+                "statements": statements,
+                "citations": [item for item in value.response.citations if item.id in cited_ids],
+            }
+        ),
+        cited_evidence=tuple(item for item in value.cited_evidence if item.id in cited_ids),
+    )
+
+
+@pytest.mark.parametrize(
+    "presence", [(True, True, True), (False, False, False), (True, False, True)]
+)
+def test_citation_applicability_schema_binds_actual_presence_with_independent_factual_domain(
+    value: JudgeInput, presence: tuple[bool, ...]
+) -> None:
+    value = with_citation_presence(value, presence)
+    packet = build_judge_packet(value)
+    schema = judge_schema(packet)
+    assert set(schema["$defs"]) == {
+        "JudgeClaimResult",
+        "JudgeCitedStatementResult",
+        "JudgeUncitedStatementResult",
+    }
+    assert_closed_required_objects(schema)
+    statement_map = schema["properties"]["statements"]
+    assert list(statement_map["properties"]) == statement_map["required"] == ["s1", "s2", "s3"]
+    for statement, cited in zip(value.response.statements, presence, strict=True):
+        name = "JudgeCitedStatementResult" if cited else "JudgeUncitedStatementResult"
+        assert statement_map["properties"][statement.id] == {"$ref": f"#/$defs/{name}"}
+        definition = schema["$defs"][name]
+        assert definition["title"] == name
+        assert definition["properties"]["factual"]["enum"] == [
+            "supported",
+            "unsupported",
+            "contradicted",
+        ]
+        assert definition["properties"]["citation_support"]["enum"] == (
+            ["supported", "unsupported"] if cited else ["not_applicable"]
+        )
+    # Exercise every factual grade through the real offline composition and replay.
+    payload = wire_payload(result(value))
+    for (identifier, leaf), grade, cited in zip(
+        payload["statements"].items(),
+        ("supported", "unsupported", "contradicted"),
+        presence,
+        strict=True,
+    ):
+        leaf["factual"] = grade
+        leaf["citation_support"] = (
+            ("supported" if identifier == "s1" else "unsupported") if cited else "not_applicable"
+        )
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
+    evaluated = test.run()
+    assert test.port.counts[0]["output_config"]["format"]["schema"] == schema
+    assert test.port.creates[0]["output_config"] == test.port.counts[0]["output_config"]
+    assert wire_payload(evaluated.judgment) == payload
+    test.verify(evaluated, evaluated.judgment)
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    ["missing", None, "", "[]", False, True, 0, {}, [True], [1], [None], ()],
+)
+def test_citation_applicability_rejects_malformed_packet_citation_lists(
+    value: JudgeInput, malformed: object
+) -> None:
+    packet = build_judge_packet(value)
+    if malformed == "missing":
+        packet["statements"][0].pop("citation_ids")
+    else:
+        packet["statements"][0]["citation_ids"] = malformed
+    with pytest.raises(ValueError):
+        judge_schema(packet)
+    test = harness(value)
+    with pytest.raises(ValueError):
+        JudgeRecorder(
+            test.port, packet=packet, context=test.context, run_id=RUN_ID, stream=StringIO()
+        ).prepared({}, "count_tokens")
+    assert test.port.counts == test.port.creates == []
+
+
+@pytest.mark.parametrize(
+    "presence", [(True, True, True), (False, False, False), (True, False, True)]
+)
+def test_citation_applicability_schema_is_fresh_and_blind_within_presence_pattern(
+    value: JudgeInput, presence: tuple[bool, ...]
+) -> None:
+    from rent_navigator.eval import judge as module
+
+    packet = build_judge_packet(with_citation_presence(value, presence))
+    original = deepcopy(packet)
+    template = module._wire_schema_template()
+    internal = JudgeResult.model_json_schema()
+    schema = judge_schema(packet)
+    changed = deepcopy(packet)
+    changed.update(arm="baseline", case_id="other", expected_grade="contradicted")
+    changed["expected_tool_result"] = {"status": "unsupported"}
+    changed["observed_tool_result"] = None
+    changed["evidence"] = []
+    for entry in changed["required_claims"]:
+        entry["text"] = "Different required claim; no expected grade enters schema."
+    for entry in changed["statements"]:
+        entry["text"] = "Different legal text."
+        if entry["citation_ids"]:
+            entry["citation_ids"] = ["f" * 64]
+    assert judge_schema(changed) == schema
+    assert packet == original
+    schema["$defs"]["JudgeCitedStatementResult"]["properties"]["factual"]["enum"].clear()
+    assert judge_schema(packet) != schema
+    assert module._wire_schema_template() == template
+    assert JudgeResult.model_json_schema() == internal
+    assert template["$defs"]["JudgeUncitedStatementResult"]["properties"]["factual"]["enum"]
+
+
+def test_synthetic_smoke_cited_not_applicable_remains_billed_invalid_output(
+    value: JudgeInput,
+) -> None:
+    # This new synthetic response mirrors the rejected grade shape, not a historical run.
+    payload = wire_payload(result(value))
+    payload["statements"]["s3"]["citation_support"] = "not_applicable"
+    raw_text = json.dumps(payload, indent=2)
+    response = message(
+        value,
+        content=[{"type": "text", "text": raw_text}],
+        usage={"input_tokens": 6394, "output_tokens": 132},
+    )
+    with pytest.raises(ProviderFailure) as parsed:
+        parse_judgment(response, value)
+    assert parsed.value.code == "invalid_generated_output"
+    test = harness(value)
+    test.port.response = response
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    assert caught.value.code == "invalid_generated_output"
+    assert caught.value.accounting.cost.actual_cost_usd == Decimal("0.014108")
+    assert caught.value.accounting.cost.usage_complete
+    assert test.budget.committed_usd == Decimal("0.014108")
+    assert test.records()[-1].value["content"][0]["text"] == raw_text
+    assert len(test.port.counts) == len(test.port.creates) == 1
+    test.verify(caught.value.accounting)
 
 
 def test_lossless_mapping_uses_trusted_claim_order_and_preserves_all_grades(

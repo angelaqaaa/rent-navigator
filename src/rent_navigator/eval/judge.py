@@ -4,6 +4,7 @@ import json
 import math
 import time
 from collections.abc import Callable, Sequence
+from copy import deepcopy
 from hashlib import sha256
 from io import StringIO
 from typing import Annotated, Any, Literal, TextIO, cast
@@ -121,12 +122,24 @@ _PACKET_POLICY = {
 
 
 _WIRE_POLICY = {
-    "version": 1,
+    "version": 2,
     "format": "closed root and grade objects; independent closed required ID-keyed objects",
     "claim_ids": "exact packet.required_claims IDs",
     "statement_ids": "exact packet.statements IDs, independently sized",
     "schema_order": "sorted source IDs; all properties required",
     "invalid_source": "reject empty or duplicate IDs before dispatch",
+    "citation_applicability": {
+        "selection": "only nonempty citation_ids of each strictly validated packet statement",
+        "cited": {
+            "definition": "JudgeCitedStatementResult",
+            "citation_support": ["supported", "unsupported"],
+        },
+        "uncited": {
+            "definition": "JudgeUncitedStatementResult",
+            "citation_support": ["not_applicable"],
+        },
+        "factual": "unchanged full domain; independent of citation support",
+    },
     "decode": "one JSON decode; reject duplicate decoded keys recursively and non-JSON constants",
     "validation": "exact root/container/leaf keys and strict original scoring field types",
     "mapping": "bijective unchanged grades to internal arrays in trusted packet order",
@@ -151,6 +164,15 @@ def _wire_schema_template() -> dict[str, Any]:
             "required": [],
             "additionalProperties": False,
         }
+    statement = schema["$defs"].pop("JudgeStatementResult")
+    for name, citation_domain in (
+        ("JudgeCitedStatementResult", ["supported", "unsupported"]),
+        ("JudgeUncitedStatementResult", ["not_applicable"]),
+    ):
+        definition = deepcopy(statement)
+        definition["title"] = name
+        definition["properties"]["citation_support"]["enum"] = citation_domain
+        schema["$defs"][name] = definition
     return schema
 
 
@@ -177,14 +199,26 @@ def _packet_ids(packet: dict[str, Any]) -> dict[str, tuple[str, ...]]:
 def judge_schema(packet: dict[str, Any]) -> dict[str, Any]:
     """Bind every required object key to this packet, without encoding expected grades."""
     source_ids = _packet_ids(packet)
+    statements = [Statement.model_validate(row, strict=True) for row in packet["statements"]]
+    statement_definitions: dict[str, str] = {
+        statement.id: (
+            "JudgeCitedStatementResult" if statement.citation_ids else "JudgeUncitedStatementResult"
+        )
+        for statement in statements
+    }
     schema = _wire_schema_template()
-    for field, definition in (
-        ("required_claims", "JudgeClaimResult"),
-        ("statements", "JudgeStatementResult"),
-    ):
+    for field in ("required_claims", "statements"):
         identifiers = sorted(source_ids[field])
         schema["properties"][field]["properties"] = {
-            identifier: {"$ref": f"#/$defs/{definition}"} for identifier in identifiers
+            identifier: {
+                "$ref": "#/$defs/"
+                + (
+                    "JudgeClaimResult"
+                    if field == "required_claims"
+                    else statement_definitions[identifier]
+                )
+            }
+            for identifier in identifiers
         }
         schema["properties"][field]["required"] = identifiers
     return schema

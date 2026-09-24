@@ -1,7 +1,11 @@
 """Offline judge composition, packet privacy, billing and immutable smoke checks."""
 
 import asyncio
+import builtins
+import io
 import json
+import os
+import socket
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
@@ -10,6 +14,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+import anthropic
+import httpx2
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
@@ -643,6 +649,155 @@ def test_native_boolean_count_is_retained_without_judge_generation(
     assert not test.port.creates and caught.value.accounting.cost.actual_cost_usd == 0
     assert test.records()[-1].value["input_tokens"] is True
     test.verify(caught.value.accounting)
+
+
+@pytest.fixture
+def isolated_count_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Count replay cannot access credentials, clients, or network")
+
+    def protected_open(original: Any) -> Any:
+        def guarded(path: Any, *args: Any, **kwargs: Any) -> Any:
+            if isinstance(path, (str, Path)) and Path(path).name in {
+                ".env",
+                ".env.local",
+                "credentials.json",
+            }:
+                forbidden()
+            return original(path, *args, **kwargs)
+
+        return guarded
+
+    for module in (builtins, io, os):
+        monkeypatch.setattr(module, "open", protected_open(module.open))
+    monkeypatch.setattr(socket.socket, "connect", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+    for client in (
+        anthropic.Anthropic,
+        anthropic.AsyncAnthropic,
+        httpx2.Client,
+        httpx2.AsyncClient,
+    ):
+        monkeypatch.setattr(client, "__init__", forbidden)
+
+
+def count_failure(
+    value: JudgeInput, monkeypatch: pytest.MonkeyPatch, tokens: dict[str, Any], *, expired: bool
+) -> tuple[Harness, JudgeAccounting]:
+    test = harness(value)
+    assert test.clock.now == 10
+
+    async def count(**kwargs: Any) -> MessageTokensCount:
+        test.port.counts.append(deepcopy(kwargs))
+        test.clock.now = 56 if expired else 10.1
+        return MessageTokensCount.model_construct(**tokens)
+
+    monkeypatch.setattr(test.port, "count_tokens", count)
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    assert caught.value.code == ("deadline_exceeded" if expired else "provider_error")
+    accounting = caught.value.accounting
+    assert len(test.port.counts) == 1 and not test.port.creates
+    assert accounting.cost.actual_cost_usd == accounting.cost.reserved_cost_usd == 0
+    assert accounting.cost.usage_complete and test.budget.committed_usd == 0
+    assert accounting.returned_model_id is None
+    assert all(record.provider_operation != "generation" for record in accounting.records)
+    assert all(record.response_code == caught.value.code for record in accounting.records)
+    raw = test.records()
+    assert len(raw) == 2 and raw[-1].event == "response"
+    assert json.dumps(raw[-1].value, sort_keys=True) == json.dumps(tokens, sort_keys=True)
+    return test, accounting
+
+
+@pytest.mark.parametrize(
+    "tokens", [{"input_tokens": True}, {"input_tokens": 1000}], ids=["boolean", "integer"]
+)
+def test_count_timeout_failed_judge_replays_with_no_generation(
+    value: JudgeInput,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_count_replay: None,
+    tokens: dict[str, Any],
+) -> None:
+    test, accounting = count_failure(value, monkeypatch, tokens, expired=True)
+    test.verify(accounting)
+    with pytest.raises(ValueError, match="Judgment has no generation"):
+        test.verify(accounting, result(value))
+
+
+@pytest.mark.parametrize(
+    "tokens,expired",
+    [
+        ({"input_tokens": True}, False),
+        ({}, False),
+        ({}, True),
+        ({"input_tokens": None}, False),
+        ({"input_tokens": None}, True),
+        ({"input_tokens": "1000"}, False),
+        ({"input_tokens": "1000"}, True),
+        ({"input_tokens": 1000.0}, False),
+        ({"input_tokens": 1000.0}, True),
+    ],
+)
+def test_invalid_count_replay_keeps_exact_scalar_and_reachable_failure(
+    value: JudgeInput,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_count_replay: None,
+    tokens: dict[str, Any],
+    expired: bool,
+) -> None:
+    test, accounting = count_failure(value, monkeypatch, tokens, expired=expired)
+    test.verify(accounting)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "ok",
+        "answered",
+        "refused",
+        "invalid_request",
+        "body_too_large",
+        "rate_limited",
+        "busy",
+        "budget_exhausted",
+        "stale_corpus",
+        "invalid_generated_output",
+        "tool_protocol_error",
+    ],
+)
+def test_invalid_count_replay_rejects_success_and_unrelated_failure_codes(
+    value: JudgeInput,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_count_replay: None,
+    code: str,
+) -> None:
+    test, accounting = count_failure(value, monkeypatch, {"input_tokens": True}, expired=True)
+    fields = accounting.model_dump(mode="json")
+    for record in fields["records"]:
+        record["response_code"] = code
+    changed = JudgeAccounting.model_validate_json(json.dumps(fields))
+    with pytest.raises(ValueError, match="Invalid judge count response"):
+        test.verify(changed)
+
+
+@pytest.mark.parametrize("code", ["provider_error", "deadline_exceeded"])
+def test_invalid_count_replay_rejects_any_following_generation(
+    value: JudgeInput, isolated_count_replay: None, code: str
+) -> None:
+    test = harness(value)
+    evaluation = test.run()
+    raw = test.records()
+    raw[1].value["input_tokens"] = True
+    fields = evaluation.model_dump(mode="json", exclude={"judgment"})
+    for record in fields["records"]:
+        if record["provider_operation"] == "count_tokens":
+            record["response_code"] = code
+    changed = JudgeAccounting.model_validate_json(json.dumps(fields))
+    with pytest.raises(ValueError, match="Invalid judge count response"):
+        verify_judge_records(
+            raw, value=value, context=test.context, accounting=changed, run_id=RUN_ID
+        )
 
 
 @pytest.mark.parametrize(

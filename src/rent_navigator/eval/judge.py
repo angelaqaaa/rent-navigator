@@ -637,7 +637,10 @@ def verify_judge_records(
             if (
                 set(last.value) - {"input_tokens"}
                 or not valid
-                and (detail.response_code != "provider_error" or len(details) != 1)
+                and (
+                    detail.response_code not in {"provider_error", "deadline_exceeded"}
+                    or len(details) != 1
+                )
             ):
                 raise ValueError("Invalid judge count response")
             if (

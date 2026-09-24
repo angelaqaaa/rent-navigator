@@ -685,7 +685,7 @@ def _verify_collection(
                 set(item["value"]) not in (set(), {"input_tokens"})
                 or invalid_count
                 and (
-                    call.response_code != "provider_error"
+                    call.response_code not in {"provider_error", "deadline_exceeded"}
                     or any(
                         later.trace_id == call.trace_id
                         and later.provider_operation == "generation"

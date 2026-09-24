@@ -164,7 +164,7 @@ def protocol_hash() -> str:
                 "retrieval": "macro MRR@5 and gain(2**grade-1) NDCG@5 over six QA",
                 "context": "required R/F/C; accepted analysis seeds independently recomputed",
                 "provider_evidence": (
-                    "native-token-type/strict-failed-replay/independent-input-limit-v1"
+                    "native-token-type/strict-failed-replay/independent-input-limit/count-timeout-v2"
                 ),
             },
         }

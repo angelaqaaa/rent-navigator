@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
+from anthropic.types import Usage as SDKUsage
 from pydantic import ValidationError
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -601,6 +602,110 @@ def test_missing_usage_response_keeps_null_cost_during_partial_evidence_verifica
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
     assert accounting.cost.reserved_cost_usd == Decimal("0.058")
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+def test_native_boolean_usage_survives_judge_recording_and_failed_replay(
+    value: JudgeInput, field: str
+) -> None:
+    test = harness(value)
+    tokens: dict[str, Any] = {"input_tokens": 1000, "output_tokens": 100, field: True}
+    test.port.response = message(value).model_copy(
+        update={"usage": SDKUsage.model_construct(**tokens)}
+    )
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    assert caught.value.code == "provider_error"
+    accounting = caught.value.accounting
+    assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
+    assert accounting.cost.reserved_cost_usd == Decimal(".058")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".058")
+    assert test.records()[-1].value["usage"][field] is True
+    test.verify(accounting)
+    with pytest.raises(JudgeFailure):
+        test.run()
+    assert len(test.port.counts) == len(test.port.creates) == 1
+
+
+def test_native_boolean_count_is_retained_without_judge_generation(
+    value: JudgeInput, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    test = harness(value)
+
+    async def count(**kwargs: Any) -> MessageTokensCount:
+        test.port.counts.append(kwargs)
+        return MessageTokensCount.model_construct(input_tokens=True)
+
+    monkeypatch.setattr(test.port, "count_tokens", count)
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    assert caught.value.code == "provider_error"
+    assert not test.port.creates and caught.value.accounting.cost.actual_cost_usd == 0
+    assert test.records()[-1].value["input_tokens"] is True
+    test.verify(caught.value.accounting)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "absent",
+        "null",
+        "missing_input",
+        "null_input",
+        "string_input",
+        "float_output",
+        "object",
+        "non_sdk",
+    ],
+)
+def test_failed_native_usage_shapes_have_faithful_or_safe_judge_evidence(
+    value: JudgeInput, shape: str
+) -> None:
+    def native_usage(**values: Any) -> SDKUsage:
+        return SDKUsage.model_construct(**values)
+
+    test = harness(value)
+    response = message(value)
+    usage: Any = None
+    if shape == "absent":
+        del response.__dict__["usage"]
+        response.model_fields_set.discard("usage")
+    else:
+        if shape == "missing_input":
+            usage = native_usage(output_tokens=100)
+        elif shape in {"null_input", "string_input", "object"}:
+            token = {"null_input": None, "string_input": "1000", "object": object()}[shape]
+            usage = native_usage(input_tokens=token, output_tokens=100)
+        elif shape == "float_output":
+            usage = native_usage(input_tokens=1000, output_tokens=100.0)
+        elif shape == "non_sdk":
+            usage = {"input_tokens": 1000, "output_tokens": 100}
+        response = response.model_copy(update={"usage": usage})
+    test.port.response = response
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    accounting = caught.value.accounting
+    assert caught.value.code == "provider_error" and accounting.cost.actual_cost_usd is None
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".058")
+    terminal = test.records()[-1]
+    if shape in {"object", "non_sdk"}:
+        assert terminal.event == "failure" and terminal.value == {"code": "provider_error"}
+        assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
+    else:
+        assert terminal.event == "response"
+        if shape == "absent":
+            assert "usage" not in terminal.value
+        elif shape == "null":
+            assert terminal.value["usage"] is None
+        elif shape == "missing_input":
+            assert terminal.value["usage"] == {"output_tokens": 100}
+        elif shape == "null_input":
+            assert terminal.value["usage"]["input_tokens"] is None
+        elif shape == "string_input":
+            assert terminal.value["usage"]["input_tokens"] == "1000"
+        else:
+            assert type(terminal.value["usage"]["output_tokens"]) is float
+    test.verify(accounting)
 
 
 def test_failure_audit_rejects_repriced_known_cost_for_mismatched_judge(value: JudgeInput) -> None:

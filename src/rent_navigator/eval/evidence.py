@@ -4,17 +4,23 @@ import json
 from typing import Any
 from uuid import UUID
 
-from anthropic.types import Message
 from pydantic import TypeAdapter, ValidationError
 
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.collection import _verify_observations
 from rent_navigator.eval.models import GoldCase, ResultRow
+from rent_navigator.eval.provider_evidence import usage_cost_from_raw
 from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_records
 from rent_navigator.eval.runner import config_map, row_config_hash
 from rent_navigator.models import ErrorResponse
-from rent_navigator.provider import ProviderFailure, _usage
-from rent_navigator.trace import PRICING_HASH, ReturnedModel, TraceRecord, provider_cost_totals
+from rent_navigator.provider import ProviderFailure
+from rent_navigator.trace import (
+    PRICING_HASH,
+    CostSummary,
+    ReturnedModel,
+    TraceRecord,
+    provider_cost_totals,
+)
 
 
 def verify_raw_links(
@@ -42,8 +48,20 @@ def verify_raw_links(
         if item.event == "response":
             if item.operation == "count_tokens":
                 tokens = item.value.get("input_tokens")
-                if set(item.value) != {"input_tokens"} or (
-                    call.response_code == "ok" and (type(tokens) is not int or tokens < 0)
+                invalid_count = type(tokens) is not int or tokens < 0
+                if (
+                    set(item.value) not in (set(), {"input_tokens"})
+                    or invalid_count
+                    and (
+                        call.response_code != "provider_error"
+                        or any(
+                            later.trace_id == call.trace_id
+                            and later.provider_operation == "generation"
+                            and later.provider_call_index is not None
+                            and later.provider_call_index > item.operation_index
+                            for later in records
+                        )
+                    )
                 ):
                     raise ValueError("Invalid token count evidence")
             else:
@@ -70,12 +88,14 @@ def verify_raw_links(
                         for name in ("input_tokens", "output_tokens")
                     ):
                         raise ValueError("Raw billed token counts must be strict integers")
-                    usage = _usage(Message.model_validate(item.value))
-                    if usage is None or (usage.input_tokens, usage.output_tokens) != (
-                        call.input_tokens,
-                        call.output_tokens,
-                    ):
-                        raise ValueError("Raw usage differs from priced metadata")
+                if call.requested_model_id is None:
+                    raise ValueError("Generation metadata lacks a requested model")
+                expected_cost = usage_cost_from_raw(item.value, call.requested_model_id)
+                observed_cost = CostSummary.model_validate(
+                    {field: getattr(call, field) for field in CostSummary.model_fields}
+                )
+                if expected_cost != observed_cost:
+                    raise ValueError("Raw usage differs from priced metadata")
         found.setdefault(key, []).append(item.event)
     if set(found) != set(calls) or any(
         events not in (["request", "response"], ["request", "failure"]) for events in found.values()

@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
+from anthropic.types import Usage as SDKUsage
 from test_eval_security import synthetic_security_xml
 
 from rent_navigator.agent import _final_schema
@@ -33,6 +34,7 @@ from rent_navigator.eval.offline import file_hash, run_offline
 from rent_navigator.eval.permit import LivePermit
 from rent_navigator.extract import EXTRACTION_SYSTEM
 from rent_navigator.index import build_index, search
+from rent_navigator.model_policy import MODEL_POLICIES, RequestedModel
 from rent_navigator.provider import ProviderFailure
 from rent_navigator.trace import ACTOR_MODEL, JUDGE_MODEL, Usage, cost_for_usage
 
@@ -59,7 +61,7 @@ def permit() -> LivePermit:
         held_usd=Decimal(0),
         still_required_usd=Decimal("26.981"),
         development_cap_usd=Decimal(36),
-        provider_funding_usd=Decimal(45),
+        provider_funding_usd=Decimal(50),
         demo_reserved_usd=Decimal(9),
         development_slots_remaining=7,
         prior_ledger_sha256="4" * 64,
@@ -352,6 +354,130 @@ def test_billed_invalid_judge_retains_first_attempt_stops(tmp_path: Path) -> Non
     assert Decimal(receipt["actual_usd"]) == Decimal("0.006")
     with pytest.raises(ValueError):
         verify(fixture)
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+def test_native_boolean_judge_usage_retains_failed_gate_replay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    original = ScriptedGatePort.create
+    original_count = ScriptedGatePort.count_tokens
+    observed_calls: list[str] = []
+    observed_counts: list[str] = []
+
+    async def counted(self: ScriptedGatePort, **kwargs: Any) -> MessageTokensCount:
+        observed_counts.append(kwargs["model"])
+        return await original_count(self, **kwargs)
+
+    async def changed(self: ScriptedGatePort, **kwargs: Any) -> Message:
+        response = await original(self, **kwargs)
+        observed_calls.append(kwargs["model"])
+        if kwargs["model"] == JUDGE_MODEL:
+            native: dict[str, Any] = {"input_tokens": 1000, "output_tokens": 100, field: True}
+            return response.model_copy(update={"usage": SDKUsage.model_construct(**native)})
+        return response
+
+    monkeypatch.setattr(ScriptedGatePort, "create", changed)
+    monkeypatch.setattr(ScriptedGatePort, "count_tokens", counted)
+    fixture = make_fixture(tmp_path)
+    assert observed_calls == [ACTOR_MODEL, ACTOR_MODEL, JUDGE_MODEL]
+    assert observed_counts == observed_calls
+    assert len(fixture.manifest.started_attempts) == 1
+    assert len(fixture.manifest.judge_accounting) == 1
+    assert not fixture.manifest.judge_evaluations
+    raw_path = fixture.directory / "judge-raw.jsonl"
+    raw = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    generated = next(
+        item for item in raw if item["operation"] == "generation" and item["event"] == "response"
+    )
+    assert generated["value"]["usage"][field] is True
+    accounting = next(iter(fixture.manifest.judge_accounting.values()))
+    assert all(
+        record.response_code == "provider_error"
+        for record in accounting.records
+        if record.provider_operation == "generation"
+    )
+    assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
+    assert getattr(accounting.cost, field) is None
+    receipt = json.loads((fixture.directory / "receipt.json").read_text())
+    assert Decimal(receipt["actual_usd"]) == Decimal("0.003")
+    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.058")
+    assert not receipt["complete"]
+    failed = verify(fixture, require_pass=False)
+    assert not failed.passed and not failed.evaluation_complete
+    with pytest.raises(ValueError):
+        verify(fixture)
+    generated["value"]["usage"][field] = 1
+    raw_path.write_text("".join(json.dumps(item) + "\n" for item in raw))
+    rehash(fixture.directory)
+    with pytest.raises(ValueError):
+        verify(fixture, require_pass=False)
+
+
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+def test_failed_gate_rehashed_receipt_cannot_remove_input_reforecast(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: RequestedModel
+) -> None:
+    original = ScriptedGatePort.create
+    observed_calls: list[str] = []
+
+    async def changed(self: ScriptedGatePort, **kwargs: Any) -> Message:
+        response = await original(self, **kwargs)
+        observed_calls.append(kwargs["model"])
+        if kwargs["model"] == model:
+            return response.model_copy(
+                update={
+                    "usage": SDKUsage(
+                        input_tokens=MODEL_POLICIES[model].reserved_input_tokens + 1,
+                        output_tokens=100,
+                    )
+                }
+            )
+        return response
+
+    monkeypatch.setattr(ScriptedGatePort, "create", changed)
+    fixture = make_fixture(tmp_path)
+    expected = [ACTOR_MODEL] if model == ACTOR_MODEL else [ACTOR_MODEL, ACTOR_MODEL, JUDGE_MODEL]
+    assert observed_calls == expected
+    assert not verify(fixture, require_pass=False).evaluation_complete
+    directory = fixture.directory
+    evidence_names = (
+        "raw-provider.jsonl",
+        "metadata.jsonl",
+        "judge-raw.jsonl",
+        "judge-metadata.jsonl",
+    )
+    original_hashes = {name: file_hash(directory / name) for name in evidence_names}
+    budget_path, receipt_path = directory / "budget.jsonl", directory / "receipt.json"
+    budget_lines = [json.loads(line) for line in budget_path.read_text().splitlines()]
+    original_event = json.loads(json.dumps(budget_lines[-1]))
+    assert original_event["event"] == "reconciled" and original_event["reforecast"]
+    assert Decimal(original_event["cost"]["actual_cost_usd"]) < Decimal(
+        original_event["reserved_usd"]
+    )
+    budget_lines[-1]["reforecast"] = False
+    budget_path.write_text("".join(json.dumps(item) + "\n" for item in budget_lines))
+    receipt = json.loads(receipt_path.read_text())
+    assert not receipt["complete"] and Decimal(receipt["unresolved_hold_usd"]) == 0
+    receipt["events"][-1]["reforecast"] = False
+    receipt["complete"] = True
+    receipt_path.write_text(json.dumps(receipt))
+    rehash(directory)
+    assert original_hashes == {name: file_hash(directory / name) for name in evidence_names}
+    print(
+        json.dumps(
+            {
+                "synthetic": True,
+                "model": model,
+                "original_event": original_event,
+                "rewritten_event": budget_lines[-1],
+                "unchanged_raw_trace_sha256": original_hashes,
+            },
+            sort_keys=True,
+        )
+    )
+    with pytest.raises(ValueError, match="input.*reforecast"):
+        verify(fixture, require_pass=False)
 
 
 def test_unknown_actor_usage_is_held_and_stops(tmp_path: Path) -> None:

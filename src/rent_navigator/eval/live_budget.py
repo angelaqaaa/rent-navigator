@@ -10,6 +10,7 @@ from uuid import UUID
 from anthropic.types import Message, MessageTokensCount
 
 from rent_navigator.eval.permit import LivePermit
+from rent_navigator.eval.provider_evidence import requires_input_reforecast
 from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL, RequestedModel
 from rent_navigator.models import CanonicalUUID, Sha256, StrictModel
 from rent_navigator.provider import MessagesPort, ProviderFailure, Reservation, SpendLedger
@@ -193,6 +194,8 @@ def receipt_from_events(
                 != (start.attempt_id, start.model, start.reserved_usd)
             ):
                 raise ValueError("Invalid generation reconciliation")
+            if requires_input_reforecast(event.model, event.cost) and not event.reforecast:
+                raise ValueError("Known input overage requires reforecast")
             reconciled[event.call_id] = event
             complete = complete and event.cost.usage_complete and not event.reforecast
     if counts[ACTOR_MODEL] > permit.max_actor_calls or counts[JUDGE_MODEL] > permit.max_judge_calls:

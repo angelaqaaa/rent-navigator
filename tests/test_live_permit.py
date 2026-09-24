@@ -1,4 +1,4 @@
-"""Synthetic future permits test target funding; no actual funding is confirmed."""
+"""Synthetic future permits verify fixed funding; fixtures authorize no execution."""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -33,7 +33,7 @@ def permit_payload() -> dict[str, Any]:
         "held_usd": "0",
         "still_required_usd": "26.981",
         "development_cap_usd": "36",
-        "provider_funding_usd": "45",
+        "provider_funding_usd": "50",
         "demo_reserved_usd": "9",
         "development_slots_remaining": 7,
         "future_live_batches_remaining": 2,
@@ -88,6 +88,11 @@ def test_one_run_permit_preserves_existing_budget_and_is_context_bound() -> None
         ("development_cap_usd", "21"),
         ("provider_funding_usd", "31"),
         ("provider_funding_usd", "30"),
+        ("provider_funding_usd", "45"),
+        ("provider_funding_usd", "49"),
+        ("provider_funding_usd", "51"),
+        ("development_cap_usd", "41"),
+        ("demo_reserved_usd", "14"),
         ("demo_reserved_usd", "0"),
         ("development_slots_remaining", 15),
         ("prior_ledger_sha256", "unknown"),
@@ -100,6 +105,17 @@ def test_one_run_permit_preserves_existing_budget_and_is_context_bound() -> None
 def test_invalid_or_unfunded_grants_are_rejected_before_clients(field: str, value: object) -> None:
     with pytest.raises(ValidationError):
         LivePermit.model_validate_json(json.dumps({**permit_payload(), field: value}))
+
+
+def test_confirmed_funding_keeps_five_unallocated_and_existing_call_limits() -> None:
+    permit = LivePermit.model_validate_json(json.dumps(permit_payload()))
+    assert permit.provider_funding_usd == Decimal("50")
+    assert permit.development_cap_usd == Decimal("36")
+    assert permit.demo_reserved_usd == Decimal("9")
+    assert permit.provider_funding_usd - permit.development_cap_usd - permit.demo_reserved_usd == 5
+    assert (permit.max_actor_calls, permit.max_judge_calls) == (77, 39)
+    assert permit.reserved_usd == Decimal("4.341")
+    assert permit.still_required_usd == Decimal("26.981")
 
 
 def regression_payload() -> dict[str, Any]:

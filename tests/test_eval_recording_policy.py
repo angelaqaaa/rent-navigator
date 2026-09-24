@@ -3,6 +3,7 @@
 import asyncio
 import json
 from copy import deepcopy
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -10,11 +11,13 @@ from uuid import uuid4
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
+from anthropic.types import Usage as SDKUsage
 from test_eval_runner import Harness, _final, _harness
 
 from rent_navigator.agent import _final_schema
 from rent_navigator.context import context_provenance, query_for_request
 from rent_navigator.corpus import Corpus, load_corpus
+from rent_navigator.eval.evidence import verify_raw_links
 from rent_navigator.eval.recording import (
     RawProviderRecord,
     SyntheticAllowlist,
@@ -22,8 +25,104 @@ from rent_navigator.eval.recording import (
     verify_synthetic_records,
 )
 from rent_navigator.index import SearchHit, build_index, search
-from rent_navigator.models import ToolResult
+from rent_navigator.models import ErrorResponse, ToolResult
 from rent_navigator.provider import ProviderFailure
+
+
+@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
+def test_native_boolean_usage_survives_serving_recorder(corpus: Corpus, field: str) -> None:
+    harness = _harness(corpus)
+    response = harness.fake.responses[0]
+    assert isinstance(response, Message)
+    tokens: dict[str, Any] = {"input_tokens": 1000, "output_tokens": 100, field: True}
+    harness.fake.responses[0] = response.model_copy(
+        update={"usage": SDKUsage.model_construct(**tokens)}
+    )
+    outcome = harness.run()
+    assert isinstance(outcome.row.response, ErrorResponse)
+    assert outcome.row.response.error.code == "provider_error"
+    assert not outcome.row.usage_complete and outcome.row.serving_cost_usd is None
+    assert harness.budget.stopped
+    assert records(harness)[-1].value["usage"][field] is True
+    verify(harness, records(harness))
+    verify_raw_links(records(harness), list(outcome.records), outcome.row.run_id)
+
+
+@pytest.mark.parametrize(
+    "shape", ["absent", "null", "string_input", "float_output", "object", "non_sdk"]
+)
+def test_failed_native_usage_shapes_have_faithful_or_safe_serving_evidence(
+    corpus: Corpus, shape: str
+) -> None:
+    def native_usage(**values: Any) -> SDKUsage:
+        return SDKUsage.model_construct(**values)
+
+    harness = _harness(corpus)
+    response = harness.fake.responses[0]
+    assert isinstance(response, Message)
+    if shape == "absent":
+        del response.__dict__["usage"]
+        response.model_fields_set.discard("usage")
+    else:
+        usage: Any = None
+        if shape == "string_input":
+            usage = native_usage(input_tokens="1000", output_tokens=100)
+        elif shape == "float_output":
+            usage = native_usage(input_tokens=1000, output_tokens=100.0)
+        elif shape == "object":
+            usage = native_usage(input_tokens=object(), output_tokens=100)
+        elif shape == "non_sdk":
+            usage = "synthetic-private-usage-value"
+        response = response.model_copy(update={"usage": usage})
+    harness.fake.responses[0] = response
+    outcome = harness.run()
+    assert isinstance(outcome.row.response, ErrorResponse)
+    assert outcome.row.response.error.code == "provider_error"
+    assert not outcome.row.usage_complete and outcome.row.serving_cost_usd is None
+    assert harness.budget.stopped and harness.budget.committed_usd == Decimal(".027")
+    raw = records(harness)
+    if shape in {"object", "non_sdk"}:
+        assert raw[-1].event == "failure" and raw[-1].value == {"code": "provider_error"}
+        assert "synthetic-private-usage-value" not in harness.raw.getvalue()
+    elif shape == "absent":
+        assert "usage" not in raw[-1].value
+    elif shape == "null":
+        assert raw[-1].value["usage"] is None
+    elif shape == "string_input":
+        assert raw[-1].value["usage"]["input_tokens"] == "1000"
+    else:
+        assert type(raw[-1].value["usage"]["output_tokens"]) is float
+    verify(harness, raw)
+    verify_raw_links(raw, list(outcome.records), outcome.row.run_id)
+
+
+@pytest.mark.parametrize("shape", ["boolean", "absent", "null", "object"])
+def test_invalid_native_count_never_dispatches_serving_generation(
+    corpus: Corpus, monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    harness = _harness(corpus)
+    tokens: Any = {"boolean": True, "null": None, "object": object()}.get(shape)
+
+    async def count(**kwargs: Any) -> MessageTokensCount:
+        harness.fake.counts.append(kwargs)
+        return MessageTokensCount.model_construct(
+            **({} if shape == "absent" else {"input_tokens": tokens})
+        )
+
+    monkeypatch.setattr(harness.fake, "count_tokens", count)
+    outcome = harness.run()
+    assert isinstance(outcome.row.response, ErrorResponse)
+    assert outcome.row.response.error.code == "provider_error"
+    assert not harness.fake.creates and outcome.row.serving_cost_usd == 0
+    raw = records(harness)
+    if shape == "object":
+        assert raw[-1].event == "failure" and raw[-1].value == {"code": "provider_error"}
+    elif shape == "absent":
+        assert raw[-1].value == {}
+    else:
+        assert raw[-1].value["input_tokens"] is tokens
+    verify(harness, raw)
+    verify_raw_links(raw, list(outcome.records), outcome.row.run_id)
 
 
 @pytest.fixture(scope="module")

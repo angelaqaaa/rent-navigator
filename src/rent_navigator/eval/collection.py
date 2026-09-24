@@ -19,6 +19,7 @@ from rent_navigator.eval.data import GoldDataset
 from rent_navigator.eval.metrics import aggregate, classify
 from rent_navigator.eval.models import CASE_IDS, DeterministicAssertion, GoldCase, ResultRow
 from rent_navigator.eval.offline import configuration_identity_hash
+from rent_navigator.eval.provider_evidence import usage_cost_from_raw
 from rent_navigator.eval.recording import (
     RawProviderRecord,
     SyntheticAllowlist,
@@ -53,7 +54,7 @@ from rent_navigator.models import (
     StrictModel,
     ToolResult,
 )
-from rent_navigator.provider import MessagesPort, ProviderFailure, Reservation, SpendBudget, _usage
+from rent_navigator.provider import MessagesPort, ProviderFailure, Reservation, SpendBudget
 from rent_navigator.security_cases import security_cases_hash
 from rent_navigator.trace import (
     PRICING_HASH,
@@ -678,11 +679,23 @@ def _verify_collection(
         ):
             raise ValueError("Raw failure disagrees with provider metadata")
         if item["event"] == "response" and item["operation"] == "count_tokens":
-            if set(item["value"]) != {"input_tokens"}:
+            tokens = item["value"].get("input_tokens")
+            invalid_count = type(tokens) is not int or tokens < 0
+            if (
+                set(item["value"]) not in (set(), {"input_tokens"})
+                or invalid_count
+                and (
+                    call.response_code != "provider_error"
+                    or any(
+                        later.trace_id == call.trace_id
+                        and later.provider_operation == "generation"
+                        and later.provider_call_index is not None
+                        and later.provider_call_index > item["operation_index"]
+                        for later in records
+                    )
+                )
+            ):
                 raise ValueError("Invalid raw token count response")
-            tokens = item["value"]["input_tokens"]
-            if call.response_code == "ok" and (type(tokens) is not int or tokens < 0):
-                raise ValueError("Invalid successful token count")
         if item["event"] == "response" and item["operation"] == "generation":
             if (
                 call.returned_model_id is not None
@@ -690,20 +703,20 @@ def _verify_collection(
             ):
                 raise ValueError("Raw returned model does not match call metadata")
             if call.usage_complete:
-                usage = item["value"].get("usage", {})
-                if not isinstance(usage, dict):
-                    raise ValueError("Invalid raw usage")
-                if any(
-                    type(usage.get(name)) is not int for name in ("input_tokens", "output_tokens")
+                raw_usage = item["value"].get("usage")
+                if not isinstance(raw_usage, dict) or any(
+                    type(raw_usage.get(name)) is not int
+                    for name in ("input_tokens", "output_tokens")
                 ):
                     raise ValueError("Raw token counts must be strict integers")
-                if _usage(Message.model_validate(item["value"])) is None:
-                    raise ValueError("Raw usage includes unpriced categories")
-                if (usage.get("input_tokens"), usage.get("output_tokens")) != (
-                    call.input_tokens,
-                    call.output_tokens,
-                ):
-                    raise ValueError("Raw usage does not match call metadata")
+            if call.requested_model_id is None:
+                raise ValueError("Generation metadata lacks a requested model")
+            expected_cost = usage_cost_from_raw(item["value"], call.requested_model_id)
+            observed_cost = CostSummary.model_validate(
+                {field: getattr(call, field) for field in CostSummary.model_fields}
+            )
+            if expected_cost != observed_cost:
+                raise ValueError("Raw usage does not match call metadata")
         found.setdefault(raw_key, []).append(item["event"])
     if set(found) != expected_calls or any(
         events not in (["request", "response"], ["request", "failure"]) for events in found.values()
@@ -895,13 +908,13 @@ def _verify_real_judges(
             if accounting is not None or evaluation is not None:
                 raise ValueError("Nonanswered output cannot have a judge")
             continue
-        if accounting is None or evaluation is None:
+        if accounting is None:
             if require_complete:
                 raise ValueError("Answered output lacks valid judge evidence")
             continue
+        if require_complete and (evaluation is None or not accounting.cost.usage_complete):
+            raise ValueError("Answered output lacks complete judge evidence")
         assert isinstance(row.response, AskResponse)
-        if not accounting.cost.usage_complete:
-            raise ValueError("Judge usage is incomplete")
         case = cases[row.case_id]
         value = JudgeInput(
             required_claims=tuple(case.required_claims),
@@ -927,7 +940,7 @@ def _verify_real_judges(
             value=value,
             context=context,
             accounting=accounting,
-            judgment=evaluation.judgment,
+            judgment=evaluation.judgment if evaluation is not None else None,
             run_id=manifest.run_id,
         )
     if require_complete and any(not row.usage_complete for row in (*warmups, *rows)):

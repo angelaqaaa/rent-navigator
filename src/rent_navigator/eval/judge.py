@@ -11,11 +11,11 @@ from uuid import UUID, uuid4
 
 from anthropic import transform_schema
 from anthropic.types import Message, MessageTokensCount
-from anthropic.types import Usage as SDKUsage
 from pydantic import Field, TypeAdapter, ValidationError
 
 from rent_navigator.corpus import SOURCE_URLS, Chunk, Corpus
 from rent_navigator.eval.models import GoldCase, JudgeClaimResult, JudgeResult, JudgeStatementResult
+from rent_navigator.eval.provider_evidence import capture_provider_response, usage_cost_from_raw
 from rent_navigator.eval.runner import (
     JudgeAccounting,
     JudgeEvaluation,
@@ -41,7 +41,6 @@ from rent_navigator.provider import (
     ProviderFailure,
     SpendBudget,
     _error_code,
-    _usage,
 )
 from rent_navigator.trace import (
     CostSummary,
@@ -367,15 +366,11 @@ class JudgeRecorder:
         except BaseException as error:
             self._write(operation, "failure", {"code": _error_code(error)})
             raise
-        if isinstance(result, Message):
-            raw = result.model_dump(
-                mode="json", warnings=False, exclude_none=True, include=_RESPONSE_FIELDS
-            )
-        elif isinstance(result, MessageTokensCount):
-            raw = result.model_dump(mode="json", warnings=False, include={"input_tokens"})
-        else:
+        try:
+            raw = capture_provider_response(result, message_fields=_RESPONSE_FIELDS)
+        except ProviderFailure:
             self._write(operation, "failure", {"code": "provider_error"})
-            raise ProviderFailure("provider_error")
+            raise
         self._write(operation, "response", raw)
         return result
 
@@ -637,15 +632,18 @@ def verify_judge_records(
             if operation == "generation" and detail.actual_cost_usd is not None:
                 raise ValueError("Failed provider response cannot invent known usage")
         elif operation == "count_tokens":
+            tokens = last.value.get("input_tokens")
+            valid = type(tokens) is int and tokens >= 0
             if (
-                set(last.value) != {"input_tokens"}
-                or type(last.value["input_tokens"]) is not int
-                or last.value["input_tokens"] < 0
+                set(last.value) - {"input_tokens"}
+                or not valid
+                and (detail.response_code != "provider_error" or len(details) != 1)
             ):
                 raise ValueError("Invalid judge count response")
             if (
                 len(details) == 2
-                and last.value["input_tokens"] > MODEL_POLICIES[JUDGE_MODEL].preflight_limit
+                and type(tokens) is int
+                and tokens > MODEL_POLICIES[JUDGE_MODEL].preflight_limit
             ):
                 raise ValueError("Judge generation exceeded preflight limit")
         else:
@@ -685,26 +683,16 @@ def verify_judge_records(
                 )
             ):
                 raise ValueError("Judge raw usage requires strict nonnegative integer counts")
-            if detail.usage_complete:
-                response = Message.model_validate(last.value)
-            else:
-                # Retain missing/malformed usage exactly; SDK validation must not coerce
-                # raw values or invent missing counts while auditing a failed call.
-                observed_usage = (
-                    SDKUsage.model_construct(**raw_usage) if isinstance(raw_usage, dict) else None
-                )
-                response = Message.model_construct(**{**last.value, "usage": observed_usage})
-            cost = cost_for_usage(JUDGE_MODEL, _usage(response))
+            cost = usage_cost_from_raw(last.value, JUDGE_MODEL)
             if any(
                 getattr(cost, field) != getattr(detail, field) for field in CostSummary.model_fields
             ):
                 raise ValueError("Judge raw usage differs from trace")
-            if response.model != detail.returned_model_id:
-                raise ValueError("Judge raw returned model differs from trace")
             if judgment is not None:
                 if not cost.usage_complete:
                     raise ValueError("Judge result has incomplete usage")
                 try:
+                    response = Message.model_validate(last.value)
                     parsed = parse_judgment(response, value)
                 except ProviderFailure:
                     raise ValueError("Judge raw response is not a valid judgment") from None

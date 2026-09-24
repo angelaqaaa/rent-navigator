@@ -25,6 +25,7 @@ from rent_navigator.agent import (
 from rent_navigator.context import ContextProvenance, context_provenance, query_for_request
 from rent_navigator.corpus import Corpus
 from rent_navigator.eval.models import GoldCase
+from rent_navigator.eval.provider_evidence import capture_provider_response
 from rent_navigator.extract import EXTRACTION_SYSTEM
 from rent_navigator.guards import redact_text
 from rent_navigator.index import SearchHit, build_index, search
@@ -398,12 +399,10 @@ class SyntheticRecorder:
             raise
         if operation == "count_tokens" and isinstance(result, MessageTokensCount):
             self._preflight = json.loads(json.dumps(comparable))
-        if isinstance(result, Message):
-            raw = result.model_dump(
-                mode="json",
-                warnings=False,
-                exclude_none=True,
-                include={
+        try:
+            raw = capture_provider_response(
+                result,
+                message_fields={
                     "id",
                     "type",
                     "role",
@@ -414,9 +413,11 @@ class SyntheticRecorder:
                     "usage",
                 },
             )
+        except ProviderFailure:
+            self._write(operation, "failure", {"code": "provider_error"})
+            raise
+        if isinstance(result, Message):
             self._returned.append(raw)
-        else:
-            raw = result.model_dump(mode="json", warnings=False, include={"input_tokens"})
         self._write(operation, "response", raw)
         return result
 

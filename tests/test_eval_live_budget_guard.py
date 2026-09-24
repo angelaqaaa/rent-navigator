@@ -13,8 +13,8 @@ from anthropic.types import Message, MessageTokensCount
 from test_eval_live import ScriptedGatePort, make_fixture, permit
 
 from rent_navigator.context import ContextProvenance
-from rent_navigator.eval.live_budget import FundedMessages, LiveBudget
-from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL, RequestedModel
+from rent_navigator.eval.live_budget import FundedMessages, LiveBudget, receipt_from_events
+from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL, MODEL_POLICIES, RequestedModel
 from rent_navigator.provider import ProviderFailure
 from rent_navigator.trace import PRICING_HASH, Usage, cost_for_usage
 
@@ -348,6 +348,7 @@ def test_full_reservation_and_overage_keep_exact_known_billing(
     budget.reconcile(
         current,
         cost_for_usage(model, Usage(input_tokens=input_tokens, output_tokens=output_tokens)),
+        reforecast=input_tokens > MODEL_POLICIES[model].reserved_input_tokens,
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == budget.ledger.committed_usd == Decimal(expected)
@@ -373,3 +374,47 @@ def test_missing_usage_preserves_full_new_hold_and_stops(
     assert not receipt.complete and budget.stopped
     with pytest.raises(ProviderFailure):
         budget.reserve(model)
+
+
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+@pytest.mark.parametrize("above_boundary", [False, True])
+def test_receipt_independently_enforces_input_reservation_below_dollar_limit(
+    model: RequestedModel, above_boundary: bool
+) -> None:
+    grant = permit()
+    budget = LiveBudget(grant, StringIO(), config_hash="5" * 64)
+    budget.bind(uuid4())
+    ticket = budget.reserve(model)
+    usage = Usage(
+        input_tokens=MODEL_POLICIES[model].reserved_input_tokens + int(above_boundary),
+        output_tokens=100,
+    )
+    cost = cost_for_usage(model, usage)
+    assert cost.actual_cost_usd is not None and cost.actual_cost_usd < ticket.amount
+    budget.reconcile(ticket, cost, reforecast=above_boundary)
+    original = budget.receipt()
+    assert original.actual_usd == cost.actual_cost_usd
+    assert original.unresolved_hold_usd == 0
+    assert original.complete is not above_boundary
+    assert budget.stopped is above_boundary
+    changed = [
+        event.model_copy(update={"reforecast": False}) if event.event == "reconciled" else event
+        for event in budget.events
+    ]
+    print(
+        json.dumps(
+            {
+                "synthetic": True,
+                "model": model,
+                "above_boundary": above_boundary,
+                "original_events": [event.model_dump(mode="json") for event in budget.events],
+                "rewritten_events": [event.model_dump(mode="json") for event in changed],
+            },
+            sort_keys=True,
+        )
+    )
+    if above_boundary:
+        with pytest.raises(ValueError, match="input.*reforecast"):
+            receipt_from_events(grant, budget.config_hash, changed)
+    else:
+        assert receipt_from_events(grant, budget.config_hash, changed) == original

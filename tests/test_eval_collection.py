@@ -14,7 +14,7 @@ from uuid import UUID
 
 import pytest
 from anthropic.types import Message, MessageTokensCount
-from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, write_toy_data
+from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, canonical_hits, write_toy_data
 from test_eval_runner import JUDGE_CONFIG, Clock, SyntheticJudge, _harness
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -28,7 +28,6 @@ from rent_navigator.eval.collection import (
 from rent_navigator.eval.data import GoldDataset, load_gold
 from rent_navigator.eval.models import CASE_IDS, GoldCase, ResultRow
 from rent_navigator.eval.runner import CollectionPlan, PlanEntry, build_plan
-from rent_navigator.index import SearchHit
 from rent_navigator.provider import SpendLedger
 from rent_navigator.trace import ACTOR_MODEL, TraceRecord, provider_cost_totals
 
@@ -197,7 +196,7 @@ def _collect(
             budget=budget,
             batch_ledger=ledger,
             forecast_usd=Decimal("6.308"),
-            retrieve=lambda query: (),
+            retrieve=lambda query: canonical_hits(corpus, query),
             plan=build_plan(UUID(TOY_RUN_ID)),
         )
     )
@@ -390,7 +389,7 @@ def test_missing_usage_stops_new_attempts_and_retains_reservation(
         tmp_path / "missing-usage", dataset, corpus, factory=factory, events=events, budget=budget
     )
     assert budget.stopped
-    assert budget.committed_usd == Decimal("0.019")
+    assert budget.committed_usd == Decimal("0.027")
     assert events == ["reserve_batch", "count", "create"]
     rows = _read_rows(fixture.directory, "warmups.jsonl")
     assert len(rows) == 1
@@ -404,7 +403,7 @@ def test_missing_usage_stops_new_attempts_and_retains_reservation(
     ]
     total = provider_cost_totals(records)
     assert total.actual_cost_usd is None
-    assert total.reserved_cost_usd == Decimal("0.019")
+    assert total.reserved_cost_usd == Decimal("0.027")
     _verify(fixture.directory, fixture, require_complete=False)
 
 
@@ -434,7 +433,7 @@ def test_judge_unknown_usage_stops_after_first_measured_attempt(
             budget=budget,
             batch_ledger=ledger,
             forecast_usd=Decimal("6.308"),
-            retrieve=lambda query: (SearchHit(corpus.chunks[0], -1.0),),
+            retrieve=lambda query: canonical_hits(corpus, query),
             judge=judge,
             judge_config_hash=JUDGE_CONFIG,
             plan=build_plan(UUID(TOY_RUN_ID)),
@@ -454,7 +453,7 @@ def test_judge_unknown_usage_stops_after_first_measured_attempt(
     if failure == "missing_usage":
         accounting = manifest.judge_accounting[measured[0]["attempt_id"]]
         assert accounting.cost.actual_cost_usd is None
-        assert accounting.cost.reserved_cost_usd == Decimal("0.024")
+        assert accounting.cost.reserved_cost_usd == Decimal("0.058")
         assert accounting.cost.usage_complete is False
     else:
         assert measured[0]["classification"] == "error"
@@ -484,7 +483,7 @@ def answered_completed(
             budget=SpendLedger(Decimal("10")),
             batch_ledger=ledger,
             forecast_usd=Decimal("6.308"),
-            retrieve=lambda query: (SearchHit(corpus.chunks[0], -1.0),),
+            retrieve=lambda query: canonical_hits(corpus, query),
             judge=judge,
             judge_config_hash=JUDGE_CONFIG,
             plan=build_plan(UUID(TOY_RUN_ID)),

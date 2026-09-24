@@ -147,7 +147,9 @@ class TraceRecord(TraceContext, CostSummary):
     tool_name: ToolName | None
     check_statuses: tuple[CheckMetadata, ...]
     response_code: ResponseCode
-    retrieved_evidence_ids: tuple[Sha256, ...]
+    retrieved_evidence_ids: Annotated[tuple[Sha256, ...], Field(max_length=5)]
+    foundation_evidence_ids: tuple[Sha256, ...]
+    initial_context_evidence_ids: tuple[Sha256, ...]
     cited_evidence_ids: tuple[Sha256, ...]
 
     @field_validator("timestamp")
@@ -181,8 +183,15 @@ class TraceRecord(TraceContext, CostSummary):
         check_ids = [check.id for check in self.check_statuses]
         if len(check_ids) != len(set(check_ids)):
             raise ValueError("Duplicate check metadata")
-        if len(self.retrieved_evidence_ids) != len(set(self.retrieved_evidence_ids)):
-            raise ValueError("Duplicate retrieved evidence IDs")
+        provenance = (
+            self.retrieved_evidence_ids,
+            self.foundation_evidence_ids,
+            self.initial_context_evidence_ids,
+        )
+        if any(len(identifiers) != len(set(identifiers)) for identifiers in provenance):
+            raise ValueError("Duplicate context evidence IDs")
+        if (self.record_kind != "endpoint" or self.phase != "analysis") and any(provenance):
+            raise ValueError("Only analysis endpoints retain context provenance")
         if self.cited_evidence_ids != tuple(sorted(set(self.cited_evidence_ids))):
             raise ValueError("Cited evidence IDs must be sorted and unique")
         return self
@@ -379,6 +388,9 @@ class TraceRecorder:
                 duration_ms=(self._monotonic() - started) * 1000,
                 stage_durations=(),
                 response_code="provider_error",
+                retrieved_evidence_ids=(),
+                foundation_evidence_ids=(),
+                initial_context_evidence_ids=(),
             )
             invalid_completion = False
             try:
@@ -412,7 +424,9 @@ class TraceRecorder:
         response_code: ResponseCode,
         tool_name: ToolName | None = None,
         check_statuses: tuple[CheckMetadata, ...] = (),
-        retrieved_evidence_ids: tuple[Sha256, ...] = (),
+        retrieved_evidence_ids: tuple[Sha256, ...],
+        foundation_evidence_ids: tuple[Sha256, ...],
+        initial_context_evidence_ids: tuple[Sha256, ...],
         cited_evidence_ids: tuple[Sha256, ...] = (),
     ) -> TraceRecord:
         return TraceRecord(
@@ -440,6 +454,8 @@ class TraceRecorder:
             check_statuses=check_statuses,
             response_code=response_code,
             retrieved_evidence_ids=retrieved_evidence_ids,
+            foundation_evidence_ids=foundation_evidence_ids,
+            initial_context_evidence_ids=initial_context_evidence_ids,
             cited_evidence_ids=cited_evidence_ids,
         )
 
@@ -450,6 +466,8 @@ class TraceRecorder:
         tool_name: ToolName | None = None,
         check_statuses: tuple[CheckMetadata, ...] = (),
         retrieved_evidence_ids: tuple[Sha256, ...] = (),
+        foundation_evidence_ids: tuple[Sha256, ...] = (),
+        initial_context_evidence_ids: tuple[Sha256, ...] = (),
         cited_evidence_ids: tuple[Sha256, ...] = (),
     ) -> TraceRecord:
         self._ensure_open()
@@ -471,6 +489,8 @@ class TraceRecorder:
             tool_name=tool_name,
             check_statuses=check_statuses,
             retrieved_evidence_ids=retrieved_evidence_ids,
+            foundation_evidence_ids=foundation_evidence_ids,
+            initial_context_evidence_ids=initial_context_evidence_ids,
             cited_evidence_ids=cited_evidence_ids,
         )
         self._sink.emit(record)

@@ -57,7 +57,7 @@ def test_offline_entry_records_one_native_roundtrip_and_matching_costs(
     assert report["config_hash"] == agent_config_hash("rent", "production")
     assert report["corpus_hash"] == corpus.corpus_hash
     assert report["pricing_hash"] == PRICING_HASH
-    assert report["budget_reservation_limit_usd"] == "0.038"
+    assert report["budget_reservation_limit_usd"] == "0.054"
     assert report["reforecast_required"] is False
     assert Decimal(report["batch_committed_usd"]) == Decimal("0.0004")
     response = AskResponse.model_validate_json(json.dumps(report["response"]))
@@ -83,7 +83,7 @@ def test_offline_entry_records_one_native_roundtrip_and_matching_costs(
     assert report["token_accounting"]["input_tokens"] == 200
     assert report["token_accounting"]["output_tokens"] == 40
     assert report["token_accounting"]["actual_cost_usd"] == "0.0004"
-    assert report["token_accounting"]["reserved_cost_usd"] == "0.038"
+    assert report["token_accounting"]["reserved_cost_usd"] == "0.054"
     assert all(record.source_commit == SOURCE_COMMIT for record in records)
     assert "current_cents" not in (evidence / "metadata.jsonl").read_text()
     requests = _jsonl(evidence / "synthetic_requests.jsonl")
@@ -260,7 +260,7 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
             if outcome == "first_count_error":
                 raise RuntimeError(_ERROR_SENTINEL)
             return MessageTokensCount(
-                input_tokens=15001
+                input_tokens=20001
                 if outcome == "second_count_overflow" and self.count_calls == 2
                 else 100
             )
@@ -351,7 +351,7 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
         assert report["token_accounting"]["usage_complete"] is False
         assert report["reforecast_required"] is True
         assert Decimal(report["batch_committed_usd"]) == (
-            Decimal("0.019") if generation_count == 1 else Decimal("0.0192")
+            Decimal("0.027") if generation_count == 1 else Decimal("0.0272")
         )
     else:
         assert report["token_accounting"]["usage_complete"] is True
@@ -361,8 +361,8 @@ def test_fake_live_flow_stops_preserves_accounting_and_never_queries_models(
         assert records[-1].tool_name == "rent_increase_check"
         assert len(records[-1].check_statuses) == 7
     if outcome == "second_count_overflow":
-        assert report["preflight_estimates"] == [100, 15001]
-        assert report["token_accounting"]["reserved_cost_usd"] == "0.019"
+        assert report["preflight_estimates"] == [100, 20001]
+        assert report["token_accounting"]["reserved_cost_usd"] == "0.027"
         second_request = counted_requests[1]["request"]
         assert second_request["tool_choice"] == {"type": "none"}
         assert second_request["output_config"]["format"]["type"] == "json_schema"
@@ -467,8 +467,8 @@ def test_offline_recorded_12289_second_count_preserves_complete_evidence(
     assert report["preflight_estimates"] == [3414, 12289]
     assert report["generation_attempts"] == report["count_attempts"] == 2
     assert report["real_generation_attempts"] == 0
-    assert report["budget_reservation_limit_usd"] == "0.038"
-    assert report["token_accounting"]["reserved_cost_usd"] == "0.038"
+    assert report["budget_reservation_limit_usd"] == "0.054"
+    assert report["token_accounting"]["reserved_cost_usd"] == "0.054"
     # Usage is still the fake's billed usage, not the historical request's measurement.
     assert report["token_accounting"]["actual_cost_usd"] == "0.0004"
     assert not report["reforecast_required"]

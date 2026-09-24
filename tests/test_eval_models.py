@@ -59,6 +59,8 @@ def result_row() -> dict[str, Any]:
         "attempt_id": TOY_ATTEMPT_ID,
         "trace_ids": [TOY_TRACE_ID],
         "retrieved_ids": [],
+        "foundation_evidence_ids": [],
+        "initial_context_evidence_ids": [],
         "response": None,
         "actual_extract": None,
         "actual_tool_args": None,
@@ -322,6 +324,29 @@ def test_result_rejects_missing_usage_as_free(changes: dict[str, Any]) -> None:
     row = result_row()
     row.update(changes)
     with pytest.raises(ValidationError, match="usage completeness"):
+        ResultRow.model_validate_json(json.dumps(row))
+
+
+@pytest.mark.parametrize("field", ["foundation_evidence_ids", "initial_context_evidence_ids"])
+@pytest.mark.parametrize("value", [None, "unknown", [TOY_HASH, TOY_HASH], ["INVALID"]])
+def test_context_arrays_reject_null_sentinels_duplicates_and_noncanonical_ids(
+    field: str, value: object
+) -> None:
+    row = result_row()
+    row[field] = value
+    with pytest.raises(ValidationError):
+        ResultRow.model_validate_json(json.dumps(row))
+
+
+@pytest.mark.parametrize("field", ["foundation_evidence_ids", "initial_context_evidence_ids"])
+def test_context_arrays_preserve_more_than_five_ordered_ids(field: str) -> None:
+    row = result_row()
+    identifiers = [f"{number:064x}" for number in range(10, 0, -1)]
+    row[field] = identifiers
+    parsed = ResultRow.model_validate_json(json.dumps(row))
+    assert parsed.model_dump(mode="json")[field] == identifiers
+    row["retrieved_ids"] = identifiers
+    with pytest.raises(ValidationError):
         ResultRow.model_validate_json(json.dumps(row))
 
 

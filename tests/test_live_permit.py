@@ -8,10 +8,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-import rent_navigator.eval.permit as permit_module
 from rent_navigator.eval.models import Activation
 from rent_navigator.eval.permit import LivePermit, _reservation
-from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES, ModelPolicy
 
 NOW = datetime(2026, 9, 23, 15, tzinfo=UTC)
 
@@ -31,11 +29,11 @@ def permit_payload() -> dict[str, Any]:
         "max_actor_calls": 77,
         "max_judge_calls": 39,
         "reserved_usd": "5.277",
-        "incurred_usd": "0.232356",
+        "incurred_usd": "0.676401",
         "held_usd": "0",
         "still_required_usd": "27.584",
-        "development_cap_usd": "36",
-        "provider_funding_usd": "50",
+        "development_cap_usd": "42",
+        "provider_funding_usd": "55",
         "demo_reserved_usd": "9",
         "development_slots_remaining": 7,
         "future_live_batches_remaining": 1,
@@ -46,7 +44,7 @@ def permit_payload() -> dict[str, Any]:
 
 
 def bootstrap_payload() -> dict[str, Any]:
-    """Derive a bootstrap request; under the current policy it is unfundable."""
+    """Synthetic bootstrap arithmetic; no grant or prerequisite acceptance is implied."""
     return {
         **permit_payload(),
         "purpose": "bootstrap",
@@ -58,19 +56,25 @@ def bootstrap_payload() -> dict[str, Any]:
     }
 
 
-@pytest.fixture
-def historical_permit_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Isolate old allocation branch coverage; this is not a current grant."""
-    policies = dict(MODEL_POLICIES)
-    policies[JUDGE_MODEL] = ModelPolicy(24000, 25000, 800, Decimal("2"), Decimal("10"))
-    monkeypatch.setattr(permit_module, "MODEL_POLICIES", policies)
-
-
-def test_current_bootstrap_fails_closed_until_funding_is_reconciled() -> None:
+def test_synthetic_bootstrap_preserves_reservations_under_approved_allocation() -> None:
     payload = bootstrap_payload()
     assert payload["reserved_usd"] == "5.277"
     assert payload["still_required_usd"] == "32.861"
-    assert Decimal(payload["reserved_usd"]) + Decimal(payload["still_required_usd"]) > 36
+    permit = LivePermit.model_validate_json(json.dumps(payload))
+    assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == Decimal(
+        "38.814401"
+    )
+
+
+@pytest.mark.parametrize("development,provider", [("36", "50"), ("36", "55"), ("42", "50")])
+def test_old_allocations_reject_even_when_synthetic_exposure_fits(
+    development: str, provider: str
+) -> None:
+    payload = permit_payload()
+    assert sum(
+        Decimal(payload[field]) for field in ("incurred_usd", "reserved_usd", "still_required_usd")
+    ) < Decimal(development)
+    payload.update(development_cap_usd=development, provider_funding_usd=provider)
     with pytest.raises(ValidationError, match="funded budget"):
         LivePermit.model_validate_json(json.dumps(payload))
 
@@ -113,7 +117,7 @@ def test_one_run_permit_preserves_existing_budget_and_is_context_bound() -> None
         ("incurred_usd", "0"),
         ("incurred_usd", "0.172127"),
         ("incurred_usd", "0.232355"),
-        ("incurred_usd", "5"),
+        ("incurred_usd", "10"),
         ("held_usd", "0.001"),
         ("still_required_usd", "0"),
         ("development_cap_usd", "30"),
@@ -123,7 +127,10 @@ def test_one_run_permit_preserves_existing_budget_and_is_context_bound() -> None
         ("provider_funding_usd", "45"),
         ("provider_funding_usd", "49"),
         ("provider_funding_usd", "51"),
+        ("provider_funding_usd", "54"),
+        ("provider_funding_usd", "56"),
         ("development_cap_usd", "41"),
+        ("development_cap_usd", "43"),
         ("demo_reserved_usd", "14"),
         ("demo_reserved_usd", "0"),
         ("development_slots_remaining", 15),
@@ -139,15 +146,24 @@ def test_invalid_or_unfunded_grants_are_rejected_before_clients(field: str, valu
         LivePermit.model_validate_json(json.dumps({**permit_payload(), field: value}))
 
 
-def test_confirmed_funding_keeps_five_unallocated_and_existing_call_limits() -> None:
+def test_confirmed_funding_keeps_four_unallocated_and_existing_call_limits() -> None:
     permit = LivePermit.model_validate_json(json.dumps(permit_payload()))
-    assert permit.provider_funding_usd == Decimal("50")
-    assert permit.development_cap_usd == Decimal("36")
+    assert permit.provider_funding_usd == Decimal("55")
+    assert permit.development_cap_usd == Decimal("42")
     assert permit.demo_reserved_usd == Decimal("9")
-    assert permit.provider_funding_usd - permit.development_cap_usd - permit.demo_reserved_usd == 5
+    assert permit.provider_funding_usd - permit.development_cap_usd - permit.demo_reserved_usd == 4
     assert (permit.max_actor_calls, permit.max_judge_calls) == (77, 39)
     assert permit.reserved_usd == Decimal("5.277")
     assert permit.still_required_usd == Decimal("27.584")
+
+
+def test_historical_incurred_floor_remains_structural_not_current_ledger_evidence() -> None:
+    payload = {**permit_payload(), "incurred_usd": "0.232356"}
+    permit = LivePermit.model_validate_json(json.dumps(payload))
+    assert permit.incurred_usd == Decimal("0.232356")
+    assert permit_payload()["incurred_usd"] == "0.676401"
+    with pytest.raises(ValidationError, match="funded budget"):
+        LivePermit.model_validate_json(json.dumps({**payload, "incurred_usd": "0.232355"}))
 
 
 def regression_payload() -> dict[str, Any]:
@@ -170,7 +186,7 @@ def test_regression_preserves_release_future_gates_and_remaining_development_slo
             permit.validate_phase(phase, digest)
 
 
-def test_historical_bootstrap_phase_binding(historical_permit_policy: None) -> None:
+def test_bootstrap_phase_binding() -> None:
     bootstrap = LivePermit.model_validate_json(json.dumps(bootstrap_payload()))
     assert bootstrap.validate_phase("pending", None) is bootstrap
     for phase, digest in (("active", "c" * 64), ("pending", "c" * 64), ("unknown", None)):
@@ -198,14 +214,25 @@ def test_regression_cannot_invent_a_lower_reserve_or_more_funding(
 
 
 def test_exact_development_cap_is_accepted_but_not_one_cent_more() -> None:
-    value = {**permit_payload(), "incurred_usd": "3.139"}
+    value = {**permit_payload(), "incurred_usd": "9.139"}
     permit = LivePermit.model_validate_json(json.dumps(value))
-    assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == 36
+    assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == 42
     with pytest.raises(ValidationError):
-        LivePermit.model_validate_json(json.dumps({**value, "incurred_usd": "3.149"}))
+        LivePermit.model_validate_json(json.dumps({**value, "incurred_usd": "9.149"}))
 
 
-@pytest.mark.parametrize("field", ["baseline_sha256", "future_live_batches_remaining", "held_usd"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "baseline_sha256",
+        "future_live_batches_remaining",
+        "held_usd",
+        "prior_ledger_sha256",
+        "development_cap_usd",
+        "provider_funding_usd",
+        "demo_reserved_usd",
+    ],
+)
 def test_nullable_baseline_and_budget_counts_remain_required(field: str) -> None:
     value = permit_payload()
     del value[field]
@@ -298,25 +325,21 @@ def test_decimal_objects_remain_usable_internally_and_serialize_as_strings() -> 
 
 
 def test_tiny_positive_over_cap_cannot_round_down_into_a_valid_grant() -> None:
-    value = {**permit_payload(), "incurred_usd": "3.13900000000000000000000000001"}
+    value = {**permit_payload(), "incurred_usd": "9.13900000000000000000000000001"}
     with pytest.raises(ValidationError, match="funded budget"):
         LivePermit.model_validate_json(json.dumps(value))
 
 
-def test_historical_bootstrap_preserves_exact_slot_and_remaining_allocations(
-    historical_permit_policy: None,
-) -> None:
+def test_bootstrap_preserves_exact_slot_and_remaining_allocations() -> None:
     permit = LivePermit.model_validate_json(json.dumps(bootstrap_payload()))
     assert permit.development_slots_remaining == 7
     assert permit.future_live_batches_remaining == 2
     assert permit.funded_slot == "wp9_bootstrap_savings_repair"
-    assert str(permit.still_required_usd) == "26.981"
+    assert str(permit.still_required_usd) == "32.861"
 
 
 @pytest.mark.parametrize("slots", [*range(7), *range(8, 15)])
-def test_historical_bootstrap_rejects_other_slots_with_correct_reserve(
-    slots: int, historical_permit_policy: None
-) -> None:
+def test_bootstrap_rejects_other_slots_with_correct_reserve(slots: int) -> None:
     required = _reservation(298, 160) + 2 * _reservation(77, 39) + slots * _reservation(3, 1)
     value = {
         **bootstrap_payload(),
@@ -361,17 +384,13 @@ def test_regression_cannot_restore_the_consumed_fourteenth_slot() -> None:
         "other",
     ],
 )
-def test_historical_bootstrap_requires_existing_correction_slot(
-    slot: str, historical_permit_policy: None
-) -> None:
+def test_bootstrap_requires_existing_correction_slot(slot: str) -> None:
     with pytest.raises(ValidationError, match="correction reserved allocation"):
         LivePermit.model_validate_json(json.dumps({**bootstrap_payload(), "funded_slot": slot}))
 
 
 @pytest.mark.parametrize("batches", [0, 1, 3])
-def test_historical_bootstrap_rejects_other_future_counts_with_correct_arithmetic(
-    batches: int, historical_permit_policy: None
-) -> None:
+def test_bootstrap_rejects_other_future_counts_with_correct_arithmetic(batches: int) -> None:
     required = _reservation(298, 160) + batches * _reservation(77, 39) + 7 * _reservation(3, 1)
     with pytest.raises(ValidationError):
         LivePermit.model_validate_json(
@@ -400,15 +419,13 @@ def test_regression_remaining_gate_bounds_preserve_exact_reserves(batches: int) 
     assert permit.still_required_usd == required
 
 
-def test_historical_regression_cannot_restore_consumed_correction(
-    historical_permit_policy: None,
-) -> None:
+def test_regression_cannot_restore_consumed_correction() -> None:
     value = {
         **bootstrap_payload(),
         "purpose": "regression",
         "baseline_sha256": "c" * 64,
         "future_live_batches_remaining": 2,
-        "still_required_usd": "26.981",
+        "still_required_usd": "32.861",
         "incurred_usd": "0.232356",
     }
     with pytest.raises(ValidationError, match="remaining gate allocation"):
@@ -416,9 +433,7 @@ def test_historical_regression_cannot_restore_consumed_correction(
 
 
 @pytest.mark.parametrize("baseline", [None, "c" * 64])
-def test_historical_correction_cannot_be_relabelled_as_regression(
-    baseline: str | None, historical_permit_policy: None
-) -> None:
+def test_correction_cannot_be_relabelled_as_regression(baseline: str | None) -> None:
     value = {**bootstrap_payload(), "purpose": "regression", "baseline_sha256": baseline}
     with pytest.raises(ValidationError, match="remaining gate allocation"):
         LivePermit.model_validate_json(json.dumps(value))
@@ -429,11 +444,11 @@ def test_synthetic_regression_forecast_reconciles_without_changing_allocations()
 
     permit = LivePermit.model_validate_json(json.dumps(permit_payload()))
     assert permit.incurred_usd + permit.reserved_usd + permit.still_required_usd == Decimal(
-        "33.093356"
+        "33.537401"
     )
     assert permit.development_cap_usd - (
         permit.incurred_usd + permit.reserved_usd + permit.still_required_usd
-    ) == Decimal("2.906644")
+    ) == Decimal("8.462599")
 
 
 def test_only_live_permit_advances_its_strict_schema_version() -> None:
@@ -470,15 +485,20 @@ def test_prospective_reservations_preserve_the_existing_call_inventories(
     assert _reservation(actor_calls, judge_calls) == Decimal(expected)
 
 
-def test_current_remaining_work_exposes_funding_gap_without_consuming_a_slot() -> None:
+def test_current_remaining_work_fits_confirmed_funding_without_consuming_a_slot() -> None:
     remaining = _reservation(550, 284)
     assert remaining == Decimal("38.138")
     # Settled spend is fixed input here, not a ledger mutation or new authorization.
     incurred = Decimal("0.676401")
     assert remaining + incurred == Decimal("38.814401")
+    # The old funding gap remains a historical checkpoint.
     assert remaining + incurred - Decimal("36") == Decimal("2.814401")
     assert _reservation(0, 13) == Decimal("1.066")
     assert _reservation(26, 7) == Decimal("1.276")
+    future = remaining + _reservation(0, 13) + _reservation(26, 7)
+    assert future == _reservation(576, 304) == Decimal("40.480")
+    assert future + incurred == Decimal("41.156401")
+    assert Decimal("42") - future - incurred == Decimal("0.843599")
 
 
 def test_regression_cannot_restore_an_eighth_generic_allowance() -> None:

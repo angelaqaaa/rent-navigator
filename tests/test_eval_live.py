@@ -43,7 +43,7 @@ SOURCE = "3" * 40
 
 
 def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
-    """Synthetic funded regression; the current pending bootstrap cannot fit the cap."""
+    """Synthetic funded regression; this fixture does not issue execution authority."""
     return LivePermit(
         schema_version=2,
         repository="angelaqaaa/rent-navigator",
@@ -59,11 +59,11 @@ def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
         max_actor_calls=77,
         max_judge_calls=39,
         reserved_usd=Decimal("5.277"),
-        incurred_usd=Decimal("0.232356"),
+        incurred_usd=Decimal("0.676401"),
         held_usd=Decimal(0),
         still_required_usd=Decimal("27.584"),
-        development_cap_usd=Decimal(36),
-        provider_funding_usd=Decimal(50),
+        development_cap_usd=Decimal(42),
+        provider_funding_usd=Decimal(55),
         demo_reserved_usd=Decimal(9),
         development_slots_remaining=7,
         prior_ledger_sha256="4" * 64,
@@ -370,6 +370,25 @@ def test_rehashed_tampering_still_fails(complete: GateFixture, tmp_path: Path, c
         path.write_text("".join(json.dumps(d) + "\n" for d in data))
     rehash(directory)
     with pytest.raises(ValueError):
+        verify(complete, directory)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("prior_ledger_sha256", "8" * 64), ("incurred_usd", "0.232356")]
+)
+def test_recorded_grant_cannot_replace_manifest_funding_or_ledger_binding(
+    complete: GateFixture, tmp_path: Path, field: str, value: str
+) -> None:
+    directory = tmp_path / "changed-grant"
+    shutil.copytree(complete.directory, directory)
+    path = directory / "budget.jsonl"
+    lines = [json.loads(line) for line in path.read_text().splitlines()]
+    lines[0]["permit"][field] = value
+    # The changed grant is structurally funded, but differs from the bound manifest.
+    LivePermit.model_validate_json(json.dumps(lines[0]["permit"]))
+    path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    rehash(directory)
+    with pytest.raises(ValueError, match="Budget grant provenance mismatch"):
         verify(complete, directory)
 
 

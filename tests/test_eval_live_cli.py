@@ -103,7 +103,7 @@ def test_paid_entry_rejects_before_client_creation(
     assert not args.output_dir.exists()
 
 
-def test_current_unfunded_bootstrap_stops_before_execution(
+def test_old_funding_allocation_stops_before_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     args = arguments(tmp_path)
@@ -114,12 +114,14 @@ def test_current_unfunded_bootstrap_stops_before_execution(
         funded_slot="wp9_bootstrap_savings_repair",
         future_live_batches_remaining=2,
         still_required_usd="32.861",
+        development_cap_usd="36",
+        provider_funding_usd="50",
     )
     args.permit_file.write_text(json.dumps(payload))
     args.data_dir = Path("eval")
 
     def forbidden(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("Unfunded bootstrap must fail before execution prerequisites")
+        raise AssertionError("Old funding allocation must fail before execution prerequisites")
 
     monkeypatch.setattr(subprocess, "check_output", forbidden)
     monkeypatch.setattr(live_cli, "verify_offline", forbidden)

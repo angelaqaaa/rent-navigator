@@ -77,8 +77,8 @@ class LivePermit(EvaluationModel):
                 + self.future_live_batches_remaining * gate
                 + self.development_slots_remaining * _reservation(3, 1)
             )
-            or self.development_cap_usd != Decimal("36")
-            or self.provider_funding_usd != Decimal("50")
+            or self.development_cap_usd != Decimal("42")
+            or self.provider_funding_usd != Decimal("55")
             or self.demo_reserved_usd != Decimal("9")
             or self.incurred_usd < Decimal("0.232356")
             or self.held_usd != 0

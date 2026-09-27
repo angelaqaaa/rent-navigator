@@ -137,7 +137,7 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
     assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 21000
 
 
-def test_current_capacity_forecast_exposes_unfunded_remaining_obligations() -> None:
+def test_current_capacity_forecast_preserves_historical_gap_and_approved_funding() -> None:
     actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
     judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
     release = 298 * actor + 160 * judge
@@ -159,9 +159,12 @@ def test_current_capacity_forecast_exposes_unfunded_remaining_obligations() -> N
     assert remaining == gate + after_current_gate
     incurred = Decimal("0.676401")
     assert remaining + incurred == Decimal("38.814401")
+    # Preserve the earlier unfunded checkpoint before the two additional obligations.
     assert remaining + incurred - Decimal("36") == Decimal("2.814401")
-    # Proposed calibration/diagnostics are additional, not funded ledger entries.
-    assert remaining + incurred + calibration + diagnostics == Decimal("41.156401")
+    future = remaining + calibration + diagnostics
+    assert future == Decimal("40.480") == 576 * actor + 304 * judge
+    assert future + incurred == Decimal("41.156401")
+    assert Decimal("42") - future - incurred == Decimal("0.843599")
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:

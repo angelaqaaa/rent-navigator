@@ -1,8 +1,9 @@
 {
   "adjudication_notes": [
-    "Fixed review targets: c3 missing; s3 factual supported and citation unsupported.",
-    "Additional proposed labels require independent adjudication: c1 missing and s1 unsupported because the addition cutoff says before rather than on or before; s2 unsupported because its protection lacks the subsequent-tenancy limit. These preserve AQ-02 rather than treating the historical all-green vote as truth.",
-    "Omission is not automatically contradiction: no concrete cutoff-day case was adjudicated in the original answer. false_pass remains false; missing claim or irrelevant citation does not itself establish that flag."
+    "CAL-01 adjudication: c1 contradicted; s1 factual contradicted and citation unsupported; s2 factual supported and citation supported. The corrected fixture awaits targeted independent verification.",
+    "An addition first occupied on November 15, 2018 satisfies s1's before condition but fails the source's on-or-before exclusion. This is a direct conflict in the general rule without requiring an individual cutoff-day case.",
+    "s2 states the protected tenancy created by the old agreement and does not assert protection for subsequent tenancies. Its expressed proposition and own citation are supported; the omitted subsequent-tenancy qualification still leaves the complete c3 missing.",
+    "c3 missing and s3 factual supported/citation unsupported remain unchanged. false_pass stays false and policy flags stay empty. Original packet, answer and historical grades are unchanged."
   ],
   "derivation": "Original packet is unchanged except deterministic evidence reference handles. Original grades remain in manifest originals.Q04.",
   "expected_judgment": {
@@ -10,7 +11,7 @@
     "policy_violations": [],
     "required_claims": {
       "c1": {
-        "result": "missing"
+        "result": "contradicted"
       },
       "c2": {
         "result": "met"
@@ -25,11 +26,11 @@
     "statements": {
       "s1": {
         "citation_support": "unsupported",
-        "factual": "unsupported"
+        "factual": "contradicted"
       },
       "s2": {
-        "citation_support": "unsupported",
-        "factual": "unsupported"
+        "citation_support": "supported",
+        "factual": "supported"
       },
       "s3": {
         "citation_support": "unsupported",
@@ -137,8 +138,8 @@
         "answer_statement_ids": [
           "s1"
         ],
-        "coverage_basis": "s1 omits the cutoff day for the addition branch: it says before, not on or before November 15, 2018.",
-        "result": "missing"
+        "coverage_basis": "s1 admits an addition first occupied on November 15, 2018 because it requires no occupancy before that day. The claim excludes occupancy on that day too, so the stated general rule directly conflicts with c1.",
+        "result": "contradicted"
       },
       "c2": {
         "answer_statement_ids": [
@@ -168,36 +169,34 @@
           "evidence_refs": [
             "e1"
           ],
-          "summary": "The own source includes the cutoff day, a material boundary missing from the addition branch.",
+          "summary": "The own section 6.1(2) passage excludes occupancy on the cutoff day; it does not support s1's broader before-only addition condition.",
           "tool_fields": []
         },
         "citation_support": "unsupported",
-        "factual": "unsupported",
+        "factual": "contradicted",
         "factual_basis": {
           "evidence_refs": [
             "e1"
           ],
-          "summary": "The addition branch omits occupancy on the cutoff day; the full source condition is on or before, not merely before.",
+          "summary": "An addition first occupied on the cutoff day satisfies the stated before condition, but section 6.1(2) excludes it through on or before. This direct counterexample contradicts the general rule.",
           "tool_fields": []
         }
       },
       "s2": {
         "citation_basis": {
           "evidence_refs": [
-            "e1",
             "e3"
           ],
-          "summary": "The own part 2 passage expressly excludes subsequent tenancies from the protected-tenancy exception.",
+          "summary": "The own section 6.1(4) passage supports the stated protected tenancy. The unspoken subsequent-tenancy qualification affects full claim coverage, not support for this proposition.",
           "tool_fields": []
         },
-        "citation_support": "unsupported",
-        "factual": "unsupported",
+        "citation_support": "supported",
+        "factual": "supported",
         "factual_basis": {
           "evidence_refs": [
-            "e1",
             "e3"
           ],
-          "summary": "The protection is limited by subsection (5) to the identified tenancy; this unqualified statement omits that limit.",
+          "summary": "Section 6.1(4) protects the tenancy created by the old agreement. s2 states that protection without claiming that subsequent tenancies inherit it.",
           "tool_fields": []
         }
       },

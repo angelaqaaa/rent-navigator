@@ -5,14 +5,14 @@
       "count_payload_without_timeout_utf8_bytes": 18839,
       "packet_characters": 7905,
       "packet_utf8_bytes": 7928,
-      "representative_output_characters": 2546,
-      "representative_output_utf8_bytes": 2546,
+      "representative_output_characters": 2872,
+      "representative_output_utf8_bytes": 2872,
       "schema_characters": 5367,
       "schema_utf8_bytes": 5367,
       "structural_stress_count_payload_without_timeout_characters": 20398,
       "structural_stress_count_payload_without_timeout_utf8_bytes": 20398,
-      "structural_stress_output_characters": 5301,
-      "structural_stress_output_utf8_bytes": 5301
+      "structural_stress_output_characters": 5303,
+      "structural_stress_output_utf8_bytes": 5303
     },
     "J02": {
       "count_payload_without_timeout_characters": 18896,

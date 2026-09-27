@@ -11,6 +11,7 @@ from uuid import UUID
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic
+from judge_wire_fixtures import add_audit_bases
 
 from rent_navigator.corpus import load_corpus
 from rent_navigator.eval.data import load_gold
@@ -50,6 +51,7 @@ def test_locked_sdk_preserves_wire_schema_original_text_and_failed_billing(
         "false_pass": True,
         "policy_violations": [],
     }
+    wire = add_audit_bases(wire, packet)
     original_text = "\n " + json.dumps(wire, indent=2) + " \n"
     original_text = original_text.replace('"required_claims"', '"\\u0072equired_claims"')
     if duplicate_root:
@@ -119,7 +121,7 @@ def test_locked_sdk_preserves_wire_schema_original_text_and_failed_billing(
     for key in ("model", "system", "messages", "thinking", "output_config"):
         assert count[key] == create[key]
     assert count["output_config"]["format"]["schema"] == judge_schema(packet)
-    assert create["max_tokens"] == 800
+    assert create["max_tokens"] == 3200
     assert accounting.cost.actual_cost_usd == budget.committed_usd == Decimal("0.003")
     records = [RawJudgeRecord.model_validate_json(line) for line in raw.getvalue().splitlines()]
     assert records[-1].value["content"][0]["text"] == original_text

@@ -59,7 +59,7 @@ def test_model_mismatch_stops_before_any_following_generation(
     expected_cost = Decimal("0.0015") * (position - 1)
     assert Decimal(receipt["actual_usd"]) == expected_cost
     assert Decimal(receipt["unresolved_hold_usd"]) == (
-        Decimal("0.058") if mismatch_at == "judge" else Decimal("0.027")
+        Decimal("0.082") if mismatch_at == "judge" else Decimal("0.027")
     )
     assert not receipt["complete"]
     reconciled = [event for event in receipt["events"] if event["event"] == "reconciled"]
@@ -144,8 +144,8 @@ def test_receipt_retains_before_counts_and_permit_after_counts() -> None:
     grant = permit()
     budget = LiveBudget(grant, StringIO(), config_hash="5" * 64)
     receipt = budget.receipt()
-    assert receipt.future_live_batches_before == 3
-    assert receipt.permit.future_live_batches_remaining == 2
+    assert receipt.future_live_batches_before == 2
+    assert receipt.permit.future_live_batches_remaining == 1
     assert receipt.development_slots_before == 7
     assert receipt.permit.development_slots_remaining == 7
     assert receipt.permit.funded_slot == grant.funded_slot
@@ -267,8 +267,8 @@ def test_model_anomaly_keeps_prior_verified_cost_and_current_full_hold() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.0015")
-    assert receipt.unresolved_hold_usd == Decimal("0.058")
-    assert budget.ledger.committed_usd == Decimal("0.0595")
+    assert receipt.unresolved_hold_usd == Decimal("0.082")
+    assert budget.ledger.committed_usd == Decimal("0.0835")
     assert not receipt.complete
 
 
@@ -334,9 +334,9 @@ def test_exact_model_normal_cost_is_still_settled() -> None:
         (ACTOR_MODEL, 21000, 1200, "0.027", False),
         (ACTOR_MODEL, 21001, 1200, "0.027001", True),
         (ACTOR_MODEL, 21000, 1201, "0.027005", True),
-        (JUDGE_MODEL, 25000, 800, "0.058", False),
-        (JUDGE_MODEL, 25001, 800, "0.058002", True),
-        (JUDGE_MODEL, 25000, 801, "0.058010", True),
+        (JUDGE_MODEL, 25000, 3200, "0.082", False),
+        (JUDGE_MODEL, 25001, 3200, "0.082002", True),
+        (JUDGE_MODEL, 25000, 3201, "0.082010", True),
     ],
 )
 def test_full_reservation_and_overage_keep_exact_known_billing(
@@ -360,7 +360,7 @@ def test_full_reservation_and_overage_keep_exact_known_billing(
             budget.reserve(model)
 
 
-@pytest.mark.parametrize("model,expected", [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.058")])
+@pytest.mark.parametrize("model,expected", [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.082")])
 def test_missing_usage_preserves_full_new_hold_and_stops(
     model: RequestedModel, expected: str
 ) -> None:

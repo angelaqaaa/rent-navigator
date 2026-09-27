@@ -1,0 +1,372 @@
+{
+  "adjudication_notes": [],
+  "derivation": "Existing fixed R04 synthetic smoke packet is unchanged except deterministic evidence reference handles. Supplied tool result was synthetic, not actual actor R04 execution; historical real judge response preserved separately.",
+  "expected_judgment": {
+    "false_pass": true,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      },
+      "c2": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s2": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s3": {
+        "citation_support": "unsupported",
+        "factual": "contradicted"
+      }
+    }
+  },
+  "fixture_id": "J13",
+  "provider_packet": {
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1"
+        ],
+        "heading": "RTA s. 120 — Guideline increase",
+        "id": "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "reference": "e1",
+        "text": "Guideline increase\n\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\n\nGuideline\n\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\n\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\n\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\n\nPublication of guideline\n\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\n\nGuideline for 2021\n\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\n\nSame\n\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\n\nTransition\n\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nSame\n\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nReview by Minister\n\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\n\nDefinition\n\n(7) In subsections (4), (5) and (6),\n\n“commencement date” means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1."
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s2",
+          "s3"
+        ],
+        "heading": "RTA s. 116 — Notice of rent increase required",
+        "id": "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+        "reference": "e2",
+        "text": "Notice of rent increase required\n\n116 (1) A landlord shall not increase the rent charged to a tenant for a rental unit without first giving the tenant at least 90 days written notice of the landlord’s intention to do so. 2006, c. 17, s. 116 (1).\n\nSame\n\n(2) Subsection (1) applies even if the rent charged is increased in accordance with an order under section 126. 2006, c. 17, s. 116 (2).\n\nContents of notice\n\n(3) The notice shall be in a form approved by the Board and shall set out the landlord’s intention to increase the rent and the amount of the new rent. 2006, c. 17, s. 116 (3).\n\nIncrease void without notice\n\n(4) An increase in rent is void if the landlord has not given the notice required by this section, and the landlord must give a new notice before the landlord can take the increase. 2006, c. 17, s. 116 (4)."
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s2"
+        ],
+        "heading": "Legislation Act s. 89",
+        "id": "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+        "reference": "e3",
+        "text": "Computation of time\n\nHolidays\n\n89 (1) Time limits that would otherwise expire on a holiday are extended to include the next day that is not a holiday. 2006, c. 21, Sched. F, s. 89 (1).\n\nDays on which offices closed\n\n(2) Time limits for registering or filing documents or for doing anything else that expire on a day when the place for doing so is not open during its regular hours of business are extended to include the next day the place is open during its regular hours of business. 2006, c. 21, Sched. F, s. 89 (2).\n\nNumber of days between events\n\n(3) A reference to a number of days between two events excludes the day on which the first event happens and includes the day on which the second event happens, even if the reference is to “at least” or “not less than” a number of days. 2006, c. 21, Sched. F, s. 89 (3).\n\nSpecified day included\n\n(4) A period of time described as beginning or ending on, at or with a specified day includes that day. 2006, c. 21, Sched. F, s. 89 (4).\n\nSpecified day excluded\n\n(5) A period of time described as beginning before or after a specified day excludes that day. 2006, c. 21, Sched. F, s. 89 (5).\n\nMonths\n\n(6) If a period of time is described as a number of months before or after a specified day, the following rules apply:\n\n1. The number of months is counted from the specified day, excluding the month in which the specified day falls.\n\n2. The period includes the day in the last month counted that has the same calendar number as the specified day or, if that month has no day with that number, its last day.\n\n3. Repealed: 2009, c. 33, Sched. 2, s. 43 (33).\n\n2006, c. 21, Sched. F, s. 89 (6); 2009, c. 33, Sched. 2, s. 43 (33); 2024, c. 2, Sched. 15, s. 16.\n\nLeap years\n\n(7) The anniversary of an event that took place on February 29 falls on February 28, except in a leap year. 2006, c. 21, Sched. F, s. 89 (7)."
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1"
+        ],
+        "heading": "Previous rent increase guidelines",
+        "id": "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+        "reference": "e4",
+        "text": "Previous rent increase guidelines\n\nThe chart below illustrates yearly rent increases, in Ontario, from 1991 to 2027.\n\nYear | guideline (%)\n\n2027 | 1.9\n\n2026 | 2.1\n\n2025 | 2.5\n\n2024 | 2.5\n\n2023 | 2.5\n\n2022 | 1.2\n\n2021 | 0footnote 1[1]\n\n2020 | 2.2\n\n2019 | 1.8\n\n2018 | 1.8\n\n2017 | 1.5\n\n2016 | 2.0\n\n2015 | 1.6\n\n2014 | 0.8\n\n2013 | 2.5\n\n2012 | 3.1\n\n2011 | 0.7\n\n2010 | 2.1\n\n2009 | 1.8\n\n2008 | 1.4\n\n2007 | 2.6\n\n2006 | 2.1\n\n2005 | 1.5\n\n2004 | 2.9\n\n2003 | 2.9\n\n2002 | 3.9\n\n2001 | 2.9\n\n2000 | 2.6\n\n1999 | 3.0\n\n1998 | 3.0\n\n1997 | 2.8\n\n1996 | 2.8\n\n1995 | 2.9\n\n1994 | 3.2\n\n1993 | 4.9\n\n1992 | 6.0\n\n1991 | 5.4"
+      }
+    ],
+    "expected_tool_result": {
+      "cap_cents_exact": "102100",
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "violated",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "fail"
+        },
+        {
+          "id": "spacing",
+          "reason": "satisfied",
+          "rule_ids": [
+            "calendar.s89",
+            "spacing.12_months"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "guideline",
+          "reason": "violated",
+          "rule_ids": [
+            "guideline.2026"
+          ],
+          "status": "fail"
+        },
+        {
+          "id": "form",
+          "reason": "satisfied",
+          "rule_ids": [
+            "form.N1"
+          ],
+          "status": "pass"
+        }
+      ],
+      "deemed_served_on": "2026-07-03",
+      "earliest_notice_on": "2026-10-01",
+      "earliest_spacing_on": "2026-09-01",
+      "guideline_percent": "2.1",
+      "latest_deemed_service_on": "2026-06-03",
+      "latest_dispatch_on": "2026-06-03",
+      "notice_days": 60,
+      "rule_ids": [
+        "calendar.s89",
+        "form.N1",
+        "guideline.2026",
+        "notice.90_days",
+        "scope.ordinary",
+        "spacing.12_months"
+      ],
+      "status": "fails_checked_rules",
+      "tool": "rent_increase_check"
+    },
+    "observed_tool_result": {
+      "cap_cents_exact": "102100",
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "violated",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "fail"
+        },
+        {
+          "id": "spacing",
+          "reason": "satisfied",
+          "rule_ids": [
+            "calendar.s89",
+            "spacing.12_months"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "guideline",
+          "reason": "violated",
+          "rule_ids": [
+            "guideline.2026"
+          ],
+          "status": "fail"
+        },
+        {
+          "id": "form",
+          "reason": "satisfied",
+          "rule_ids": [
+            "form.N1"
+          ],
+          "status": "pass"
+        }
+      ],
+      "deemed_served_on": "2026-07-03",
+      "earliest_notice_on": "2026-10-01",
+      "earliest_spacing_on": "2026-09-01",
+      "guideline_percent": "2.1",
+      "latest_deemed_service_on": "2026-06-03",
+      "latest_dispatch_on": "2026-06-03",
+      "notice_days": 60,
+      "rule_ids": [
+        "calendar.s89",
+        "form.N1",
+        "guideline.2026",
+        "notice.90_days",
+        "scope.ordinary",
+        "spacing.12_months"
+      ],
+      "status": "fails_checked_rules",
+      "tool": "rent_increase_check"
+    },
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "The proposed total rent of CAD 1024.00 exceeds the 2026 guideline ceiling of CAD 1021.00 for the supplied current rent."
+      },
+      {
+        "id": "c2",
+        "text": "The notice interval is only 60 calendar days, which fails the ordinary 90-day notice requirement."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+          "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109"
+        ],
+        "id": "s1",
+        "text": "The proposed total rent of CAD 1024.00 exceeds the 2026 guideline ceiling of CAD 1021.00."
+      },
+      {
+        "citation_ids": [
+          "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+          "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859"
+        ],
+        "id": "s2",
+        "text": "The notice interval is 60 calendar days, below the ordinary 90-day requirement."
+      },
+      {
+        "citation_ids": [
+          "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+        ],
+        "id": "s3",
+        "text": "This increase passes all checked rules."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": true,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "s1 express this required meaning: The proposed total rent of CAD 1024.00 exceeds the 2026 guideline ceiling of CAD 1021.00 for the supplied current rent.",
+        "result": "met"
+      },
+      "c2": {
+        "answer_statement_ids": [
+          "s2"
+        ],
+        "coverage_basis": "s2 express this required meaning: The notice interval is only 60 calendar days, which fails the ordinary 90-day notice requirement.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1",
+            "e4"
+          ],
+          "summary": "Own guideline rule and year table with the supplied result support the ceiling.",
+          "tool_fields": [
+            "/observed_tool_result/cap_cents_exact"
+          ]
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1",
+            "e4"
+          ],
+          "summary": "The supplied result fails guideline at the stated total rent ceiling.",
+          "tool_fields": [
+            "/observed_tool_result/cap_cents_exact",
+            "/observed_tool_result/checks/5/status"
+          ]
+        }
+      },
+      "s2": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e2",
+            "e3"
+          ],
+          "summary": "Own notice and calendar rules plus the supplied interval support failure.",
+          "tool_fields": [
+            "/observed_tool_result/notice_days"
+          ]
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e2",
+            "e3"
+          ],
+          "summary": "The supplied interval is 60 days and the ordinary rule requires 90.",
+          "tool_fields": [
+            "/observed_tool_result/notice_days"
+          ]
+        }
+      },
+      "s3": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e2"
+          ],
+          "summary": "Section 116 does not support passing when the supplied interval fails its requirement.",
+          "tool_fields": [
+            "/observed_tool_result/notice_days"
+          ]
+        },
+        "citation_support": "unsupported",
+        "factual": "contradicted",
+        "factual_basis": {
+          "evidence_refs": [
+            "e2"
+          ],
+          "summary": "The result explicitly fails notice and guideline checks, contradicting all checks passing.",
+          "tool_fields": [
+            "/observed_tool_result/status",
+            "/observed_tool_result/checks/3/status",
+            "/observed_tool_result/checks/5/status"
+          ]
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "R04",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "Original deliberate false-pass smoke"
+}

@@ -1,0 +1,314 @@
+{
+  "answer_review_sha256": "868dcb064006cfdda439ca6b32fb21ddf393d2f6a65fa33195565fa325b970ba",
+  "decision_sha256": "5515edf6a6d162bf1a1abbc4877a03e6b3bbaa42dcb6aa97b54be113299230a0",
+  "expected_grades_are": "proposed independent-review inputs; not live observations or approved gold",
+  "files": {
+    "J01.json": "6074e9ebc169c5d7e0da658eba75a8d43f84fc04b83c0ba1efbefee8378ba96b",
+    "J02.json": "ffac28e0108d127b012f4b03bf226f14ae4d9cd723f3e86678440b16029ffbd7",
+    "J03.json": "b521aea2a2c3703b6165533662ab8e6963507a448d23e5258f317578525185df",
+    "J04.json": "2360a0919ad30751750304450a35e822700a7abab3a4a2bad9995067f5936095",
+    "J05.json": "0903b7909e051802113f23b5beab8a37214161d32883936b7a2136195dc6f29a",
+    "J06.json": "b93e100c7efe5524b15710e097e01c6099d89b071c6de961eae89fe60c26a5be",
+    "J07.json": "567f7f07445fd0bc9a0847b016a3909ad9a2683457bea950137f5db862b1b0fe",
+    "J08.json": "fa6cda9b1d19637b33f8b842c67af85d7f72502d6a89b531208c9914b010d413",
+    "J09.json": "28222d442e80474a955479291713dac90e7cb18a6717543a7483c4420814303a",
+    "J10.json": "c246a80f89fb66dce4cf396760474ddeb7f149f25e04b7b217a44a1db1877ee0",
+    "J11.json": "3b10c1c68be507005c5357cf2716c116fe9ff55222c42ce2a84545ea8f6f5c89",
+    "J12.json": "5c838fb4c4f1719ea480477ca13b5492d6aae3d382cd7678725cb237195fa821",
+    "J13.json": "4c05269dc2deed8ad73b349a8e30d74d5684558c44fd8419a5dde6d8d333def7"
+  },
+  "fixture_ids": [
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "J07",
+    "J08",
+    "J09",
+    "J10",
+    "J11",
+    "J12",
+    "J13"
+  ],
+  "live_execution": "not authorized; zero calls made by this preparation",
+  "originals": {
+    "N04": {
+      "artifact": "wp9-quality-diagnostics-53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8/06-N04/judge-raw.jsonl",
+      "artifact_sha256": "1da3bd66e9bff6785715bdd87750297f9c85c2ab404311a1e65b3d9efd6c1481",
+      "generation_request_line": 3,
+      "generation_response_line": 4,
+      "original_generation_response": {
+        "content": [
+          {
+            "text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s4\":{\"factual\":\"supported\",\"citation_support\":\"unsupported\"},\"s5\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s6\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+            "type": "text"
+          }
+        ],
+        "id": "msg_011CfUK7LZyJFhVqErHPsL76",
+        "model": "claude-sonnet-5",
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "type": "message",
+        "usage": {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": "global",
+          "input_tokens": 8344,
+          "output_tokens": 186,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard"
+        }
+      },
+      "original_generation_response_sha256": "1eb3fd26a8202e8a13d2e99fb576363ab654d0a53bbcfd1da84d652e3ab84731",
+      "original_grade": {
+        "false_pass": false,
+        "policy_violations": [],
+        "required_claims": {
+          "c1": {
+            "result": "met"
+          }
+        },
+        "statements": {
+          "s1": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s2": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s3": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s4": {
+            "citation_support": "unsupported",
+            "factual": "supported"
+          },
+          "s5": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s6": {
+            "citation_support": "supported",
+            "factual": "supported"
+          }
+        }
+      },
+      "original_grade_text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s4\":{\"factual\":\"supported\",\"citation_support\":\"unsupported\"},\"s5\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s6\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+      "original_packet_text": "{\"evidence\":[{\"canonical\":false,\"cited_by\":[\"s1\",\"s3\"],\"heading\":\"N1 instructions \\u2014 Section C: How to increase the rent and give this notice\",\"id\":\"2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf\",\"text\":\"SECTION\\nC How to increase the rent and give this notice\\n\\nYou can increase the rent if at least 12 months have passed since the date of the last\\nrent increase or since the date the tenant moved into the rental unit. If the previous\\ntenant assigned the rental unit to the current tenant within the 12 months before the\\nincrease date, you can increase the rent if at least 12 months have passed since the\\nprevious tenant\\u2019s last rent increase.\\n\\nYou must give the tenant the Notice of Rent Increase at least 90 days before the date\\nyou will increase the tenant\\u2019s rent.\\n\\nThere are many ways that you can give this notice to your tenant. You can:\\n\\uf0a7 hand it directly to the tenant or to an adult in the rental unit,\\n\\uf0a7 leave it in the tenant's mailbox or where mail is ordinarily delivered,\\n\\uf0a7 place it under the door of the rental unit or through a mail slot in the door,\\n\\uf0a7 send it by fax to a fax machine where the tenant carries on business or to a fax\\nmachine in their home,\\n\\uf0a7 send it by courier, or\\n\\uf0a7 send it by mail.\\n\\n_____________________________________________________________________________________________________\\nNotice of Rent Increase \\u2013 Form N1\\n\\n2\\nYou cannot give the tenant this notice by posting it on the door of the tenant\\u2019s rental\\nunit.\"},{\"canonical\":false,\"cited_by\":[\"s5\"],\"heading\":\"RTA s. 120 \\u2014 Guideline increase\",\"id\":\"39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723\",\"text\":\"Guideline increase\\n\\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\\n\\nGuideline\\n\\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\\n\\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\\n\\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\\n\\nPublication of guideline\\n\\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\\n\\nGuideline for 2021\\n\\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\\n\\nSame\\n\\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\\n\\nTransition\\n\\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nSame\\n\\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nReview by Minister\\n\\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\\n\\nDefinition\\n\\n(7) In subsections (4), (5) and (6),\\n\\n\\u201ccommencement date\\u201d means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1.\"},{\"canonical\":true,\"cited_by\":[\"s3\"],\"heading\":\"RTA s. 191 \\u2014 How notice or document given\",\"id\":\"78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2\",\"text\":\"How notice or document given\\n\\n191 (1) A notice or document is sufficiently given to a person other than the Board,\\n\\n(a) by handing it to the person;\\n\\n(b) if the person is a landlord, by handing it to an employee of the landlord exercising authority in respect of the residential complex to which the notice or document relates;\\n\\n(c) if the person is a tenant, subtenant or occupant, by handing it to an apparently adult person in the rental unit;\\n\\n(d) by leaving it in the mail box where mail is ordinarily delivered to the person;\\n\\n(e) if there is no mail box, by leaving it at the place where mail is ordinarily delivered to the person;\\n\\n(f) by sending it by mail to the last known address where the person resides or carries on business; or\\n\\n(g) by any other means allowed in the Rules. 2006, c. 17, s. 191 (1).\\n\\nSame, tenant or former tenant no longer in possession\\n\\n(1.0.1) Despite subsection (1), a notice or document is sufficiently given to a tenant or former tenant who is no longer in possession of a rental unit,\\n\\n(a) by handing it to the tenant or former tenant;\\n\\n(b) by sending it by mail to the address where the tenant or former tenant resides;\\n\\n(c) by handing it to an apparently adult person where the tenant or former tenant resides; or\\n\\n(d) by any other means allowed in the Rules. 2020, c. 16, Sched. 4, s. 29.\\n\\nSame, Part V.1\\n\\n(1.1) Despite subsection (1), for the purposes of Part V.1, a notice or document is sufficiently given to a person other than the Board,\\n\\n(a) by handing it to the person;\\n\\n(b) by handing it to an apparently adult person in the member unit;\\n\\n(c) by leaving it in the mail box where mail is ordinarily delivered to the person;\\n\\n(d) if there is no mail box, by sliding it under the door of the member unit or through a mail slot in the door or leaving it at the place where mail is ordinarily delivered to the person;\\n\\n(e) by sending it by mail to the last known address where the person resides or carries on business;\\n\\n(f) if the person is a non-profit housing co-operative,\\n\\n(i) by delivering it personally or sending it by mail to,\\n\\n(A) the head office of the co-operative as shown on the records of the Ministry of Finance, or\\n\\n(B) the co-operative\\u2019s business office, or\\n\\n(ii) by handing it to a manager or co-ordinator of the co-operative exercising authority in respect of the residential complex, as defined in Part V.1, to which the notice or document relates; or\\n\\n(g) by any other means allowed in the Rules. 2013, c. 3, s. 42.\\n\\nWhen notice deemed valid\"},{\"canonical\":true,\"cited_by\":[\"s1\",\"s2\",\"s4\"],\"heading\":\"RTA s. 116 \\u2014 Notice of rent increase required\",\"id\":\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\",\"text\":\"Notice of rent increase required\\n\\n116 (1) A landlord shall not increase the rent charged to a tenant for a rental unit without first giving the tenant at least 90 days written notice of the landlord\\u2019s intention to do so. 2006, c. 17, s. 116 (1).\\n\\nSame\\n\\n(2) Subsection (1) applies even if the rent charged is increased in accordance with an order under section 126. 2006, c. 17, s. 116 (2).\\n\\nContents of notice\\n\\n(3) The notice shall be in a form approved by the Board and shall set out the landlord\\u2019s intention to increase the rent and the amount of the new rent. 2006, c. 17, s. 116 (3).\\n\\nIncrease void without notice\\n\\n(4) An increase in rent is void if the landlord has not given the notice required by this section, and the landlord must give a new notice before the landlord can take the increase. 2006, c. 17, s. 116 (4).\"},{\"canonical\":false,\"cited_by\":[\"s5\",\"s6\"],\"heading\":\"The rent increase guideline\",\"id\":\"b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b\",\"text\":\"The rent increase guideline\\n\\nFor most rental units, the most a landlord can increase the rent by, without asking the LTB for approval, is the rent increase guideline.\\n\\nThe rent increase guideline is set each year by the Ontario Government. It is based on the Consumer Price Index.\\n\\nEach year, the government announces the guideline by August 31 for rent increases that will take effect on or after January 1 of the following year.\\n\\nA guideline rent increase does not need to be approved by the LTB. However, a landlord must get approval from the LTB before they can charge an increase above the guideline.\\n\\nIf the rental unit was not occupied for residential purposes on or before November 15, 2018, it may be exempt from the rent increase guideline. The landlord must still give at least 90 days' notice in writing of any rent increase using the proper form but there is no limit on the size of the rent increase.\"},{\"canonical\":true,\"cited_by\":[\"s2\"],\"heading\":\"Legislation Act s. 89\",\"id\":\"d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859\",\"text\":\"Computation of time\\n\\nHolidays\\n\\n89 (1) Time limits that would otherwise expire on a holiday are extended to include the next day that is not a holiday. 2006, c. 21, Sched. F, s. 89 (1).\\n\\nDays on which offices closed\\n\\n(2) Time limits for registering or filing documents or for doing anything else that expire on a day when the place for doing so is not open during its regular hours of business are extended to include the next day the place is open during its regular hours of business. 2006, c. 21, Sched. F, s. 89 (2).\\n\\nNumber of days between events\\n\\n(3) A reference to a number of days between two events excludes the day on which the first event happens and includes the day on which the second event happens, even if the reference is to \\u201cat least\\u201d or \\u201cnot less than\\u201d a number of days. 2006, c. 21, Sched. F, s. 89 (3).\\n\\nSpecified day included\\n\\n(4) A period of time described as beginning or ending on, at or with a specified day includes that day. 2006, c. 21, Sched. F, s. 89 (4).\\n\\nSpecified day excluded\\n\\n(5) A period of time described as beginning before or after a specified day excludes that day. 2006, c. 21, Sched. F, s. 89 (5).\\n\\nMonths\\n\\n(6) If a period of time is described as a number of months before or after a specified day, the following rules apply:\\n\\n1. The number of months is counted from the specified day, excluding the month in which the specified day falls.\\n\\n2. The period includes the day in the last month counted that has the same calendar number as the specified day or, if that month has no day with that number, its last day.\\n\\n3. Repealed: 2009, c. 33, Sched. 2, s. 43 (33).\\n\\n2006, c. 21, Sched. F, s. 89 (6); 2009, c. 33, Sched. 2, s. 43 (33); 2024, c. 2, Sched. 15, s. 16.\\n\\nLeap years\\n\\n(7) The anniversary of an event that took place on February 29 falls on February 28, except in a leap year. 2006, c. 21, Sched. F, s. 89 (7).\"}],\"expected_tool_result\":{\"cap_cents_exact\":null,\"checks\":[{\"id\":\"scope\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"supported_year\",\"reason\":\"satisfied\",\"rule_ids\":[],\"status\":\"pass\"},{\"id\":\"period_start\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"notice\",\"reason\":\"missing_fact\",\"rule_ids\":[\"calendar.s89\",\"notice.90_days\"],\"status\":\"unknown\"}],\"deemed_served_on\":null,\"earliest_notice_on\":null,\"earliest_spacing_on\":null,\"guideline_percent\":null,\"latest_deemed_service_on\":\"2026-12-01\",\"latest_dispatch_on\":\"2026-12-01\",\"notice_days\":null,\"rule_ids\":[\"calendar.s89\",\"notice.90_days\",\"scope.ordinary\"],\"status\":\"cannot_determine\",\"tool\":\"notice_deadline_check\"},\"observed_tool_result\":{\"cap_cents_exact\":null,\"checks\":[{\"id\":\"scope\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"supported_year\",\"reason\":\"satisfied\",\"rule_ids\":[],\"status\":\"pass\"},{\"id\":\"period_start\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"notice\",\"reason\":\"missing_fact\",\"rule_ids\":[\"calendar.s89\",\"notice.90_days\"],\"status\":\"unknown\"}],\"deemed_served_on\":null,\"earliest_notice_on\":null,\"earliest_spacing_on\":null,\"guideline_percent\":null,\"latest_deemed_service_on\":\"2026-12-01\",\"latest_dispatch_on\":\"2026-12-01\",\"notice_days\":null,\"rule_ids\":[\"calendar.s89\",\"notice.90_days\",\"scope.ordinary\"],\"status\":\"cannot_determine\",\"tool\":\"notice_deadline_check\"},\"required_claims\":[{\"id\":\"c1\",\"text\":\"Without the hand-service date, compliance with the 90-day notice interval cannot be determined.\"}],\"statements\":[{\"citation_ids\":[\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\",\"2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf\"],\"id\":\"s1\",\"text\":\"For an ordinary rent increase with a confirmed period start, a landlord must give the tenant at least 90 days' written notice before the rent increase takes effect. The notice must be in an approved form and set out the landlord's intention to increase the rent and the amount of the new rent.\"},{\"citation_ids\":[\"d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859\",\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\"],\"id\":\"s2\",\"text\":\"The 90-day notice period is calculated by excluding the day the notice is served and including the day the rent increase takes effect. For a rent increase effective March 1, 2027, notice must be served by December 1, 2026 at the latest.\"},{\"citation_ids\":[\"2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf\",\"78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2\"],\"id\":\"s3\",\"text\":\"Hand delivery is a valid method of service. The notice can be handed directly to the tenant or to an apparently adult person in the rental unit.\"},{\"citation_ids\":[\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\"],\"id\":\"s4\",\"text\":\"The notice deadline cannot be determined because the date the notice was actually served is not provided. Without a served date, it is impossible to verify whether the 90-day notice requirement has been satisfied.\"},{\"citation_ids\":[\"b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b\",\"39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723\"],\"id\":\"s5\",\"text\":\"For most rental units, a landlord cannot increase rent by more than the annual guideline set by the Ontario Government, unless the unit is exempt or the landlord obtains approval from the Landlord and Tenant Board. The guideline is based on the Consumer Price Index and is published by August 31 for increases taking effect January 1 of the following year.\"},{\"citation_ids\":[\"b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b\"],\"id\":\"s6\",\"text\":\"If a rental unit was not occupied for residential purposes on or before November 15, 2018, it may be exempt from the rent increase guideline. In such cases, the landlord must still provide 90 days' notice but there is no limit on the size of the rent increase.\"}]}",
+      "original_packet_text_sha256": "99532c3b92fc43264c301ef23c214231209f93af5a5de2df3553f7b27706e85f"
+    },
+    "Q01": {
+      "artifact": "wp9-quality-diagnostics-53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8/07-Q01/judge-raw.jsonl",
+      "artifact_sha256": "44cfe4c1839fd17df6ceb82d6ac2b459b39e0a240f2fa44180af0fff7e31fcff",
+      "generation_request_line": 3,
+      "generation_response_line": 4,
+      "original_generation_response": {
+        "content": [
+          {
+            "text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+            "type": "text"
+          }
+        ],
+        "id": "msg_011CfUK87ukbcie7qq2GxKou",
+        "model": "claude-sonnet-5",
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "type": "message",
+        "usage": {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": "global",
+          "input_tokens": 4591,
+          "output_tokens": 104,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard"
+        }
+      },
+      "original_generation_response_sha256": "5ef7ad58edf9c6853507f5e8c48eb36c64679027182cbff448724e3eb581c600",
+      "original_grade": {
+        "false_pass": false,
+        "policy_violations": [],
+        "required_claims": {
+          "c1": {
+            "result": "met"
+          },
+          "c2": {
+            "result": "met"
+          }
+        },
+        "statements": {
+          "s1": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s2": {
+            "citation_support": "supported",
+            "factual": "supported"
+          }
+        }
+      },
+      "original_grade_text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+      "original_packet_text": "{\"evidence\":[{\"canonical\":true,\"cited_by\":[\"s2\"],\"heading\":\"Rent increase guideline\",\"id\":\"24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2\",\"text\":\"Rent increase guideline\\n\\nThe rent increase guideline for 2027 is 1.9%.\\n\\nThe guideline is the maximum a landlord can increase most tenants\\u2019 rent during a year without the approval of the Landlord and Tenant Board.\\n\\nFor most tenants, your rent can\\u2019t go up by more than the rent increase guideline for every year.\\n\\nThe guideline applies to most private residential rental units covered by the Residential Tenancies Act, 2006. This applies to most tenants, such as those living in:\\n\\nrented houses, apartments, basement apartments and condos\\n\\ncare homes\\n\\nmobile homes\\n\\nland lease communities\\n\\nThe guideline does not apply to:\\n\\nnew buildings, additions to existing buildings and most new basement apartments that are occupied for the first time for residential purposes after November 15, 2018\\n\\nrental units upon turnover of a tenancy (the landlord and new tenant agree on the rent amount)\\n\\ncommunity housing units\\n\\nlong-term care homes\\n\\ncommercial properties\\n\\nSocial housing is covered by the Residential Tenancies Act, 2006, but has different rules regarding rent control and rent increase notices.\"},{\"canonical\":true,\"cited_by\":[],\"heading\":\"RTA s. 120 \\u2014 Guideline increase\",\"id\":\"39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723\",\"text\":\"Guideline increase\\n\\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\\n\\nGuideline\\n\\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\\n\\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\\n\\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\\n\\nPublication of guideline\\n\\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\\n\\nGuideline for 2021\\n\\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\\n\\nSame\\n\\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\\n\\nTransition\\n\\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nSame\\n\\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nReview by Minister\\n\\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\\n\\nDefinition\\n\\n(7) In subsections (4), (5) and (6),\\n\\n\\u201ccommencement date\\u201d means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1.\"},{\"canonical\":true,\"cited_by\":[\"s1\"],\"heading\":\"Previous rent increase guidelines\",\"id\":\"f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109\",\"text\":\"Previous rent increase guidelines\\n\\nThe chart below illustrates yearly rent increases, in Ontario, from 1991 to 2027.\\n\\nYear | guideline (%)\\n\\n2027 | 1.9\\n\\n2026 | 2.1\\n\\n2025 | 2.5\\n\\n2024 | 2.5\\n\\n2023 | 2.5\\n\\n2022 | 1.2\\n\\n2021 | 0footnote 1[1]\\n\\n2020 | 2.2\\n\\n2019 | 1.8\\n\\n2018 | 1.8\\n\\n2017 | 1.5\\n\\n2016 | 2.0\\n\\n2015 | 1.6\\n\\n2014 | 0.8\\n\\n2013 | 2.5\\n\\n2012 | 3.1\\n\\n2011 | 0.7\\n\\n2010 | 2.1\\n\\n2009 | 1.8\\n\\n2008 | 1.4\\n\\n2007 | 2.6\\n\\n2006 | 2.1\\n\\n2005 | 1.5\\n\\n2004 | 2.9\\n\\n2003 | 2.9\\n\\n2002 | 3.9\\n\\n2001 | 2.9\\n\\n2000 | 2.6\\n\\n1999 | 3.0\\n\\n1998 | 3.0\\n\\n1997 | 2.8\\n\\n1996 | 2.8\\n\\n1995 | 2.9\\n\\n1994 | 3.2\\n\\n1993 | 4.9\\n\\n1992 | 6.0\\n\\n1991 | 5.4\"}],\"expected_tool_result\":null,\"observed_tool_result\":null,\"required_claims\":[{\"id\":\"c1\",\"text\":\"The rent-increase guideline for 2026 is 2.1%.\"},{\"id\":\"c2\",\"text\":\"The rent-increase guideline for 2027 is 1.9%.\"}],\"statements\":[{\"citation_ids\":[\"f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109\"],\"id\":\"s1\",\"text\":\"For 2026, the rent increase guideline is 2.1%.\"},{\"citation_ids\":[\"24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2\"],\"id\":\"s2\",\"text\":\"For 2027, the rent increase guideline is 1.9%.\"}]}",
+      "original_packet_text_sha256": "230ce550db25beadba63b3da3fb2459b2092331f58dd568ff5c477d0a3d5c670"
+    },
+    "Q04": {
+      "artifact": "wp9-quality-diagnostics-53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8/05-Q04/judge-raw.jsonl",
+      "artifact_sha256": "3acc5d520de289eb2f278a37f3f70ebfdaa2215ca4bc365e465a48df9a2da560",
+      "generation_request_line": 3,
+      "generation_response_line": 4,
+      "original_generation_response": {
+        "content": [
+          {
+            "text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"},\"c3\":{\"result\":\"met\"},\"c4\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s4\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+            "type": "text"
+          }
+        ],
+        "id": "msg_011CfUK5g3h7wE1y7SaPem69",
+        "model": "claude-sonnet-5",
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "type": "message",
+        "usage": {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": "global",
+          "input_tokens": 5352,
+          "output_tokens": 174,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard"
+        }
+      },
+      "original_generation_response_sha256": "d5e007e1f63c5c9dae3fbab5faff25ce183819ab5b78ebdd409ccc11a13f6144",
+      "original_grade": {
+        "false_pass": false,
+        "policy_violations": [],
+        "required_claims": {
+          "c1": {
+            "result": "met"
+          },
+          "c2": {
+            "result": "met"
+          },
+          "c3": {
+            "result": "met"
+          },
+          "c4": {
+            "result": "met"
+          }
+        },
+        "statements": {
+          "s1": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s2": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s3": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s4": {
+            "citation_support": "supported",
+            "factual": "supported"
+          }
+        }
+      },
+      "original_grade_text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"},\"c3\":{\"result\":\"met\"},\"c4\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s4\":{\"factual\":\"supported\",\"citation_support\":\"supported\"}},\"false_pass\":false,\"policy_violations\":[]}",
+      "original_packet_text": "{\"evidence\":[{\"canonical\":true,\"cited_by\":[\"s1\",\"s2\",\"s3\",\"s4\"],\"heading\":\"RTA s. 6.1 \\u2014 Exemptions from rules relating to rent\",\"id\":\"76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16\",\"text\":\"Exemptions from rules relating to rent\\n\\n6.1 (1) In this section,\\n\\n\\u201caddition\\u201d means, with respect to a mobile home park or land lease community, an expansion beyond the boundaries of the mobile home park or land lease community; (\\u201crajout\\u201d)\\n\\n\\u201ccommencement date\\u201d means the day section 1 of Schedule 36 to the Restoring Trust, Transparency and Accountability Act, 2018 comes into force. (\\u201cdate d\\u2019entr\\u00e9e en vigueur\\u201d) 2018, c. 17, Sched. 36, s. 1.\\n\\nBuildings, etc., not occupied on or before November 15, 2018\\n\\n(2) Sections 120, 121, 122, 126, 127, 129, 131, 132, 133, 165 and 167 do not apply on and after the commencement date with respect to a rental unit if the requirements set out in one of the following paragraphs are met:\\n\\n1. The rental unit is located in a building, mobile home park or land lease community and no part of the building, mobile home park or land lease community was occupied for residential purposes on or before November 15, 2018.\\n\\n2. The rental unit is entirely located in an addition to a building, mobile home park or land lease community and no part of the addition was occupied for residential purposes on or before November 15, 2018. 2018, c. 17, Sched. 36, s. 1.\\n\\nRental units in detached houses, semi-detached houses or row houses\\n\\n(3) Sections 120, 121, 122, 126, 127, 129, 131, 132 and 133 do not apply on and after the commencement date with respect to a rental unit if all of the following requirements are met:\\n\\n1. The rental unit is located in a detached house, semi-detached house or row house which, on or at any time before November 15, 2018, contained not more than two residential units.\\n\\n2. The rental unit is a residential unit that meets all of the following requirements:\\n\\ni. The unit has its own bathroom and kitchen facilities.\\n\\nii. The unit has one or more exterior or interior entrances.\\n\\niii. At each entrance, the unit has a door which is equipped so that it can be secured from the inside of the unit.\\n\\niv. At least one door described in subparagraph iii is capable of being locked from the outside of the unit.\\n\\n3. The rental unit became a residential unit described in paragraph 2 after November 15, 2018.\\n\\n4. One or both of the following circumstances apply:\\n\\ni. At the time the rental unit was first occupied as a residential unit described in paragraph 2, the owner or one of the owners, as applicable, lived in another residential unit in the detached house, semi-detached house or row house.\\n\\nii. The rental unit is located in a part of the detached house, semi-detached house or row house which was unfinished space immediately before the rental unit became a residential unit described in paragraph 2. 2018, c. 17, Sched. 36, s. 1.\\n\\nNon-application of exemption under subs. (2) or (3)\"},{\"canonical\":true,\"cited_by\":[],\"heading\":\"New buildings and additions\",\"id\":\"c97c40201489f9b11e5d36c78e2873e2a37f92954804d7a56c6c4245dd135f3e\",\"text\":\"New buildings and additions\\n\\nIf there is a dispute about new buildings and additions, the landlord must prove that the building or addition was first occupied for residential purposes after November 15, 2018.\\n\\nLandlords might want to keep records, such as:\\n\\nbuilding permits, permit applications and plans\\n\\noccupancy permits\\n\\nnew home warranty documents\\n\\ndocuments from the builder\"},{\"canonical\":true,\"cited_by\":[\"s2\"],\"heading\":\"RTA s. 6.1 \\u2014 Exemptions from rules relating to rent\",\"id\":\"cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8\",\"text\":\"(4) Subject to subsection (5), the exemption under subsection (2) or (3) does not apply with respect to a rental unit that is subject to a tenancy in respect of which a tenancy agreement was entered into on or before November 15, 2018. 2018, c. 17, Sched. 36, s. 1.\\n\\nApplication of subs. (4)\\n\\n(5) Subsection (4) applies only with respect to the tenancy described in that subsection and does not apply with respect to any subsequent tenancy. 2018, c. 17, Sched. 36, s. 1.\\n\\nBurden of proof\\n\\n(6) For greater certainty, in an application to the Board in which the application of subsection (2) or (3) is at issue, the onus is on the landlord to prove that the subsection applies. 2018, c. 17, Sched. 36, s. 1.\\n\\nTransition rules\\n\\n(7) The following rules apply on and after the commencement date with respect to a rental unit, if subsection (2) or (3) applies to the rental unit and the unit is subject to a tenancy in respect of which a tenancy agreement was entered into before that date but after November 15, 2018:\\n\\n1. Despite subsections (2) and (3), sections 121 and 122 continue to apply with respect to an agreement that was entered into between the landlord and the tenant of the rental unit under section 121 before the commencement date.\\n\\n2. Despite subsections (2) and (3), section 132 continues to apply with respect to an application that was made by the landlord or the tenant of the rental unit under that section before the commencement date and was not finally determined before that date.\\n\\n3. Despite subsections (2) and (3), section 133 continues to apply with respect to an application that was made by the tenant of the rental unit under that section before the commencement date and was not finally determined before that date.\\n\\n4. Despite subsection (2), section 165 continues to apply with respect to an assignment of the rental unit for which the landlord granted consent under section 95 before the commencement date or which was authorized by the Board under section 98 before that date. 2018, c. 17, Sched. 36, s. 1.\"}],\"expected_tool_result\":null,\"observed_tool_result\":null,\"required_claims\":[{\"id\":\"c1\",\"text\":\"For the building-or-addition exemption, no part of the relevant building or addition may have been occupied for residential purposes on or before November 15, 2018.\"},{\"id\":\"c2\",\"text\":\"A current tenant moving in after November 15, 2018 does not by itself establish the building-or-addition exemption.\"},{\"id\":\"c3\",\"text\":\"The exemption does not apply to the protected tenancy under an agreement entered into on or before November 15, 2018; that protection does not extend to subsequent tenancies.\"},{\"id\":\"c4\",\"text\":\"The landlord bears the burden of proving the section 6.1 exemption when it is disputed before the Board.\"}],\"statements\":[{\"citation_ids\":[\"76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16\"],\"id\":\"s1\",\"text\":\"Section 6.1(2) exempts rental units from rent increase limits if the building, mobile home park, or land lease community had no part occupied for residential purposes on or before November 15, 2018, or if the unit is entirely in an addition with no prior residential occupancy before that date.\"},{\"citation_ids\":[\"76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16\",\"cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8\"],\"id\":\"s2\",\"text\":\"The exemption does not apply if a tenancy agreement was entered into on or before November 15, 2018, even if the building or addition itself meets the occupancy requirements.\"},{\"citation_ids\":[\"76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16\"],\"id\":\"s3\",\"text\":\"In a dispute about whether section 6.1 applies, the landlord bears the burden of proving that the building, addition, or unit meets the occupancy requirements.\"},{\"citation_ids\":[\"76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16\"],\"id\":\"s4\",\"text\":\"A current tenant moving in after 2018 is not sufficient by itself; the exemption depends on when the building or addition was first occupied for residential purposes, not when the current tenant began occupying it.\"}]}",
+      "original_packet_text_sha256": "651e1ce4aff83febf366219ad3c18653dc05c2e600ee8d5d169fa88cf96d14d4"
+    },
+    "R04": {
+      "artifact": "wp9-quality-diagnostics-53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8/01-smoke-R04/judge-raw.jsonl",
+      "artifact_sha256": "822b7373a0789f8c6e17b4da069b6008e97ce5441b6a10c40dc64c3dba86df34",
+      "generation_request_line": 3,
+      "generation_response_line": 4,
+      "original_generation_response": {
+        "content": [
+          {
+            "text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"contradicted\",\"citation_support\":\"unsupported\"}},\"false_pass\":true,\"policy_violations\":[]}",
+            "type": "text"
+          }
+        ],
+        "id": "msg_011CfUJzcjsgtcQR8ppCNPqp",
+        "model": "claude-sonnet-5",
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "type": "message",
+        "usage": {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": "global",
+          "input_tokens": 6608,
+          "output_tokens": 131,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard"
+        }
+      },
+      "original_generation_response_sha256": "de3735aeb6a29f817fb774ca91d2aa661cd4d6e840fe6d41bcd57b6c7de2b405",
+      "original_grade": {
+        "false_pass": true,
+        "policy_violations": [],
+        "required_claims": {
+          "c1": {
+            "result": "met"
+          },
+          "c2": {
+            "result": "met"
+          }
+        },
+        "statements": {
+          "s1": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s2": {
+            "citation_support": "supported",
+            "factual": "supported"
+          },
+          "s3": {
+            "citation_support": "unsupported",
+            "factual": "contradicted"
+          }
+        }
+      },
+      "original_grade_text": "{\"required_claims\":{\"c1\":{\"result\":\"met\"},\"c2\":{\"result\":\"met\"}},\"statements\":{\"s1\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s2\":{\"factual\":\"supported\",\"citation_support\":\"supported\"},\"s3\":{\"factual\":\"contradicted\",\"citation_support\":\"unsupported\"}},\"false_pass\":true,\"policy_violations\":[]}",
+      "original_packet_text": "{\"evidence\":[{\"canonical\":true,\"cited_by\":[\"s1\"],\"heading\":\"RTA s. 120 \\u2014 Guideline increase\",\"id\":\"39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723\",\"text\":\"Guideline increase\\n\\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\\n\\nGuideline\\n\\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\\n\\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\\n\\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\\n\\nPublication of guideline\\n\\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\\n\\nGuideline for 2021\\n\\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\\n\\nSame\\n\\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\\n\\nTransition\\n\\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nSame\\n\\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\\n\\nReview by Minister\\n\\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\\n\\nDefinition\\n\\n(7) In subsections (4), (5) and (6),\\n\\n\\u201ccommencement date\\u201d means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1.\"},{\"canonical\":true,\"cited_by\":[\"s2\",\"s3\"],\"heading\":\"RTA s. 116 \\u2014 Notice of rent increase required\",\"id\":\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\",\"text\":\"Notice of rent increase required\\n\\n116 (1) A landlord shall not increase the rent charged to a tenant for a rental unit without first giving the tenant at least 90 days written notice of the landlord\\u2019s intention to do so. 2006, c. 17, s. 116 (1).\\n\\nSame\\n\\n(2) Subsection (1) applies even if the rent charged is increased in accordance with an order under section 126. 2006, c. 17, s. 116 (2).\\n\\nContents of notice\\n\\n(3) The notice shall be in a form approved by the Board and shall set out the landlord\\u2019s intention to increase the rent and the amount of the new rent. 2006, c. 17, s. 116 (3).\\n\\nIncrease void without notice\\n\\n(4) An increase in rent is void if the landlord has not given the notice required by this section, and the landlord must give a new notice before the landlord can take the increase. 2006, c. 17, s. 116 (4).\"},{\"canonical\":true,\"cited_by\":[\"s2\"],\"heading\":\"Legislation Act s. 89\",\"id\":\"d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859\",\"text\":\"Computation of time\\n\\nHolidays\\n\\n89 (1) Time limits that would otherwise expire on a holiday are extended to include the next day that is not a holiday. 2006, c. 21, Sched. F, s. 89 (1).\\n\\nDays on which offices closed\\n\\n(2) Time limits for registering or filing documents or for doing anything else that expire on a day when the place for doing so is not open during its regular hours of business are extended to include the next day the place is open during its regular hours of business. 2006, c. 21, Sched. F, s. 89 (2).\\n\\nNumber of days between events\\n\\n(3) A reference to a number of days between two events excludes the day on which the first event happens and includes the day on which the second event happens, even if the reference is to \\u201cat least\\u201d or \\u201cnot less than\\u201d a number of days. 2006, c. 21, Sched. F, s. 89 (3).\\n\\nSpecified day included\\n\\n(4) A period of time described as beginning or ending on, at or with a specified day includes that day. 2006, c. 21, Sched. F, s. 89 (4).\\n\\nSpecified day excluded\\n\\n(5) A period of time described as beginning before or after a specified day excludes that day. 2006, c. 21, Sched. F, s. 89 (5).\\n\\nMonths\\n\\n(6) If a period of time is described as a number of months before or after a specified day, the following rules apply:\\n\\n1. The number of months is counted from the specified day, excluding the month in which the specified day falls.\\n\\n2. The period includes the day in the last month counted that has the same calendar number as the specified day or, if that month has no day with that number, its last day.\\n\\n3. Repealed: 2009, c. 33, Sched. 2, s. 43 (33).\\n\\n2006, c. 21, Sched. F, s. 89 (6); 2009, c. 33, Sched. 2, s. 43 (33); 2024, c. 2, Sched. 15, s. 16.\\n\\nLeap years\\n\\n(7) The anniversary of an event that took place on February 29 falls on February 28, except in a leap year. 2006, c. 21, Sched. F, s. 89 (7).\"},{\"canonical\":true,\"cited_by\":[\"s1\"],\"heading\":\"Previous rent increase guidelines\",\"id\":\"f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109\",\"text\":\"Previous rent increase guidelines\\n\\nThe chart below illustrates yearly rent increases, in Ontario, from 1991 to 2027.\\n\\nYear | guideline (%)\\n\\n2027 | 1.9\\n\\n2026 | 2.1\\n\\n2025 | 2.5\\n\\n2024 | 2.5\\n\\n2023 | 2.5\\n\\n2022 | 1.2\\n\\n2021 | 0footnote 1[1]\\n\\n2020 | 2.2\\n\\n2019 | 1.8\\n\\n2018 | 1.8\\n\\n2017 | 1.5\\n\\n2016 | 2.0\\n\\n2015 | 1.6\\n\\n2014 | 0.8\\n\\n2013 | 2.5\\n\\n2012 | 3.1\\n\\n2011 | 0.7\\n\\n2010 | 2.1\\n\\n2009 | 1.8\\n\\n2008 | 1.4\\n\\n2007 | 2.6\\n\\n2006 | 2.1\\n\\n2005 | 1.5\\n\\n2004 | 2.9\\n\\n2003 | 2.9\\n\\n2002 | 3.9\\n\\n2001 | 2.9\\n\\n2000 | 2.6\\n\\n1999 | 3.0\\n\\n1998 | 3.0\\n\\n1997 | 2.8\\n\\n1996 | 2.8\\n\\n1995 | 2.9\\n\\n1994 | 3.2\\n\\n1993 | 4.9\\n\\n1992 | 6.0\\n\\n1991 | 5.4\"}],\"expected_tool_result\":{\"cap_cents_exact\":\"102100\",\"checks\":[{\"id\":\"scope\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"supported_year\",\"reason\":\"satisfied\",\"rule_ids\":[],\"status\":\"pass\"},{\"id\":\"period_start\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"notice\",\"reason\":\"violated\",\"rule_ids\":[\"calendar.s89\",\"notice.90_days\"],\"status\":\"fail\"},{\"id\":\"spacing\",\"reason\":\"satisfied\",\"rule_ids\":[\"calendar.s89\",\"spacing.12_months\"],\"status\":\"pass\"},{\"id\":\"guideline\",\"reason\":\"violated\",\"rule_ids\":[\"guideline.2026\"],\"status\":\"fail\"},{\"id\":\"form\",\"reason\":\"satisfied\",\"rule_ids\":[\"form.N1\"],\"status\":\"pass\"}],\"deemed_served_on\":\"2026-07-03\",\"earliest_notice_on\":\"2026-10-01\",\"earliest_spacing_on\":\"2026-09-01\",\"guideline_percent\":\"2.1\",\"latest_deemed_service_on\":\"2026-06-03\",\"latest_dispatch_on\":\"2026-06-03\",\"notice_days\":60,\"rule_ids\":[\"calendar.s89\",\"form.N1\",\"guideline.2026\",\"notice.90_days\",\"scope.ordinary\",\"spacing.12_months\"],\"status\":\"fails_checked_rules\",\"tool\":\"rent_increase_check\"},\"observed_tool_result\":{\"cap_cents_exact\":\"102100\",\"checks\":[{\"id\":\"scope\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"supported_year\",\"reason\":\"satisfied\",\"rule_ids\":[],\"status\":\"pass\"},{\"id\":\"period_start\",\"reason\":\"satisfied\",\"rule_ids\":[\"scope.ordinary\"],\"status\":\"pass\"},{\"id\":\"notice\",\"reason\":\"violated\",\"rule_ids\":[\"calendar.s89\",\"notice.90_days\"],\"status\":\"fail\"},{\"id\":\"spacing\",\"reason\":\"satisfied\",\"rule_ids\":[\"calendar.s89\",\"spacing.12_months\"],\"status\":\"pass\"},{\"id\":\"guideline\",\"reason\":\"violated\",\"rule_ids\":[\"guideline.2026\"],\"status\":\"fail\"},{\"id\":\"form\",\"reason\":\"satisfied\",\"rule_ids\":[\"form.N1\"],\"status\":\"pass\"}],\"deemed_served_on\":\"2026-07-03\",\"earliest_notice_on\":\"2026-10-01\",\"earliest_spacing_on\":\"2026-09-01\",\"guideline_percent\":\"2.1\",\"latest_deemed_service_on\":\"2026-06-03\",\"latest_dispatch_on\":\"2026-06-03\",\"notice_days\":60,\"rule_ids\":[\"calendar.s89\",\"form.N1\",\"guideline.2026\",\"notice.90_days\",\"scope.ordinary\",\"spacing.12_months\"],\"status\":\"fails_checked_rules\",\"tool\":\"rent_increase_check\"},\"required_claims\":[{\"id\":\"c1\",\"text\":\"The proposed total rent of CAD 1024.00 exceeds the 2026 guideline ceiling of CAD 1021.00 for the supplied current rent.\"},{\"id\":\"c2\",\"text\":\"The notice interval is only 60 calendar days, which fails the ordinary 90-day notice requirement.\"}],\"statements\":[{\"citation_ids\":[\"39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723\",\"f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109\"],\"id\":\"s1\",\"text\":\"The proposed total rent of CAD 1024.00 exceeds the 2026 guideline ceiling of CAD 1021.00.\"},{\"citation_ids\":[\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\",\"d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859\"],\"id\":\"s2\",\"text\":\"The notice interval is 60 calendar days, below the ordinary 90-day requirement.\"},{\"citation_ids\":[\"9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163\"],\"id\":\"s3\",\"text\":\"This increase passes all checked rules.\"}]}",
+      "original_packet_text_sha256": "c54038d0c6777567cc3acd7f36648746c22d4e6fc411c87290987199a7a96580"
+    }
+  },
+  "prepared_judge_config_hash": "893184b31c98f638b9b1d16be677f17f59eedce67ef9735e175d76fe3f996798",
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "schema_version": 1,
+  "sizing_file_sha256": "e13c13e3cccf65be0a730c9432ed18ab7950145cfeb8bfc62c3e8ee8c6510e32",
+  "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+}

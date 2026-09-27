@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
+from judge_wire_fixtures import add_audit_bases
 from test_eval_security import synthetic_security_xml
 
 from rent_navigator.agent import _final_schema
@@ -30,7 +31,7 @@ from rent_navigator.eval.live import (
 )
 from rent_navigator.eval.live_budget import LiveBudget, receipt_from_events
 from rent_navigator.eval.models import CASE_IDS
-from rent_navigator.eval.offline import file_hash, run_offline
+from rent_navigator.eval.offline import Baseline, file_hash, run_offline
 from rent_navigator.eval.permit import LivePermit
 from rent_navigator.extract import EXTRACTION_SYSTEM
 from rent_navigator.index import build_index, search
@@ -41,7 +42,8 @@ from rent_navigator.trace import ACTOR_MODEL, JUDGE_MODEL, Usage, cost_for_usage
 SOURCE = "3" * 40
 
 
-def permit() -> LivePermit:
+def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
+    """Synthetic funded regression; the current pending bootstrap cannot fit the cap."""
     return LivePermit(
         schema_version=2,
         repository="angelaqaaa/rent-navigator",
@@ -50,16 +52,16 @@ def permit() -> LivePermit:
         run_id="1234",
         run_attempt=1,
         batch_uuid=uuid4(),
-        purpose="bootstrap",
-        baseline_sha256=None,
-        future_live_batches_remaining=2,
-        funded_slot="wp9_bootstrap_savings_repair",
+        purpose="regression",
+        baseline_sha256=baseline_sha256,
+        future_live_batches_remaining=1,
+        funded_slot="synthetic_regression",
         max_actor_calls=77,
         max_judge_calls=39,
-        reserved_usd=Decimal("4.341"),
+        reserved_usd=Decimal("5.277"),
         incurred_usd=Decimal("0.232356"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("26.981"),
+        still_required_usd=Decimal("27.584"),
         development_cap_usd=Decimal(36),
         provider_funding_usd=Decimal(50),
         demo_reserved_usd=Decimal(9),
@@ -102,7 +104,12 @@ class ScriptedGatePort:
                 "policy_violations": [],
             }
             content = [
-                {"type": "text", "text": "{" if self.malformed_judge else json.dumps(result)}
+                {
+                    "type": "text",
+                    "text": "{"
+                    if self.malformed_judge
+                    else json.dumps(add_audit_bases(result, packet)),
+                }
             ]
         elif kwargs["system"] == EXTRACTION_SYSTEM:
             case = next(
@@ -169,13 +176,35 @@ class GateFixture:
     manifest: LiveManifest
 
 
+def activate_synthetic_baseline(data_dir: Path, corpus: Corpus) -> GoldDataset:
+    dataset = load_gold(data_dir, corpus)
+    # This baseline exists only in the temporary fixture. It is not a project bootstrap.
+    baseline = Baseline(
+        schema_version=1,
+        source_sha="8" * 40,
+        corpus_hash=corpus.corpus_hash,
+        gold_hash=dataset.gold_hash,
+        config_hash="6" * 64,
+        mrr_at_5=0.0,
+        ndcg_at_5=0.0,
+        B=32,
+        bootstrap_run_id=uuid4(),
+        bootstrap_manifest_sha256="7" * 64,
+    )
+    (data_dir / "baseline.json").write_text(baseline.model_dump_json())
+    (data_dir / "activation.json").write_text(
+        json.dumps({"schema_version": 1, "baseline_phase": "active"})
+    )
+    return load_gold(data_dir, corpus)
+
+
 def make_fixture(
     root: Path, *, malformed_judge: bool = False, fail_first: bool = False
 ) -> GateFixture:
     corpus = load_corpus()
     data_dir = root / "data"
     shutil.copytree(Path("eval"), data_dir)
-    dataset = load_gold(data_dir, corpus)
+    dataset = activate_synthetic_baseline(data_dir, corpus)
     lock = root / "lock"
     lock.write_text("isolated synthetic lock fixture\n")
     offline = root / "offline"
@@ -199,7 +228,7 @@ def make_fixture(
             source_sha=SOURCE,
             lock_path=lock,
             offline_dir=offline,
-            permit=permit(),
+            permit=permit(file_hash(data_dir / "baseline.json")),
             messages=ScriptedGatePort(
                 dataset, malformed_judge=malformed_judge, fail_first=fail_first
             ),
@@ -401,7 +430,7 @@ def test_native_boolean_judge_usage_retains_failed_gate_replay(
     assert getattr(accounting.cost, field) is None
     receipt = json.loads((fixture.directory / "receipt.json").read_text())
     assert Decimal(receipt["actual_usd"]) == Decimal("0.003")
-    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.058")
+    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.082")
     assert not receipt["complete"]
     failed = verify(fixture, require_pass=False)
     assert not failed.passed and not failed.evaluation_complete
@@ -518,7 +547,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("26.981")
+    assert receipt.permit.still_required_usd == Decimal("27.584")
 
 
 @pytest.mark.parametrize(
@@ -648,7 +677,7 @@ def test_gate_cannot_overwrite_original_evidence(complete: GateFixture) -> None:
                 source_sha=SOURCE,
                 lock_path=complete.lock,
                 offline_dir=complete.offline,
-                permit=permit(),
+                permit=permit(file_hash(complete.data_dir / "baseline.json")),
                 messages=ScriptedGatePort(complete.dataset),
                 retrieve=lambda q: search(complete.index, q),
             )
@@ -656,44 +685,27 @@ def test_gate_cannot_overwrite_original_evidence(complete: GateFixture) -> None:
 
 
 @pytest.mark.parametrize("change", [None, "B", "config_hash", "mrr_at_5", "bootstrap_run_id"])
-def test_attachment_must_preserve_actual_bootstrap_baseline(
+def test_regression_attachment_preserves_its_original_synthetic_baseline(
     complete: GateFixture, tmp_path: Path, change: str | None
 ) -> None:
-    from rent_navigator.eval.offline import Baseline, OfflineReport
-
     data_dir = tmp_path / "active-data"
     shutil.copytree(complete.data_dir, data_dir)
-    report = OfflineReport.model_validate_json(
-        (complete.directory / "offline/report.json").read_bytes()
-    )
-    frozen = Baseline(
-        schema_version=1,
-        source_sha=SOURCE,
-        corpus_hash=complete.corpus.corpus_hash,
-        gold_hash=complete.dataset.gold_hash,
-        config_hash=complete.manifest.config_hash,
-        mrr_at_5=report.production_retrieval.mrr_at_5,
-        ndcg_at_5=report.production_retrieval.ndcg_at_5,
-        B=32,
-        bootstrap_run_id=complete.manifest.batch_uuid,
-        bootstrap_manifest_sha256=file_hash(complete.directory / "manifest.json"),
-    ).model_dump(mode="json")
+    original = (complete.data_dir / "baseline.json").read_bytes()
     if change is not None:
+        frozen = json.loads(original)
         frozen[change] = {
             "B": 28,
             "config_hash": "9" * 64,
-            "mrr_at_5": 0.0,
+            "mrr_at_5": 1.0,
             "bootstrap_run_id": str(uuid4()),
         }[change]
-    (data_dir / "baseline.json").write_text(json.dumps(frozen))
-    (data_dir / "activation.json").write_text(
-        json.dumps({"schema_version": 1, "baseline_phase": "active"})
-    )
+        (data_dir / "baseline.json").write_text(json.dumps(frozen))
     active = replace(complete, data_dir=data_dir, dataset=load_gold(data_dir, complete.corpus))
     if change is None:
+        assert (data_dir / "baseline.json").read_bytes() == original
         assert verify(active).passed
     else:
-        with pytest.raises(ValueError, match="actual passing bootstrap"):
+        with pytest.raises(ValueError, match="historical comparison baseline"):
             verify(active)
 
 

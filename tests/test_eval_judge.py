@@ -19,6 +19,7 @@ import httpx2
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
+from judge_wire_fixtures import add_audit_bases
 from pydantic import ValidationError
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -86,7 +87,7 @@ def result(value: JudgeInput) -> JudgeResult:
     )
 
 
-def wire_payload(payload: JudgeResult | dict[str, Any]) -> dict[str, Any]:
+def wire_payload(payload: JudgeResult | dict[str, Any], value: JudgeInput) -> dict[str, Any]:
     """Serialize fixture grades without changing their values or trusted IDs."""
     data = (
         payload.model_dump(mode="json") if isinstance(payload, JudgeResult) else deepcopy(payload)
@@ -98,7 +99,7 @@ def wire_payload(payload: JudgeResult | dict[str, Any]) -> dict[str, Any]:
             item["id"]: {key: value for key, value in item.items() if key != "id"}
             for item in entries
         }
-    return data
+    return add_audit_bases(data, build_judge_packet(value))
 
 
 def message(value: JudgeInput, **changes: Any) -> Message:
@@ -108,7 +109,7 @@ def message(value: JudgeInput, **changes: Any) -> Message:
             "type": "message",
             "role": "assistant",
             "model": JUDGE_MODEL,
-            "content": [{"type": "text", "text": json.dumps(wire_payload(result(value)))}],
+            "content": [{"type": "text", "text": json.dumps(wire_payload(result(value), value))}],
             "stop_reason": "end_turn",
             "stop_sequence": None,
             "usage": {"input_tokens": 1000, "output_tokens": 100},
@@ -273,7 +274,7 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
     assert evaluated.judgment == result(value)
     validate_smoke_result(value, evaluated.judgment)
     assert evaluated.cost.actual_cost_usd == Decimal("0.003")
-    assert evaluated.cost.reserved_cost_usd == Decimal("0.058")
+    assert evaluated.cost.reserved_cost_usd == Decimal("0.082")
     assert test.budget.committed_usd == Decimal("0.003")
     assert len(test.port.counts) == len(test.port.creates) == 1
     count, create = test.port.counts[0], test.port.creates[0]
@@ -282,7 +283,7 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
         for key, item in create.items()
         if key not in {"max_tokens", "stream", "service_tier", "timeout"}
     } == {key: item for key, item in count.items() if key != "timeout"}
-    assert create["max_tokens"] == 800 and create["thinking"] == {"type": "disabled"}
+    assert create["max_tokens"] == 3200 and create["thinking"] == {"type": "disabled"}
     assert not ({"temperature", "top_p", "top_k", "extra_body", "tools"} & set(create))
     assert create["timeout"] == pytest.approx(44.9)
     assert [item.provider_operation for item in evaluated.records] == [
@@ -317,7 +318,7 @@ def test_billed_invalid_judge_preserves_cost_trace_and_raw(
     value: JudgeInput, mutation: str
 ) -> None:
     test = harness(value)
-    payload = wire_payload(result(value))
+    payload = wire_payload(result(value), value)
     kwargs: dict[str, Any] = {}
     if mutation == "missing_claim":
         payload["required_claims"] = {}
@@ -366,8 +367,8 @@ def test_missing_generation_usage_retains_reservation_and_safe_failure(
         test.run()
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.058")
-    assert test.budget.committed_usd == Decimal("0.058") and test.budget.stopped
+    assert accounting.cost.reserved_cost_usd == Decimal("0.082")
+    assert test.budget.committed_usd == Decimal("0.082") and test.budget.stopped
     assert SENTINEL not in test.metadata.getvalue() + test.raw.getvalue() + str(caught.value)
     test.verify(accounting)
 
@@ -378,7 +379,7 @@ def test_absent_usage_on_returned_response_is_incomplete(value: JudgeInput) -> N
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.accounting.cost.actual_cost_usd is None
-    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.058")
+    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.082")
     assert test.budget.stopped
     assert len(test.records()) == 4
 
@@ -481,7 +482,7 @@ def test_raw_judge_verifier_rejects_tampering(value: JudgeInput, mutation: str) 
         records[-1].value["usage"]["output_tokens"] = 101
     elif mutation == "judgment":
         records[-1].value["content"][0]["text"] = json.dumps(
-            wire_payload(result(value).model_copy(update={"false_pass": False}))
+            wire_payload(result(value).model_copy(update={"false_pass": False}), value)
         )
     elif mutation == "model":
         records[-1].value["model"] = "claude-haiku-4-5-20251001"
@@ -520,7 +521,8 @@ def test_smoke_fixed_content_and_failure_expectation_are_not_actor_measurements(
 
 
 def test_invalid_packet_completes_zero_generation_trace(value: JudgeInput) -> None:
-    test = harness(replace(value, cited_evidence=()))
+    test = harness(value)
+    test.value = replace(value, cited_evidence=())
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.accounting.cost.actual_cost_usd == 0
@@ -607,7 +609,7 @@ def test_missing_usage_response_keeps_null_cost_during_partial_evidence_verifica
     test.verify(accounting)
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.058")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.082")
 
 
 @pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
@@ -624,8 +626,8 @@ def test_native_boolean_usage_survives_judge_recording_and_failed_replay(
     assert caught.value.code == "provider_error"
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal(".058")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal(".058")
+    assert accounting.cost.reserved_cost_usd == Decimal(".082")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".082")
     assert test.records()[-1].value["usage"][field] is True
     test.verify(accounting)
     with pytest.raises(JudgeFailure):
@@ -841,7 +843,7 @@ def test_failed_native_usage_shapes_have_faithful_or_safe_judge_evidence(
         test.run()
     accounting = caught.value.accounting
     assert caught.value.code == "provider_error" and accounting.cost.actual_cost_usd is None
-    assert test.budget.stopped and test.budget.committed_usd == Decimal(".058")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".082")
     terminal = test.records()[-1]
     if shape in {"object", "non_sdk"}:
         assert terminal.event == "failure" and terminal.value == {"code": "provider_error"}
@@ -904,8 +906,8 @@ def test_judge_model_anomaly_keeps_raw_tokens_but_unknown_pricing_and_full_hold(
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
-    assert accounting.cost.reserved_cost_usd == Decimal("0.058")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.058")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.082")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.082")
     assert len(test.port.counts) == len(test.port.creates) == 1
     generation = next(
         record for record in accounting.records if record.provider_operation == "generation"
@@ -955,7 +957,7 @@ def test_billed_judge_rejects_inconsistent_citation_applicability_by_statement_i
     payload["statements"].reverse()
     test = harness(value)
     test.port.response = message(
-        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload))}]
+        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload, value))}]
     )
     with pytest.raises(JudgeFailure) as caught:
         test.run()
@@ -966,7 +968,9 @@ def test_billed_judge_rejects_inconsistent_citation_applicability_by_statement_i
     assert test.budget.committed_usd == Decimal("0.003")
     assert len(test.port.creates) == len(test.port.counts) == 1
     assert accounting.records[-1].response_code == "invalid_generated_output"
-    assert json.loads(test.records()[-1].value["content"][0]["text"]) == wire_payload(payload)
+    assert json.loads(test.records()[-1].value["content"][0]["text"]) == wire_payload(
+        payload, value
+    )
     test.verify(accounting)
 
 
@@ -1003,7 +1007,7 @@ def test_baseline_empty_citations_accept_only_not_applicable_without_changing_fa
         item["citation_support"] = "not_applicable"
     test = harness(value)
     test.port.response = message(
-        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload))}]
+        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload, value))}]
     )
     evaluated = test.run()
     assert evaluated.judgment.statements[-1].factual == "contradicted"
@@ -1024,7 +1028,7 @@ def test_cited_factual_contradiction_does_not_mechanically_assign_citation_score
     payload["statements"].reverse()
     test = harness(value)
     test.port.response = message(
-        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload))}]
+        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload, value))}]
     )
     evaluated = test.run()
     payload["statements"].reverse()
@@ -1039,7 +1043,7 @@ def test_policy_flags_remain_original_judgments_instead_of_being_silently_remove
     payload["policy_violations"] = ["S07"]
     test = harness(value)
     test.port.response = message(
-        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload))}]
+        value, content=[{"type": "text", "text": json.dumps(wire_payload(payload, value))}]
     )
     evaluated = test.run()
     assert evaluated.judgment.policy_violations == ["S07"]
@@ -1106,7 +1110,7 @@ def test_independent_required_maps_bind_count_generation_and_lossless_mapping(
 ) -> None:
     value = sized_input(value, claim_count, statement_count)
     expected = result(value)
-    output = wire_payload(expected)
+    output = wire_payload(expected, value)
     output["required_claims"] = dict(reversed(list(output["required_claims"].items())))
     output["statements"] = dict(reversed(list(output["statements"].items())))
     raw_text = json.dumps(dict(reversed(list(output.items()))), indent=2)
@@ -1129,13 +1133,13 @@ def test_independent_required_maps_bind_count_generation_and_lossless_mapping(
             "required_claims",
             [item.id for item in value.required_claims],
             "JudgeClaimResult",
-            {"result"},
+            {"result", "answer_statement_ids", "coverage_basis"},
         ),
         (
             "statements",
             [item.id for item in value.response.statements],
             "JudgeStatementResult",
-            {"factual", "citation_support"},
+            {"factual", "citation_support", "factual_basis", "citation_basis"},
         ),
     ):
         container = resolved(schema, schema["properties"][field_name])
@@ -1145,7 +1149,7 @@ def test_independent_required_maps_bind_count_generation_and_lossless_mapping(
             leaf = resolved(schema, node)
             assert set(leaf["properties"]) == leaf_keys
             assert set(leaf["required"]) == leaf_keys
-            for key in leaf_keys:
+            for key in leaf_keys & {"result", "factual", "citation_support"}:
                 expected_domain = (
                     ["supported", "unsupported"]
                     if key == "citation_support"
@@ -1224,15 +1228,14 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
     )
     uncited = judge_schema(build_judge_packet(baseline))
     assert uncited != first
-    assert first["$defs"] == uncited["$defs"]
+    assert first["$defs"]["JudgeClaimResult"] == uncited["$defs"]["JudgeClaimResult"]
     for schema, definition in (
         (first, "JudgeCitedStatementResult"),
         (uncited, "JudgeUncitedStatementResult"),
     ):
-        assert all(
-            node == {"$ref": f"#/$defs/{definition}"}
-            for node in schema["properties"]["statements"]["properties"].values()
-        )
+        for identifier, node in schema["properties"]["statements"]["properties"].items():
+            assert node == {"$ref": f"#/$defs/JudgeStatement_{identifier}"}
+            assert resolved(schema, node)["title"] == definition
     serialized = json.dumps(first)
     for secret in [
         str(value.response.attempt_id),
@@ -1267,7 +1270,7 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     if changed_part == "wire_policy":
         monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": "different"})
     elif changed_part == "citation_selection":
-        assert module._WIRE_POLICY["version"] == 2
+        assert module._WIRE_POLICY["version"] == 3
         assert "citation_applicability" in module._WIRE_POLICY
         monkeypatch.setattr(
             module,
@@ -1320,16 +1323,18 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
     schema = judge_schema(packet)
     assert set(schema["$defs"]) == {
         "JudgeClaimResult",
-        "JudgeCitedStatementResult",
-        "JudgeUncitedStatementResult",
+        "JudgeFactualBasis",
+        *(f"JudgeStatement_{statement.id}" for statement in value.response.statements),
     }
     assert_closed_required_objects(schema)
     statement_map = schema["properties"]["statements"]
     assert list(statement_map["properties"]) == statement_map["required"] == ["s1", "s2", "s3"]
     for statement, cited in zip(value.response.statements, presence, strict=True):
         name = "JudgeCitedStatementResult" if cited else "JudgeUncitedStatementResult"
-        assert statement_map["properties"][statement.id] == {"$ref": f"#/$defs/{name}"}
-        definition = schema["$defs"][name]
+        assert statement_map["properties"][statement.id] == {
+            "$ref": f"#/$defs/JudgeStatement_{statement.id}"
+        }
+        definition = schema["$defs"][f"JudgeStatement_{statement.id}"]
         assert definition["title"] == name
         assert definition["properties"]["factual"]["enum"] == [
             "supported",
@@ -1340,7 +1345,7 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
             ["supported", "unsupported"] if cited else ["not_applicable"]
         )
     # Exercise every factual grade through the real offline composition and replay.
-    payload = wire_payload(result(value))
+    payload = wire_payload(result(value), value)
     for (identifier, leaf), grade, cited in zip(
         payload["statements"].items(),
         ("supported", "unsupported", "contradicted"),
@@ -1356,7 +1361,7 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
     evaluated = test.run()
     assert test.port.counts[0]["output_config"]["format"]["schema"] == schema
     assert test.port.creates[0]["output_config"] == test.port.counts[0]["output_config"]
-    assert wire_payload(evaluated.judgment) == payload
+    assert wire_payload(evaluated.judgment, value) == payload
     test.verify(evaluated, evaluated.judgment)
 
 
@@ -1396,19 +1401,19 @@ def test_citation_applicability_schema_is_fresh_and_blind_within_presence_patter
     internal = JudgeResult.model_json_schema()
     schema = judge_schema(packet)
     changed = deepcopy(packet)
-    changed.update(arm="baseline", case_id="other", expected_grade="contradicted")
-    changed["expected_tool_result"] = {"status": "unsupported"}
-    changed["observed_tool_result"] = None
-    changed["evidence"] = []
     for entry in changed["required_claims"]:
         entry["text"] = "Different required claim; no expected grade enters schema."
     for entry in changed["statements"]:
         entry["text"] = "Different legal text."
-        if entry["citation_ids"]:
-            entry["citation_ids"] = ["f" * 64]
     assert judge_schema(changed) == schema
+    for extra in ("arm", "case_id", "expected_grade"):
+        with pytest.raises(ValueError):
+            judge_schema({**changed, extra: "untrusted label"})
+    changed["evidence"][0]["reference"] = "foreign"
+    with pytest.raises(ValueError):
+        judge_schema(changed)
     assert packet == original
-    schema["$defs"]["JudgeCitedStatementResult"]["properties"]["factual"]["enum"].clear()
+    schema["$defs"]["JudgeStatement_s1"]["properties"]["factual"]["enum"].clear()
     assert judge_schema(packet) != schema
     assert module._wire_schema_template() == template
     assert JudgeResult.model_json_schema() == internal
@@ -1419,7 +1424,7 @@ def test_synthetic_smoke_cited_not_applicable_remains_billed_invalid_output(
     value: JudgeInput,
 ) -> None:
     # This new synthetic response mirrors the rejected grade shape, not a historical run.
-    payload = wire_payload(result(value))
+    payload = wire_payload(result(value), value)
     payload["statements"]["s3"]["citation_support"] = "not_applicable"
     raw_text = json.dumps(payload, indent=2)
     response = message(
@@ -1463,7 +1468,7 @@ def test_lossless_mapping_uses_trusted_claim_order_and_preserves_all_grades(
     payload["false_pass"] = False
     payload["policy_violations"] = ["S08", "S01", "S07"]
     expected = JudgeResult.model_validate_json(json.dumps(payload))
-    output = wire_payload(expected)
+    output = wire_payload(expected, value)
     output["required_claims"] = dict(reversed(list(output["required_claims"].items())))
     output["statements"] = dict(reversed(list(output["statements"].items())))
     raw_text = json.dumps(output, indent=3).replace('"s1"', '"s\\u0031"')
@@ -1480,7 +1485,7 @@ def test_lossless_mapping_uses_trusted_claim_order_and_preserves_all_grades(
 def test_private_wire_requires_exact_unmodified_container_keys(
     value: JudgeInput, field_name: str, mutation: str
 ) -> None:
-    output = wire_payload(result(value))
+    output = wire_payload(result(value), value)
     rows = output[field_name]
     key = next(iter(rows))
     if mutation == "extra":
@@ -1535,7 +1540,7 @@ def test_private_wire_requires_exact_unmodified_container_keys(
 def test_private_wire_rejects_strict_root_leaf_and_score_type_violations(
     value: JudgeInput, mutation: str
 ) -> None:
-    output = wire_payload(result(value))
+    output = wire_payload(result(value), value)
     claim = next(iter(output["required_claims"]))
     leaf = output["required_claims"][claim]
     statement = output["statements"]["s1"]
@@ -1693,7 +1698,7 @@ def test_non_json_constants_and_non_object_roots_are_rejected(
 
 def test_trailing_text_and_legacy_arrays_have_no_fallback(value: JudgeInput) -> None:
     for raw_text in (
-        json.dumps(wire_payload(result(value))) + " {}",
+        json.dumps(wire_payload(result(value), value)) + " {}",
         result(value).model_dump_json(),
     ):
         with pytest.raises(ProviderFailure) as caught:
@@ -1783,7 +1788,7 @@ def test_raw_evidence_cannot_substitute_packet_original_text_or_normalized_resul
                 record.value["messages"][0]["content"] = json.dumps(packet)
     elif mutation == "raw_text":
         records[-1].value["content"][0]["text"] = json.dumps(
-            wire_payload(result(value).model_copy(update={"false_pass": False}))
+            wire_payload(result(value).model_copy(update={"false_pass": False}), value)
         )
     elif mutation == "normalized_result":
         judgment = result(value).model_copy(update={"false_pass": False})
@@ -1810,7 +1815,7 @@ def test_private_response_text_is_decoded_once_before_mapping(
     value: JudgeInput, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     original_loads = json.loads
-    raw_text = json.dumps(wire_payload(result(value)), indent=4)
+    raw_text = json.dumps(wire_payload(result(value), value), indent=4)
     calls: list[str] = []
 
     def observed_loads(text: str, **kwargs: Any) -> Any:
@@ -1829,7 +1834,7 @@ def test_private_response_text_is_decoded_once_before_mapping(
     "missing", ["required_claims", "statements", "false_pass", "policy_violations"]
 )
 def test_each_root_member_is_required_without_defaults(value: JudgeInput, missing: str) -> None:
-    output = wire_payload(result(value))
+    output = wire_payload(result(value), value)
     output.pop(missing)
     with pytest.raises(ProviderFailure) as caught:
         parse_judgment(
@@ -1880,7 +1885,7 @@ def test_six_statement_judge_preserves_full_600_character_qualifications_through
         for statement_result in payload["statements"]:
             statement_result["citation_support"] = "not_applicable"
     expected = JudgeResult.model_validate_json(json.dumps(payload))
-    wire = wire_payload(expected)
+    wire = wire_payload(expected, value)
     wire["statements"] = dict(reversed(list(wire["statements"].items())))
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": json.dumps(wire)}])

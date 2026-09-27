@@ -84,7 +84,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     assert actor.actual_cost_usd == Decimal("0.004069")
     assert actor.reserved_cost_usd == Decimal("0.027")
     assert judge.actual_cost_usd == Decimal("0.008138")
-    assert judge.reserved_cost_usd == Decimal("0.058")
+    assert judge.reserved_cost_usd == Decimal("0.082")
     assert actor.usage_complete is True
     assert json.loads(actor.model_dump_json())["actual_cost_usd"] == "0.004069"
 
@@ -98,7 +98,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         Usage(input_tokens=None, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.058")])
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.082")])
 def test_synthetic_missing_usage_retains_reservation(
     usage: Usage | None, model: RequestedModel, reserved: str
 ) -> None:
@@ -121,13 +121,13 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
         JUDGE_MODEL: {
             "preflight_limit": 24000,
             "reserved_input_tokens": 25000,
-            "max_output_tokens": 800,
+            "max_output_tokens": 3200,
             "input_per_million": "2",
             "output_per_million": "10",
         },
     }
     assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.027")
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.058")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.082")
     assert (
         PRICING_HASH
         == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -137,29 +137,31 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
     assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 21000
 
 
-def test_current_capacity_forecast_preserves_exact_remaining_budget() -> None:
+def test_current_capacity_forecast_exposes_unfunded_remaining_obligations() -> None:
     actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
     judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
     release = 298 * actor + 160 * judge
     gate = 77 * actor + 39 * judge
     development = 3 * actor + judge
     diagnostics = 26 * actor + 7 * judge
-    assert (release, gate, development, diagnostics) == (
-        Decimal("17.326"),
-        Decimal("4.341"),
-        Decimal("0.139"),
-        Decimal("1.108"),
+    calibration = 13 * judge
+    assert (release, gate, development, diagnostics, calibration) == (
+        Decimal("21.166"),
+        Decimal("5.277"),
+        Decimal("0.163"),
+        Decimal("1.276"),
+        Decimal("1.066"),
     )
-    future = diagnostics + release + 3 * gate + 7 * development
-    after_diagnostics_and_current_gate = release + 2 * gate + 7 * development
-    assert future == Decimal("32.430") == 576 * actor + 291 * judge
-    assert after_diagnostics_and_current_gate == Decimal("26.981")
-    assert future == diagnostics + gate + after_diagnostics_and_current_gate
-    incurred = Decimal("0.232356")
-    assert future + incurred == Decimal("32.662356")
-    # The target is prospective; this synthetic calculation confirms no funding.
-    assert Decimal("36") - incurred - future == Decimal("3.337644")
-    assert future + incurred + Decimal("9") - Decimal("30") == Decimal("11.662356")
+    remaining = release + 3 * gate + 7 * development
+    after_current_gate = release + 2 * gate + 7 * development
+    assert remaining == Decimal("38.138") == 550 * actor + 284 * judge
+    assert after_current_gate == Decimal("32.861")
+    assert remaining == gate + after_current_gate
+    incurred = Decimal("0.676401")
+    assert remaining + incurred == Decimal("38.814401")
+    assert remaining + incurred - Decimal("36") == Decimal("2.814401")
+    # Proposed calibration/diagnostics are additional, not funded ledger entries.
+    assert remaining + incurred + calibration + diagnostics == Decimal("41.156401")
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:

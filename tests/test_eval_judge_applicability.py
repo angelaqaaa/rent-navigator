@@ -74,28 +74,20 @@ def patterned_value(corpus: Corpus, pattern: str) -> JudgeInput:
 
 def assert_applicability(schema: dict[str, Any], packet: dict[str, Any]) -> None:
     internal_factual = JudgeStatementResult.model_json_schema()["properties"]["factual"]["enum"]
-    expected = {
-        "JudgeCitedStatementResult": ["supported", "unsupported"],
-        "JudgeUncitedStatementResult": ["not_applicable"],
-    }
-    for name, domain in expected.items():
+    for statement in packet["statements"]:
+        name = f"JudgeStatement_{statement['id']}"
         definition = schema["$defs"][name]
+        domain = ["supported", "unsupported"] if statement["citation_ids"] else ["not_applicable"]
         assert definition["additionalProperties"] is False
         assert (
             set(definition["properties"])
             == set(definition["required"])
-            == {"factual", "citation_support"}
+            == {"factual", "citation_support", "factual_basis", "citation_basis"}
         )
         assert definition["properties"]["factual"]["enum"] == internal_factual
         assert definition["properties"]["citation_support"]["enum"] == domain
-    for statement in packet["statements"]:
-        target = (
-            "JudgeCitedStatementResult"
-            if statement["citation_ids"]
-            else "JudgeUncitedStatementResult"
-        )
         assert schema["properties"]["statements"]["properties"][statement["id"]] == {
-            "$ref": "#/$defs/" + target
+            "$ref": "#/$defs/" + name
         }
     assert schema["additionalProperties"] is False
     for field in ("required_claims", "statements"):
@@ -116,7 +108,7 @@ def test_locked_sdk_transform_preserves_exact_applicability_schema(
     assert_applicability(schema, packet)
     assert transform_schema(deepcopy(schema)) == schema
     assert packet == before and JudgeStatementResult.model_json_schema() == internal
-    schema["$defs"]["JudgeCitedStatementResult"]["properties"]["citation_support"]["enum"].append(
+    schema["$defs"]["JudgeStatement_s1"]["properties"]["citation_support"]["enum"].append(
         "not_applicable"
     )
     assert_applicability(judge_schema(packet), packet)
@@ -136,7 +128,7 @@ def test_real_judge_recorder_count_create_use_the_bound_packet_full_schema(
     for statement in payload["statements"]:
         if not presence[statement["id"]]:
             statement["citation_support"] = "not_applicable"
-    original_text = json.dumps(wire_payload(payload), indent=2)
+    original_text = json.dumps(wire_payload(payload, value), indent=2)
     test.port.response = message(value, content=[{"type": "text", "text": original_text}])
     evaluated = test.run()
     assert len(test.port.counts) == len(test.port.creates) == 1
@@ -147,7 +139,7 @@ def test_real_judge_recorder_count_create_use_the_bound_packet_full_schema(
         for key, value in create.items()
         if key not in {"max_tokens", "stream", "service_tier", "timeout"}
     } == {key: value for key, value in count.items() if key != "timeout"}
-    assert create["max_tokens"] == 800 and create["stream"] is False
+    assert create["max_tokens"] == 3200 and create["stream"] is False
     assert create["service_tier"] == "standard_only"
     assert count["timeout"] == 45.0 and create["timeout"] == pytest.approx(44.9)
     assert json.loads(count["messages"][0]["content"]) == packet
@@ -210,6 +202,12 @@ def test_rehashed_real_collection_judge_artifacts_reject_unbound_applicability(
             }
         else:
             target["citation_ids"] = [] if target["citation_ids"] else [packet["evidence"][0]["id"]]
+            for evidence in packet["evidence"]:
+                evidence["cited_by"] = [
+                    statement["id"]
+                    for statement in packet["statements"]
+                    if evidence["id"] in statement["citation_ids"]
+                ]
             prepared["messages"][0]["content"] = json.dumps(packet)
             if mutation == "matching_wrong_packet_schema":
                 prepared["output_config"]["format"]["schema"] = judge_schema(packet)

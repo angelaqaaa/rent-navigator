@@ -1,0 +1,412 @@
+{
+  "adjudication_notes": [
+    "s4 combines a false deadline claim with a true compliance-unknown claim. The true second sentence does not cancel the first sentence’s contradiction. c1 remains met; false_pass remains false."
+  ],
+  "derivation": "Original packet is unchanged except deterministic evidence reference handles. Original grades remain in manifest originals.N04.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s2": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s3": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s4": {
+        "citation_support": "unsupported",
+        "factual": "contradicted"
+      },
+      "s5": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s6": {
+        "citation_support": "supported",
+        "factual": "supported"
+      }
+    }
+  },
+  "fixture_id": "J04",
+  "provider_packet": {
+    "evidence": [
+      {
+        "canonical": false,
+        "cited_by": [
+          "s1",
+          "s3"
+        ],
+        "heading": "N1 instructions — Section C: How to increase the rent and give this notice",
+        "id": "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "reference": "e1",
+        "text": "SECTION\nC How to increase the rent and give this notice\n\nYou can increase the rent if at least 12 months have passed since the date of the last\nrent increase or since the date the tenant moved into the rental unit. If the previous\ntenant assigned the rental unit to the current tenant within the 12 months before the\nincrease date, you can increase the rent if at least 12 months have passed since the\nprevious tenant’s last rent increase.\n\nYou must give the tenant the Notice of Rent Increase at least 90 days before the date\nyou will increase the tenant’s rent.\n\nThere are many ways that you can give this notice to your tenant. You can:\n hand it directly to the tenant or to an adult in the rental unit,\n leave it in the tenant's mailbox or where mail is ordinarily delivered,\n place it under the door of the rental unit or through a mail slot in the door,\n send it by fax to a fax machine where the tenant carries on business or to a fax\nmachine in their home,\n send it by courier, or\n send it by mail.\n\n_____________________________________________________________________________________________________\nNotice of Rent Increase – Form N1\n\n2\nYou cannot give the tenant this notice by posting it on the door of the tenant’s rental\nunit."
+      },
+      {
+        "canonical": false,
+        "cited_by": [
+          "s5"
+        ],
+        "heading": "RTA s. 120 — Guideline increase",
+        "id": "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "reference": "e2",
+        "text": "Guideline increase\n\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\n\nGuideline\n\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\n\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\n\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\n\nPublication of guideline\n\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\n\nGuideline for 2021\n\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\n\nSame\n\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\n\nTransition\n\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nSame\n\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nReview by Minister\n\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\n\nDefinition\n\n(7) In subsections (4), (5) and (6),\n\n“commencement date” means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1."
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s3"
+        ],
+        "heading": "RTA s. 191 — How notice or document given",
+        "id": "78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2",
+        "reference": "e3",
+        "text": "How notice or document given\n\n191 (1) A notice or document is sufficiently given to a person other than the Board,\n\n(a) by handing it to the person;\n\n(b) if the person is a landlord, by handing it to an employee of the landlord exercising authority in respect of the residential complex to which the notice or document relates;\n\n(c) if the person is a tenant, subtenant or occupant, by handing it to an apparently adult person in the rental unit;\n\n(d) by leaving it in the mail box where mail is ordinarily delivered to the person;\n\n(e) if there is no mail box, by leaving it at the place where mail is ordinarily delivered to the person;\n\n(f) by sending it by mail to the last known address where the person resides or carries on business; or\n\n(g) by any other means allowed in the Rules. 2006, c. 17, s. 191 (1).\n\nSame, tenant or former tenant no longer in possession\n\n(1.0.1) Despite subsection (1), a notice or document is sufficiently given to a tenant or former tenant who is no longer in possession of a rental unit,\n\n(a) by handing it to the tenant or former tenant;\n\n(b) by sending it by mail to the address where the tenant or former tenant resides;\n\n(c) by handing it to an apparently adult person where the tenant or former tenant resides; or\n\n(d) by any other means allowed in the Rules. 2020, c. 16, Sched. 4, s. 29.\n\nSame, Part V.1\n\n(1.1) Despite subsection (1), for the purposes of Part V.1, a notice or document is sufficiently given to a person other than the Board,\n\n(a) by handing it to the person;\n\n(b) by handing it to an apparently adult person in the member unit;\n\n(c) by leaving it in the mail box where mail is ordinarily delivered to the person;\n\n(d) if there is no mail box, by sliding it under the door of the member unit or through a mail slot in the door or leaving it at the place where mail is ordinarily delivered to the person;\n\n(e) by sending it by mail to the last known address where the person resides or carries on business;\n\n(f) if the person is a non-profit housing co-operative,\n\n(i) by delivering it personally or sending it by mail to,\n\n(A) the head office of the co-operative as shown on the records of the Ministry of Finance, or\n\n(B) the co-operative’s business office, or\n\n(ii) by handing it to a manager or co-ordinator of the co-operative exercising authority in respect of the residential complex, as defined in Part V.1, to which the notice or document relates; or\n\n(g) by any other means allowed in the Rules. 2013, c. 3, s. 42.\n\nWhen notice deemed valid"
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1",
+          "s2",
+          "s4"
+        ],
+        "heading": "RTA s. 116 — Notice of rent increase required",
+        "id": "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+        "reference": "e4",
+        "text": "Notice of rent increase required\n\n116 (1) A landlord shall not increase the rent charged to a tenant for a rental unit without first giving the tenant at least 90 days written notice of the landlord’s intention to do so. 2006, c. 17, s. 116 (1).\n\nSame\n\n(2) Subsection (1) applies even if the rent charged is increased in accordance with an order under section 126. 2006, c. 17, s. 116 (2).\n\nContents of notice\n\n(3) The notice shall be in a form approved by the Board and shall set out the landlord’s intention to increase the rent and the amount of the new rent. 2006, c. 17, s. 116 (3).\n\nIncrease void without notice\n\n(4) An increase in rent is void if the landlord has not given the notice required by this section, and the landlord must give a new notice before the landlord can take the increase. 2006, c. 17, s. 116 (4)."
+      },
+      {
+        "canonical": false,
+        "cited_by": [
+          "s5",
+          "s6"
+        ],
+        "heading": "The rent increase guideline",
+        "id": "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+        "reference": "e5",
+        "text": "The rent increase guideline\n\nFor most rental units, the most a landlord can increase the rent by, without asking the LTB for approval, is the rent increase guideline.\n\nThe rent increase guideline is set each year by the Ontario Government. It is based on the Consumer Price Index.\n\nEach year, the government announces the guideline by August 31 for rent increases that will take effect on or after January 1 of the following year.\n\nA guideline rent increase does not need to be approved by the LTB. However, a landlord must get approval from the LTB before they can charge an increase above the guideline.\n\nIf the rental unit was not occupied for residential purposes on or before November 15, 2018, it may be exempt from the rent increase guideline. The landlord must still give at least 90 days' notice in writing of any rent increase using the proper form but there is no limit on the size of the rent increase."
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s2"
+        ],
+        "heading": "Legislation Act s. 89",
+        "id": "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+        "reference": "e6",
+        "text": "Computation of time\n\nHolidays\n\n89 (1) Time limits that would otherwise expire on a holiday are extended to include the next day that is not a holiday. 2006, c. 21, Sched. F, s. 89 (1).\n\nDays on which offices closed\n\n(2) Time limits for registering or filing documents or for doing anything else that expire on a day when the place for doing so is not open during its regular hours of business are extended to include the next day the place is open during its regular hours of business. 2006, c. 21, Sched. F, s. 89 (2).\n\nNumber of days between events\n\n(3) A reference to a number of days between two events excludes the day on which the first event happens and includes the day on which the second event happens, even if the reference is to “at least” or “not less than” a number of days. 2006, c. 21, Sched. F, s. 89 (3).\n\nSpecified day included\n\n(4) A period of time described as beginning or ending on, at or with a specified day includes that day. 2006, c. 21, Sched. F, s. 89 (4).\n\nSpecified day excluded\n\n(5) A period of time described as beginning before or after a specified day excludes that day. 2006, c. 21, Sched. F, s. 89 (5).\n\nMonths\n\n(6) If a period of time is described as a number of months before or after a specified day, the following rules apply:\n\n1. The number of months is counted from the specified day, excluding the month in which the specified day falls.\n\n2. The period includes the day in the last month counted that has the same calendar number as the specified day or, if that month has no day with that number, its last day.\n\n3. Repealed: 2009, c. 33, Sched. 2, s. 43 (33).\n\n2006, c. 21, Sched. F, s. 89 (6); 2009, c. 33, Sched. 2, s. 43 (33); 2024, c. 2, Sched. 15, s. 16.\n\nLeap years\n\n(7) The anniversary of an event that took place on February 29 falls on February 28, except in a leap year. 2006, c. 21, Sched. F, s. 89 (7)."
+      }
+    ],
+    "expected_tool_result": {
+      "cap_cents_exact": null,
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "missing_fact",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "unknown"
+        }
+      ],
+      "deemed_served_on": null,
+      "earliest_notice_on": null,
+      "earliest_spacing_on": null,
+      "guideline_percent": null,
+      "latest_deemed_service_on": "2026-12-01",
+      "latest_dispatch_on": "2026-12-01",
+      "notice_days": null,
+      "rule_ids": [
+        "calendar.s89",
+        "notice.90_days",
+        "scope.ordinary"
+      ],
+      "status": "cannot_determine",
+      "tool": "notice_deadline_check"
+    },
+    "observed_tool_result": {
+      "cap_cents_exact": null,
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "missing_fact",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "unknown"
+        }
+      ],
+      "deemed_served_on": null,
+      "earliest_notice_on": null,
+      "earliest_spacing_on": null,
+      "guideline_percent": null,
+      "latest_deemed_service_on": "2026-12-01",
+      "latest_dispatch_on": "2026-12-01",
+      "notice_days": null,
+      "rule_ids": [
+        "calendar.s89",
+        "notice.90_days",
+        "scope.ordinary"
+      ],
+      "status": "cannot_determine",
+      "tool": "notice_deadline_check"
+    },
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "Without the hand-service date, compliance with the 90-day notice interval cannot be determined."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+          "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf"
+        ],
+        "id": "s1",
+        "text": "For an ordinary rent increase with a confirmed period start, a landlord must give the tenant at least 90 days' written notice before the rent increase takes effect. The notice must be in an approved form and set out the landlord's intention to increase the rent and the amount of the new rent."
+      },
+      {
+        "citation_ids": [
+          "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+          "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+        ],
+        "id": "s2",
+        "text": "The 90-day notice period is calculated by excluding the day the notice is served and including the day the rent increase takes effect. For a rent increase effective March 1, 2027, notice must be served by December 1, 2026 at the latest."
+      },
+      {
+        "citation_ids": [
+          "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+          "78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2"
+        ],
+        "id": "s3",
+        "text": "Hand delivery is a valid method of service. The notice can be handed directly to the tenant or to an apparently adult person in the rental unit."
+      },
+      {
+        "citation_ids": [
+          "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+        ],
+        "id": "s4",
+        "text": "The notice deadline cannot be determined because the date the notice was actually served is not provided. Without a served date, it is impossible to verify whether the 90-day notice requirement has been satisfied."
+      },
+      {
+        "citation_ids": [
+          "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+          "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723"
+        ],
+        "id": "s5",
+        "text": "For most rental units, a landlord cannot increase rent by more than the annual guideline set by the Ontario Government, unless the unit is exempt or the landlord obtains approval from the Landlord and Tenant Board. The guideline is based on the Consumer Price Index and is published by August 31 for increases taking effect January 1 of the following year."
+      },
+      {
+        "citation_ids": [
+          "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b"
+        ],
+        "id": "s6",
+        "text": "If a rental unit was not occupied for residential purposes on or before November 15, 2018, it may be exempt from the rent increase guideline. In such cases, the landlord must still provide 90 days' notice but there is no limit on the size of the rent increase."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s4"
+        ],
+        "coverage_basis": "s4 express this required meaning: Without the hand-service date, compliance with the 90-day notice interval cannot be determined.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e4",
+            "e1"
+          ],
+          "summary": "Section 116 requires at least 90 days of written notice in an approved form stating the intention and new rent.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e4",
+            "e1"
+          ],
+          "summary": "Section 116 requires at least 90 days of written notice in an approved form stating the intention and new rent.",
+          "tool_fields": []
+        }
+      },
+      "s2": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e6",
+            "e4"
+          ],
+          "summary": "Own timing rules together with the executed deadline support the date.",
+          "tool_fields": [
+            "/observed_tool_result/latest_deemed_service_on"
+          ]
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e4",
+            "e6"
+          ],
+          "summary": "The rules and executed result establish December 1, 2026 as the latest service date.",
+          "tool_fields": [
+            "/observed_tool_result/latest_deemed_service_on"
+          ]
+        }
+      },
+      "s3": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1",
+            "e3"
+          ],
+          "summary": "The own section 191 passage permits handing notice to the tenant or an apparently adult person in the rental unit.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1",
+            "e3"
+          ],
+          "summary": "The own section 191 passage permits handing notice to the tenant or an apparently adult person in the rental unit.",
+          "tool_fields": []
+        }
+      },
+      "s4": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e4"
+          ],
+          "summary": "Section 116 does not support the asserted inability to compute a deadline.",
+          "tool_fields": []
+        },
+        "citation_support": "unsupported",
+        "factual": "contradicted",
+        "factual_basis": {
+          "evidence_refs": [
+            "e4"
+          ],
+          "summary": "The first sentence denies a deadline explicitly present in the executed result; the second correctly says actual compliance is unknown.",
+          "tool_fields": [
+            "/observed_tool_result/latest_deemed_service_on",
+            "/observed_tool_result/notice_days"
+          ]
+        }
+      },
+      "s5": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e5",
+            "e2"
+          ],
+          "summary": "The cited guideline provisions describe the ordinary cap, approval route, CPI basis and August announcement for the next calendar year.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e5",
+            "e2"
+          ],
+          "summary": "The cited guideline provisions describe the ordinary cap, approval route, CPI basis and August announcement for the next calendar year.",
+          "tool_fields": []
+        }
+      },
+      "s6": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e5"
+          ],
+          "summary": "The guide states this qualified possible exemption and preserves 90-day notice; it does not classify the particular unit.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e5"
+          ],
+          "summary": "The guide states this qualified possible exemption and preserves 90-day notice; it does not classify the particular unit.",
+          "tool_fields": []
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "N04",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "Original N04 compound deadline contradiction"
+}

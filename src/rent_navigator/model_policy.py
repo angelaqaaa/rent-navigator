@@ -30,7 +30,7 @@ class ModelPolicy:
 MODEL_POLICIES: Final[Mapping[RequestedModel, ModelPolicy]] = MappingProxyType(
     {
         ACTOR_MODEL: ModelPolicy(20000, 21000, 1200, Decimal("1"), Decimal("5")),
-        JUDGE_MODEL: ModelPolicy(24000, 25000, 800, Decimal("2"), Decimal("10")),
+        JUDGE_MODEL: ModelPolicy(24000, 25000, 3200, Decimal("2"), Decimal("10")),
     }
 )
 

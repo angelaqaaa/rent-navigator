@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from eval_fixtures import TOY_HASH, TOY_SOURCE_SHA, canonical_hits, write_toy_data
+from judge_wire_fixtures import add_audit_bases
 from test_eval_collection import RecordingBatchLedger, _environment
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -63,6 +64,7 @@ class SyntheticRealCompositionPort:
                 "false_pass": False,
                 "policy_violations": [],
             }
+            value = add_audit_bases(value, packet)
             content = [
                 {
                     "type": "text",
@@ -370,8 +372,8 @@ def test_first_judge_model_drift_stops_shared_collection_and_preserves_billed_re
     assert accounting.returned_model_id == ACTOR_MODEL
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.058")
-    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.058")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.082")
+    assert budget.committed_usd == port.actor_calls * Decimal("0.0015") + Decimal("0.082")
     row = ResultRow.model_validate_json((directory / "results.jsonl").read_text().strip())
     assert row.judge_cost_usd is None
     assert row.serving_cost_usd is not None and row.usage_complete
@@ -431,7 +433,7 @@ def test_complete_legacy_artifact_with_self_consistent_model_drift_is_rejected(
 
 
 @pytest.mark.parametrize(
-    "model,hold", [(ACTOR_MODEL, Decimal("0.027")), (JUDGE_MODEL, Decimal("0.058"))]
+    "model,hold", [(ACTOR_MODEL, Decimal("0.027")), (JUDGE_MODEL, Decimal("0.082"))]
 )
 def test_collection_model_anomaly_defensively_holds_full_reservation(
     model: str, hold: Decimal

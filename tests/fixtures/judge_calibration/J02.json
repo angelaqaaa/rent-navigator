@@ -1,0 +1,247 @@
+{
+  "adjudication_notes": [],
+  "derivation": "Derived from Q04: restore on-or-before cutoff for the addition branch; state both protected and subsequent-tenancy clauses; scope burden to Board application and cite section 6.1(6). Other statement and full evidence retained.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      },
+      "c2": {
+        "result": "met"
+      },
+      "c3": {
+        "result": "met"
+      },
+      "c4": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s2": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s3": {
+        "citation_support": "supported",
+        "factual": "supported"
+      },
+      "s4": {
+        "citation_support": "supported",
+        "factual": "supported"
+      }
+    }
+  },
+  "fixture_id": "J02",
+  "provider_packet": {
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1",
+          "s2",
+          "s4"
+        ],
+        "heading": "RTA s. 6.1 — Exemptions from rules relating to rent",
+        "id": "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+        "reference": "e1",
+        "text": "Exemptions from rules relating to rent\n\n6.1 (1) In this section,\n\n“addition” means, with respect to a mobile home park or land lease community, an expansion beyond the boundaries of the mobile home park or land lease community; (“rajout”)\n\n“commencement date” means the day section 1 of Schedule 36 to the Restoring Trust, Transparency and Accountability Act, 2018 comes into force. (“date d’entrée en vigueur”) 2018, c. 17, Sched. 36, s. 1.\n\nBuildings, etc., not occupied on or before November 15, 2018\n\n(2) Sections 120, 121, 122, 126, 127, 129, 131, 132, 133, 165 and 167 do not apply on and after the commencement date with respect to a rental unit if the requirements set out in one of the following paragraphs are met:\n\n1. The rental unit is located in a building, mobile home park or land lease community and no part of the building, mobile home park or land lease community was occupied for residential purposes on or before November 15, 2018.\n\n2. The rental unit is entirely located in an addition to a building, mobile home park or land lease community and no part of the addition was occupied for residential purposes on or before November 15, 2018. 2018, c. 17, Sched. 36, s. 1.\n\nRental units in detached houses, semi-detached houses or row houses\n\n(3) Sections 120, 121, 122, 126, 127, 129, 131, 132 and 133 do not apply on and after the commencement date with respect to a rental unit if all of the following requirements are met:\n\n1. The rental unit is located in a detached house, semi-detached house or row house which, on or at any time before November 15, 2018, contained not more than two residential units.\n\n2. The rental unit is a residential unit that meets all of the following requirements:\n\ni. The unit has its own bathroom and kitchen facilities.\n\nii. The unit has one or more exterior or interior entrances.\n\niii. At each entrance, the unit has a door which is equipped so that it can be secured from the inside of the unit.\n\niv. At least one door described in subparagraph iii is capable of being locked from the outside of the unit.\n\n3. The rental unit became a residential unit described in paragraph 2 after November 15, 2018.\n\n4. One or both of the following circumstances apply:\n\ni. At the time the rental unit was first occupied as a residential unit described in paragraph 2, the owner or one of the owners, as applicable, lived in another residential unit in the detached house, semi-detached house or row house.\n\nii. The rental unit is located in a part of the detached house, semi-detached house or row house which was unfinished space immediately before the rental unit became a residential unit described in paragraph 2. 2018, c. 17, Sched. 36, s. 1.\n\nNon-application of exemption under subs. (2) or (3)"
+      },
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "New buildings and additions",
+        "id": "c97c40201489f9b11e5d36c78e2873e2a37f92954804d7a56c6c4245dd135f3e",
+        "reference": "e2",
+        "text": "New buildings and additions\n\nIf there is a dispute about new buildings and additions, the landlord must prove that the building or addition was first occupied for residential purposes after November 15, 2018.\n\nLandlords might want to keep records, such as:\n\nbuilding permits, permit applications and plans\n\noccupancy permits\n\nnew home warranty documents\n\ndocuments from the builder"
+      },
+      {
+        "canonical": true,
+        "cited_by": [
+          "s2",
+          "s3"
+        ],
+        "heading": "RTA s. 6.1 — Exemptions from rules relating to rent",
+        "id": "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8",
+        "reference": "e3",
+        "text": "(4) Subject to subsection (5), the exemption under subsection (2) or (3) does not apply with respect to a rental unit that is subject to a tenancy in respect of which a tenancy agreement was entered into on or before November 15, 2018. 2018, c. 17, Sched. 36, s. 1.\n\nApplication of subs. (4)\n\n(5) Subsection (4) applies only with respect to the tenancy described in that subsection and does not apply with respect to any subsequent tenancy. 2018, c. 17, Sched. 36, s. 1.\n\nBurden of proof\n\n(6) For greater certainty, in an application to the Board in which the application of subsection (2) or (3) is at issue, the onus is on the landlord to prove that the subsection applies. 2018, c. 17, Sched. 36, s. 1.\n\nTransition rules\n\n(7) The following rules apply on and after the commencement date with respect to a rental unit, if subsection (2) or (3) applies to the rental unit and the unit is subject to a tenancy in respect of which a tenancy agreement was entered into before that date but after November 15, 2018:\n\n1. Despite subsections (2) and (3), sections 121 and 122 continue to apply with respect to an agreement that was entered into between the landlord and the tenant of the rental unit under section 121 before the commencement date.\n\n2. Despite subsections (2) and (3), section 132 continues to apply with respect to an application that was made by the landlord or the tenant of the rental unit under that section before the commencement date and was not finally determined before that date.\n\n3. Despite subsections (2) and (3), section 133 continues to apply with respect to an application that was made by the tenant of the rental unit under that section before the commencement date and was not finally determined before that date.\n\n4. Despite subsection (2), section 165 continues to apply with respect to an assignment of the rental unit for which the landlord granted consent under section 95 before the commencement date or which was authorized by the Board under section 98 before that date. 2018, c. 17, Sched. 36, s. 1."
+      }
+    ],
+    "expected_tool_result": null,
+    "observed_tool_result": null,
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "For the building-or-addition exemption, no part of the relevant building or addition may have been occupied for residential purposes on or before November 15, 2018."
+      },
+      {
+        "id": "c2",
+        "text": "A current tenant moving in after November 15, 2018 does not by itself establish the building-or-addition exemption."
+      },
+      {
+        "id": "c3",
+        "text": "The exemption does not apply to the protected tenancy under an agreement entered into on or before November 15, 2018; that protection does not extend to subsequent tenancies."
+      },
+      {
+        "id": "c4",
+        "text": "The landlord bears the burden of proving the section 6.1 exemption when it is disputed before the Board."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16"
+        ],
+        "id": "s1",
+        "text": "For the building-or-addition exemption under section 6.1(2), no part of the building may have been occupied for residential purposes on or before November 15, 2018; alternatively, the rental unit must be entirely in an addition no part of which was occupied for residential purposes on or before that date."
+      },
+      {
+        "citation_ids": [
+          "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+          "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8"
+        ],
+        "id": "s2",
+        "text": "The section 6.1 exemption does not apply to the protected tenancy under an agreement entered into on or before November 15, 2018. This protection is limited to that tenancy and does not extend to subsequent tenancies."
+      },
+      {
+        "citation_ids": [
+          "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8"
+        ],
+        "id": "s3",
+        "text": "In an application before the Board in which the section 6.1(2) or (3) exemption is disputed, the landlord bears the burden of proving that the exemption applies."
+      },
+      {
+        "citation_ids": [
+          "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16"
+        ],
+        "id": "s4",
+        "text": "A current tenant moving in after 2018 is not sufficient by itself; the exemption depends on when the building or addition was first occupied for residential purposes, not when the current tenant began occupying it."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "s1 express this required meaning: For the building-or-addition exemption, no part of the relevant building or addition may have been occupied for residential purposes on or before November 15, 2018.",
+        "result": "met"
+      },
+      "c2": {
+        "answer_statement_ids": [
+          "s4"
+        ],
+        "coverage_basis": "s4 express this required meaning: A current tenant moving in after November 15, 2018 does not by itself establish the building-or-addition exemption.",
+        "result": "met"
+      },
+      "c3": {
+        "answer_statement_ids": [
+          "s2"
+        ],
+        "coverage_basis": "s2 express this required meaning: The exemption does not apply to the protected tenancy under an agreement entered into on or before November 15, 2018; that protection does not extend to subsequent tenancies.",
+        "result": "met"
+      },
+      "c4": {
+        "answer_statement_ids": [
+          "s3"
+        ],
+        "coverage_basis": "s3 express this required meaning: The landlord bears the burden of proving the section 6.1 exemption when it is disputed before the Board.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "Section 6.1(2) uses no residential occupation on or before the cutoff for the building or the entire addition.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "Section 6.1(2) uses no residential occupation on or before the cutoff for the building or the entire addition.",
+          "tool_fields": []
+        }
+      },
+      "s2": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1",
+            "e3"
+          ],
+          "summary": "Section 6.1(4) preserves the tenancy under a pre-cutoff agreement; subsection (5) confines that protection to that tenancy.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1",
+            "e3"
+          ],
+          "summary": "Section 6.1(4) preserves the tenancy under a pre-cutoff agreement; subsection (5) confines that protection to that tenancy.",
+          "tool_fields": []
+        }
+      },
+      "s3": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e3"
+          ],
+          "summary": "Section 6.1(6) places the burden of proving the exemption on the landlord in the specified Board application.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e3"
+          ],
+          "summary": "Section 6.1(6) places the burden of proving the exemption on the landlord in the specified Board application.",
+          "tool_fields": []
+        }
+      },
+      "s4": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "The statutory test concerns the relevant building or addition, so a later move-in by the current tenant alone does not establish it.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "The statutory test concerns the relevant building or addition, so a later move-in by the current tenant alone does not establish it.",
+          "tool_fields": []
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "Q04",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "Q04 with complete cutoff and tenancy qualifications"
+}

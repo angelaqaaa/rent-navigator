@@ -3,6 +3,7 @@
 import asyncio
 from copy import deepcopy
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
@@ -311,6 +312,108 @@ def test_final_success_validation_expiry_publishes_one_failure_endpoint_and_no_j
     # Replay without instrumentation proves retained raw/trace linkage.
     monkeypatch.undo()
     test.verify(accounting)
+
+
+@pytest.mark.parametrize("boundary", ["success", "accounting", "evaluation"])
+def test_buffered_metadata_is_visible_at_each_publication_and_stable_before_close(
+    value: JudgeInput, boundary: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    test = harness(value)
+    metadata_path = tmp_path / "synthetic-judge-metadata.jsonl"
+    finishes: list[str] = []
+    candidates: list[str] = []
+    original_finish = TraceRecorder.finish
+    original_create = test.port.create
+    original_accounting = validate_judge_accounting
+    original_evaluation = JudgeEvaluation
+
+    def published_records() -> list[TraceRecord]:
+        return [
+            TraceRecord.model_validate_json(line)
+            for line in metadata_path.read_text(encoding="utf-8").splitlines()
+        ]
+
+    def verify_calls_visible_without_endpoint() -> None:
+        published = published_records()
+        assert [record.provider_operation for record in published] == [
+            "count_tokens",
+            "generation",
+        ]
+        assert all(record.record_kind == "provider_call" for record in published)
+
+    def counted_finish(self: TraceRecorder, code: Any, **kwargs: Any) -> TraceRecord:
+        finishes.append(code)
+        return original_finish(self, code, **kwargs)
+
+    async def inspect_before_generation(**kwargs: Any) -> Message:
+        published = published_records()
+        assert len(published) == 1
+        assert published[0].record_kind == "provider_call"
+        assert published[0].provider_operation == "count_tokens"
+        return await original_create(**kwargs)
+
+    def inspect_accounting(accounting: JudgeAccounting, context: Any) -> None:
+        verify_calls_visible_without_endpoint()
+        endpoint = [record for record in accounting.records if record.record_kind == "endpoint"]
+        assert len(endpoint) == 1
+        candidates.append(endpoint[0].response_code)
+        original_accounting(accounting, context)
+        if boundary == "accounting" and endpoint[0].response_code == "ok":
+            test.clock.now += 180.0
+
+    def inspect_evaluation(**kwargs: Any) -> JudgeEvaluation:
+        verify_calls_visible_without_endpoint()
+        evaluated = original_evaluation(**kwargs)
+        if boundary == "evaluation":
+            test.clock.now += 180.0
+        return evaluated
+
+    monkeypatch.setattr(TraceRecorder, "finish", counted_finish)
+    monkeypatch.setattr(test.port, "create", inspect_before_generation)
+    monkeypatch.setattr(judge_module, "validate_judge_accounting", inspect_accounting)
+    monkeypatch.setattr(judge_module, "JudgeEvaluation", inspect_evaluation)
+    # The buffer is deliberately larger than the complete synthetic metadata output.
+    with metadata_path.open("w", encoding="utf-8", buffering=1024 * 1024) as metadata:
+        judge = judge_module.RealJudge(
+            test.port,
+            budget=test.budget,
+            metadata=metadata,
+            raw_provider=test.raw,
+            run_id=RUN_ID,
+            clock=test.clock,
+        )
+        accounting: JudgeAccounting
+        if boundary == "success":
+            evaluated = asyncio.run(judge.evaluate(value, context=test.context))
+            accounting = evaluated
+            assert candidates == ["ok"]
+        else:
+            with pytest.raises(JudgeFailure) as caught:
+                asyncio.run(judge.evaluate(value, context=test.context))
+            assert caught.value.code == "deadline_exceeded"
+            assert not hasattr(caught.value, "judgment")
+            accounting = caught.value.accounting
+            assert candidates == ["ok", "deadline_exceeded"]
+        assert not metadata.closed
+        published = published_records()
+        assert published == accounting.records
+        assert len(published) == 3
+        assert [record.record_kind for record in published] == [
+            "provider_call",
+            "provider_call",
+            "endpoint",
+        ]
+        assert published[-1].response_code == (
+            "ok" if boundary == "success" else "deadline_exceeded"
+        )
+        assert finishes == ["ok"]
+        assert accounting.cost == provider_cost_totals(published)
+        before_close = metadata_path.read_bytes()
+        before_close_hash = sha256(before_close).hexdigest()
+    assert metadata_path.read_bytes() == before_close
+    assert sha256(metadata_path.read_bytes()).hexdigest() == before_close_hash
+    monkeypatch.undo()
+    test.verify(accounting, evaluated.judgment if boundary == "success" else None)
 
 
 def test_cancellation_retains_unknown_usage_and_finishes_without_background_task(

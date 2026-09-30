@@ -821,6 +821,7 @@ class _JudgeMetadataSink(MetadataSink):
     def __init__(self, target: TextIO) -> None:
         self._local = StringIO()
         super().__init__(self._local)
+        self._target_stream = target
         self._target = MetadataSink(target)
         self._endpoint: TraceRecord | None = None
         self._published = False
@@ -834,6 +835,7 @@ class _JudgeMetadataSink(MetadataSink):
             self._endpoint = record
         else:
             self._target.emit(record)
+            self._target_stream.flush()
 
     def records(self) -> list[TraceRecord]:
         if self._endpoint is None:
@@ -856,6 +858,7 @@ class _JudgeMetadataSink(MetadataSink):
         if self._endpoint is None or self._published:
             raise ValueError("Judge endpoint publication requires one unpublished candidate")
         self._target.emit(self._endpoint)
+        self._target_stream.flush()
         self._published = True
 
 

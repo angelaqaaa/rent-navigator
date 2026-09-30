@@ -14,7 +14,7 @@ from uuid import UUID
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
-from judge_wire_fixtures import add_audit_bases
+from judge_wire_fixtures import add_audit_bases, answer_anchor, source_anchor
 from test_eval_judge import harness, message, result, wire_payload
 
 from rent_navigator.corpus import load_corpus
@@ -55,21 +55,20 @@ def test_handles_are_sorted_bijective_and_schema_binds_each_own_citation(value: 
     assert build_judge_packet(replace(value, evidence=tuple(reversed(value.evidence)))) == packet
     schema = judge_schema(packet)
     assert transform_schema(schema) == schema
-    claim = schema["$defs"]["JudgeClaimResult"]["properties"]
-    assert claim["answer_statement_ids"]["items"]["enum"] == ["s1", "s2", "s3"]
-    assert "maxLength: 360" in claim["coverage_basis"]["description"]
+    claim = schema["$defs"]["JudgeClaim_c1"]["properties"]["parts"]["items"]["properties"]
+    anchors = claim["answer_anchors"]["items"]["anyOf"]
+    assert [item["properties"]["statement_id"]["enum"][0] for item in anchors] == ["s1", "s2", "s3"]
+    assert "maxLength: 360" in claim["basis"]["description"]
     for statement in value.response.statements:
         ref = schema["properties"]["statements"]["properties"][statement.id]["$ref"]
         leaf = schema["$defs"][ref.rsplit("/", 1)[1]]
-        assert set(leaf["required"]) == {
-            "factual",
-            "citation_support",
-            "factual_basis",
-            "citation_basis",
-        }
+        assert set(leaf["required"]) == {"factual", "citation_support", "parts"}
         assert leaf["additionalProperties"] is False
-        own = leaf["properties"]["citation_basis"]["properties"]["evidence_refs"]["items"]["enum"]
-        assert own == [entry["reference"] for entry in entries if statement.id in entry["cited_by"]]
+        citation = leaf["properties"]["parts"]["items"]["properties"]["citation_audit"]
+        own = citation["properties"]["source_anchors"]["items"]["anyOf"]
+        assert [item["properties"]["reference"]["enum"][0] for item in own] == [
+            entry["reference"] for entry in entries if statement.id in entry["cited_by"]
+        ]
 
 
 @pytest.mark.parametrize(
@@ -112,47 +111,49 @@ def test_malformed_audit_fields_are_rejected_without_grade_repair(
     wire = wire_payload(result(value), value)
     claim = next(iter(wire["required_claims"].values()))
     leaf = wire["statements"]["s1"]
-    factual, citation = leaf["factual_basis"], leaf["citation_basis"]
+    factual, citation = leaf["parts"][0]["factual_audit"], leaf["parts"][0]["citation_audit"]
     if mutation == "missing_basis":
-        del leaf["factual_basis"]
+        del leaf["parts"][0]["factual_audit"]
     elif mutation == "extra_basis_field":
         factual["quote"] = "unexpected"
     elif mutation == "blank_summary":
-        factual["summary"] = " \n\t"
+        factual["basis"] = " \n\t"
     elif mutation == "long_summary":
-        factual["summary"] = "x" * 321
+        factual["basis"] = "x" * 321
     elif mutation == "long_coverage":
-        claim["coverage_basis"] = "x" * 361
+        claim["parts"][0]["basis"] = "x" * 361
     elif mutation == "blank_coverage":
-        claim["coverage_basis"] = "  "
+        claim["parts"][0]["basis"] = "  "
     elif mutation == "numeric_summary":
-        factual["summary"] = 3
+        factual["basis"] = 3
     elif mutation == "null_basis":
-        leaf["factual_basis"] = None
+        leaf["parts"][0]["factual_audit"] = None
     elif mutation == "string_refs":
-        factual["evidence_refs"] = "e1"
+        factual["source_anchors"] = "e1"
     elif mutation == "duplicate_refs":
-        factual["evidence_refs"] = ["e1", "e1"]
+        factual["source_anchors"] = [source_anchor(packet["evidence"][0])] * 2
     elif mutation == "foreign_refs":
-        factual["evidence_refs"] = ["e99999"]
+        factual["source_anchors"] = [{"reference": "e99999", "quote": "Unbound"}]
     elif mutation == "canonical_id_instead_of_handle":
-        factual["evidence_refs"] = [packet["evidence"][0]["id"]]
+        factual["source_anchors"] = [
+            {"reference": packet["evidence"][0]["id"], "quote": packet["evidence"][0]["text"]}
+        ]
     elif mutation == "foreign_answer_id":
-        claim["answer_statement_ids"] = ["s6"]
+        claim["parts"][0]["answer_anchors"] = [{"statement_id": "s6", "quote": "Unbound"}]
     elif mutation == "duplicate_answer_id":
-        claim["answer_statement_ids"] = ["s1", "s1"]
+        claim["parts"][0]["answer_anchors"] = [answer_anchor(packet["statements"][0])] * 2
     elif mutation == "met_without_answer":
-        claim["answer_statement_ids"] = []
+        claim["parts"][0]["answer_anchors"] = []
     elif mutation == "wrong_own_reference":
-        citation["evidence_refs"] = [
-            next(
-                entry["reference"] for entry in packet["evidence"] if "s1" not in entry["cited_by"]
+        citation["source_anchors"] = [
+            source_anchor(
+                next(entry for entry in packet["evidence"] if "s1" not in entry["cited_by"])
             )
         ]
     elif mutation == "supported_without_reference":
-        factual["evidence_refs"] = []
+        factual["source_anchors"] = []
     elif mutation == "citation_supported_tool_only":
-        citation["evidence_refs"] = []
+        citation["source_anchors"] = []
         citation["tool_fields"] = ["/observed_tool_result/notice_days"]
     elif mutation == "object_pointer":
         factual["tool_fields"] = ["/observed_tool_result/checks/0"]
@@ -183,15 +184,15 @@ def test_malformed_audit_fields_are_rejected_without_grade_repair(
 
 
 @pytest.mark.parametrize(
-    "key", ["summary", "evidence_refs", "tool_fields", "coverage_basis", "answer_statement_ids"]
+    "key", ["basis", "source_anchors", "tool_fields", "text", "answer_anchors"]
 )
 def test_recursive_equal_duplicate_audit_keys_are_rejected(value: JudgeInput, key: str) -> None:
     wire = wire_payload(result(value), value)
     text = json.dumps(wire)
     target: dict[str, Any] = (
-        next(iter(wire["required_claims"].values()))
-        if key in {"coverage_basis", "answer_statement_ids"}
-        else wire["statements"]["s1"]["factual_basis"]
+        next(iter(wire["required_claims"].values()))["parts"][0]
+        if key in {"text", "answer_anchors"}
+        else wire["statements"]["s1"]["parts"][0]["factual_audit"]
     )
     encoded = json.dumps(key) + ": " + json.dumps(target[key])
     escaped_key = f'"\\u{ord(key[0]):04x}{key[1:]}"'
@@ -245,11 +246,15 @@ def test_cross_statement_coverage_empty_missing_claim_and_grade_independence(
 ) -> None:
     wire = wire_payload(result(value), value)
     claims = list(wire["required_claims"].values())
-    claims[0]["answer_statement_ids"] = ["s2", "s1"]
-    claims[0]["coverage_basis"] = "Synthetic qualification split across two answer statements."
-    claims[1].update(result="missing", answer_statement_ids=[])
+    claims[0]["parts"][0]["answer_anchors"] = [
+        answer_anchor(item) for item in build_judge_packet(value)["statements"][:2]
+    ]
+    claims[0]["parts"][0]["basis"] = "Synthetic qualification split across two answer statements."
+    claims[1]["result"] = "missing"
+    claims[1]["parts"][0].update(observation="omitted", answer_anchors=[])
     wire["statements"]["s3"]["citation_support"] = "supported"
-    wire["statements"]["s3"]["citation_basis"]["summary"] = (
+    wire["statements"]["s3"]["parts"][0]["citation_audit"]["observation"] = "explicit"
+    wire["statements"]["s3"]["parts"][0]["citation_audit"]["basis"] = (
         "Synthetic basis deliberately differs from the factual grade."
     )
     decoded = _decode_judgment(json.dumps(wire), build_judge_packet(value))
@@ -271,21 +276,21 @@ def test_valid_scalar_null_tool_fields_and_rfc6901_escaping(value: JudgeInput) -
         "/observed_tool_result/a~1b/~0c/2",
     )
     wire = wire_payload(result(value), value)
-    wire["statements"]["s1"]["factual_basis"].update(
-        evidence_refs=[],
-        tool_fields=["/observed_tool_result/notice_days", "/expected_tool_result/checks/0/status"],
+    wire["statements"]["s1"]["parts"][0]["factual_audit"].update(
+        source_anchors=[],
+        tool_fields=["/expected_tool_result/checks/0/status", "/observed_tool_result/notice_days"],
     )
     assert _decode_judgment(json.dumps(wire), packet) == result(value)
     packet["expected_tool_result"]["cap_cents_exact"] = None
     nullable = "/expected_tool_result/cap_cents_exact"
     assert nullable in _packet_binding(packet).tool_fields
-    wire["statements"]["s1"]["factual_basis"]["tool_fields"] = [nullable]
+    wire["statements"]["s1"]["parts"][0]["factual_audit"]["tool_fields"] = [nullable]
     # A valid reference is a structural constraint, never inferred entailment.
     assert _decode_judgment(json.dumps(wire), packet) == result(value)
     packet["expected_tool_result"] = None
     packet["observed_tool_result"] = None
     assert _packet_binding(packet).tool_fields == ()
-    wire["statements"]["s1"]["factual_basis"]["tool_fields"] = [nullable]
+    wire["statements"]["s1"]["parts"][0]["factual_audit"]["tool_fields"] = [nullable]
     with pytest.raises(ValueError):
         _decode_judgment(json.dumps(wire), packet)
 
@@ -304,7 +309,7 @@ def test_uncited_basis_is_fixed_and_factual_supported_remains_possible(
         leaf["citation_support"] = "not_applicable"
     wire = wire_payload(grades, changed)
     if mutate_fixed:
-        wire["statements"]["s1"]["citation_basis"]["summary"] = "Nothing was cited."
+        wire["statements"]["s1"]["parts"][0]["citation_audit"]["basis"] = "Nothing was cited."
         with pytest.raises(ValueError):
             _decode_judgment(json.dumps(wire), build_judge_packet(changed))
     else:
@@ -346,11 +351,13 @@ def test_rehashed_cross_packet_request_and_basis_tampering_fail_replay(value: Ju
     records = test.records()
     raw = records[-1].value["content"][0]
     wire = json.loads(raw["text"])
-    wire["statements"]["s1"]["citation_basis"]["evidence_refs"] = [
-        next(
-            entry["reference"]
-            for entry in build_judge_packet(value)["evidence"]
-            if "s1" not in entry["cited_by"]
+    wire["statements"]["s1"]["parts"][0]["citation_audit"]["source_anchors"] = [
+        source_anchor(
+            next(
+                entry
+                for entry in build_judge_packet(value)["evidence"]
+                if "s1" not in entry["cited_by"]
+            )
         )
     ]
     raw["text"] = json.dumps(wire)
@@ -429,7 +436,9 @@ def test_locked_sdk_audit_text_and_shared_output_limit_with_exact_replay(
         packet,
     )
     if bad_basis:
-        wire["statements"]["s1"]["factual_basis"]["tool_fields"] = ["/observed_tool_result/unknown"]
+        wire["statements"]["s1"]["parts"][0]["factual_audit"]["tool_fields"] = [
+            "/observed_tool_result/unknown"
+        ]
     original = " \n" + json.dumps(wire, indent=2) + "\n "
     requests: list[dict[str, Any]] = []
 
@@ -502,3 +511,52 @@ def test_locked_sdk_audit_text_and_shared_output_limit_with_exact_replay(
         judgment=judgment,
         run_id=run_id,
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["claim_grade", "factual_grade", "claim_id", "statement_id", "claim_kind", "statement_parts"],
+)
+def test_structural_fixture_helper_does_not_repair_invalid_grades_or_ids(
+    value: JudgeInput, mutation: str
+) -> None:
+    packet = build_judge_packet(value)
+    grades = result(value).model_dump(mode="json")
+    keyed = {
+        **grades,
+        "required_claims": {
+            row["id"]: {"result": row["result"]} for row in grades["required_claims"]
+        },
+        "statements": {
+            row["id"]: {"factual": row["factual"], "citation_support": row["citation_support"]}
+            for row in grades["statements"]
+        },
+    }
+    if mutation == "claim_grade":
+        keyed["required_claims"]["c1"]["result"] = {"invalid": True}
+    elif mutation == "factual_grade":
+        keyed["statements"]["s1"]["factual"] = False
+    elif mutation == "claim_id":
+        keyed["required_claims"]["unbound"] = keyed["required_claims"].pop("c1")
+    elif mutation == "statement_id":
+        keyed["statements"]["unbound"] = keyed["statements"].pop("s1")
+    elif mutation == "claim_kind":
+        keyed["required_claims"]["c1"]["kind"] = "invalid_branch"
+    else:
+        keyed["statements"]["s1"]["parts"] = False
+    original = deepcopy(keyed)
+    wire = add_audit_bases(keyed, packet)
+    assert keyed == original
+    assert set(wire["required_claims"]) == set(keyed["required_claims"])
+    assert set(wire["statements"]) == set(keyed["statements"])
+    for field in ("required_claims", "statements"):
+        for identifier, leaf in keyed[field].items():
+            for key, supplied in leaf.items():
+                assert wire[field][identifier][key] == supplied
+    for identifier, leaf in keyed["required_claims"].items():
+        assert wire["required_claims"][identifier]["result"] == leaf["result"]
+    for identifier, leaf in keyed["statements"].items():
+        assert wire["statements"][identifier]["factual"] == leaf["factual"]
+        assert wire["statements"][identifier]["citation_support"] == leaf["citation_support"]
+    with pytest.raises(ValueError):
+        _decode_judgment(json.dumps(wire), packet)

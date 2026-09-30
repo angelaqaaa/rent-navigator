@@ -18,6 +18,8 @@ from judge_calibration import (
     compact_json,
     load_calibration,
     stress_audit_output,
+    wire4_audit_output,
+    wire4_stress_audit_output,
 )
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -108,25 +110,34 @@ def test_public_boundary_packet_reference_binding_and_blinding(
     assert fixture["title"] not in compact_json(packet)
 
 
-def test_frozen_offline_size_report_matches_current_schema_and_fixtures() -> None:
+def test_frozen_offline_size_report_retains_historical_configuration() -> None:
     manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
     raw = (CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
     assert sha256(raw).hexdigest() == manifest["sizing_file_sha256"]
-    sizes = json.loads(raw)
     assert (
-        sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == judge_config_hash()
+        sha256(raw).hexdigest()
+        == "c8c4082647e0197d231d47bd291e59c07376406caddc4578b6a48d2e9a0dac8a"
     )
+    sizes = json.loads(raw)
+    historical = "893184b31c98f638b9b1d16be677f17f59eedce67ef9735e175d76fe3f996798"
+    assert sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == historical
+    assert judge_config_hash() != historical
     assert sizes["provider_calls"] == 0
-    assert sizes["fixtures"] == {
-        identifier: calibration_sizes(load_calibration(identifier))
-        for identifier in CALIBRATION_IDS
-    }
+    assert set(sizes["fixtures"]) == set(CALIBRATION_IDS)
 
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
-def test_proposed_audit_examples_map_only_grades_without_semantic_claim(identifier: str) -> None:
+def test_historical_wire3_representative_and_stress_are_not_migrated(identifier: str) -> None:
     fixture = load_calibration(identifier)
-    example = fixture["representative_audit_output"]
+    for old_wire in (fixture["representative_audit_output"], stress_audit_output(fixture)):
+        with pytest.raises(ValueError):
+            _decode_judgment(compact_json(old_wire), fixture["provider_packet"])
+
+
+@pytest.mark.parametrize("identifier", CALIBRATION_IDS)
+def test_derived_wire4_structural_examples_map_only_unchanged_grades(identifier: str) -> None:
+    fixture = load_calibration(identifier)
+    example = wire4_audit_output(fixture)
     result = _decode_judgment(compact_json(example), fixture["provider_packet"])
     expected = fixture["expected_judgment"]
     assert {item.id: {"result": item.result} for item in result.required_claims} == expected[
@@ -138,7 +149,7 @@ def test_proposed_audit_examples_map_only_grades_without_semantic_claim(identifi
     } == expected["statements"]
     assert result.false_pass == expected["false_pass"]
     assert result.policy_violations == expected["policy_violations"]
-    stress = stress_audit_output(fixture)
+    stress = wire4_stress_audit_output(fixture)
     assert _decode_judgment(compact_json(stress), fixture["provider_packet"]) == result
     sizes = calibration_sizes(fixture)
     assert sizes["structural_stress_output_utf8_bytes"] > sizes["representative_output_utf8_bytes"]

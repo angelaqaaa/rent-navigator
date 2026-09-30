@@ -82,7 +82,7 @@ def assert_applicability(schema: dict[str, Any], packet: dict[str, Any]) -> None
         assert (
             set(definition["properties"])
             == set(definition["required"])
-            == {"factual", "citation_support", "factual_basis", "citation_basis"}
+            == {"factual", "citation_support", "parts"}
         )
         assert definition["properties"]["factual"]["enum"] == internal_factual
         assert definition["properties"]["citation_support"]["enum"] == domain
@@ -93,7 +93,7 @@ def assert_applicability(schema: dict[str, Any], packet: dict[str, Any]) -> None
     for field in ("required_claims", "statements"):
         mapping = schema["properties"][field]
         assert mapping["additionalProperties"] is False
-        assert mapping["required"] == sorted(item["id"] for item in packet[field])
+        assert mapping["required"] == [item["id"] for item in packet[field]]
         assert set(mapping["properties"]) == set(mapping["required"])
 
 

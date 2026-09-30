@@ -1,10 +1,12 @@
-"""Offline loading and sizing for proposed, non-scored calibration packets."""
+"""Historical packet loading and separate current-wire structural sizing."""
 
 import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from uuid import UUID
+
+from judge_wire_fixtures import add_audit_bases, answer_anchor, source_anchor
 
 from rent_navigator.corpus import SOURCE_URLS, Corpus
 from rent_navigator.eval.judge import JUDGE_SYSTEM, judge_schema
@@ -79,7 +81,8 @@ def tool_leaf_paths(packet: dict[str, Any]) -> list[str]:
 
     def visit(value: object, pointer: str) -> None:
         if isinstance(value, dict):
-            for key, child in value.items():
+            for key in sorted(value):
+                child = value[key]
                 escaped = str(key).replace("~", "~0").replace("/", "~1")
                 visit(child, f"{pointer}/{escaped}")
         elif isinstance(value, list):
@@ -124,10 +127,46 @@ def stress_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
     return output
 
 
+def wire4_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
+    """Derive a new structural wire from unchanged expected grade inputs.
+
+    This does not migrate historical raw votes or establish semantic correctness.
+    """
+    return add_audit_bases(fixture["expected_judgment"], fixture["provider_packet"])
+
+
+def wire4_stress_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
+    """Permitted full-span wire4 shape, not a minimal or semantic witness."""
+    packet = fixture["provider_packet"]
+    output = wire4_audit_output(fixture)
+    pointers = tool_leaf_paths(packet)
+    for leaf in output["required_claims"].values():
+        leaf["parts"][0]["answer_anchors"] = [answer_anchor(row) for row in packet["statements"]]
+        leaf["parts"][0]["basis"] = "x" * 360
+    for statement in packet["statements"]:
+        part = output["statements"][statement["id"]]["parts"][0]
+        part["factual_audit"].update(
+            source_anchors=[source_anchor(row) for row in packet["evidence"]],
+            tool_fields=pointers,
+            basis="x" * 320,
+        )
+        if statement["citation_ids"]:
+            part["citation_audit"].update(
+                source_anchors=[
+                    source_anchor(row)
+                    for row in packet["evidence"]
+                    if row["id"] in statement["citation_ids"]
+                ],
+                tool_fields=pointers,
+                basis="x" * 320,
+            )
+    return output
+
+
 def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
     packet = fixture["provider_packet"]
     schema = judge_schema(packet)
-    payload = {
+    payload: dict[str, Any] = {
         "model": JUDGE_MODEL,
         "system": JUDGE_SYSTEM,
         "messages": [
@@ -143,6 +182,7 @@ def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
     for statement in stress_packet["statements"]:
         statement["text"] = "x" * 600
     stress_payload = deepcopy(payload)
+    stress_payload["output_config"]["format"]["schema"] = judge_schema(stress_packet)
     stress_payload["messages"] = [
         {
             "role": "user",
@@ -154,8 +194,8 @@ def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
         "schema": schema,
         "count_payload_without_timeout": payload,
         "structural_stress_count_payload_without_timeout": stress_payload,
-        "representative_output": fixture["representative_audit_output"],
-        "structural_stress_output": stress_audit_output(fixture),
+        "representative_output": wire4_audit_output(fixture),
+        "structural_stress_output": wire4_stress_audit_output(fixture),
     }
     return {
         f"{name}_{unit}": len(text.encode()) if unit == "utf8_bytes" else len(text)

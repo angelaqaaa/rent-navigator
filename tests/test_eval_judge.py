@@ -1136,13 +1136,13 @@ def test_independent_required_maps_bind_count_generation_and_lossless_mapping(
             "required_claims",
             [item.id for item in value.required_claims],
             "JudgeClaimResult",
-            {"result", "answer_statement_ids", "coverage_basis"},
+            {"kind", "result", "parts"},
         ),
         (
             "statements",
             [item.id for item in value.response.statements],
             "JudgeStatementResult",
-            {"factual", "citation_support", "factual_basis", "citation_basis"},
+            {"factual", "citation_support", "parts"},
         ),
     ):
         container = resolved(schema, schema["properties"][field_name])
@@ -1231,7 +1231,9 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
     )
     uncited = judge_schema(build_judge_packet(baseline))
     assert uncited != first
-    assert first["$defs"]["JudgeClaimResult"] == uncited["$defs"]["JudgeClaimResult"]
+    assert {
+        key: value for key, value in first["$defs"].items() if key.startswith("JudgeClaim_")
+    } == {key: value for key, value in uncited["$defs"].items() if key.startswith("JudgeClaim_")}
     for schema, definition in (
         (first, "JudgeCitedStatementResult"),
         (uncited, "JudgeUncitedStatementResult"),
@@ -1273,17 +1275,17 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     if changed_part == "wire_policy":
         monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": "different"})
     elif changed_part == "citation_selection":
-        assert module._WIRE_POLICY["version"] == 3
-        assert "citation_applicability" in module._WIRE_POLICY
+        assert module._WIRE_POLICY["version"] == 4
+        assert "citation_audit" in module._WIRE_POLICY
         monkeypatch.setattr(
             module,
             "_WIRE_POLICY",
-            {**module._WIRE_POLICY, "citation_applicability": "different selection rule"},
+            {**module._WIRE_POLICY, "citation_audit": "different own-citation rule"},
         )
     elif changed_part in {"grade_schema", "cited_schema", "uncited_schema"}:
         template = deepcopy(module._wire_schema_template())
         definition_name = {
-            "grade_schema": "JudgeClaimResult",
+            "grade_schema": "JudgeOrdinaryClaimResult",
             "cited_schema": "JudgeCitedStatementResult",
             "uncited_schema": "JudgeUncitedStatementResult",
         }[changed_part]
@@ -1325,8 +1327,7 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
     packet = build_judge_packet(value)
     schema = judge_schema(packet)
     assert set(schema["$defs"]) == {
-        "JudgeClaimResult",
-        "JudgeFactualBasis",
+        *(f"JudgeClaim_{claim.id}" for claim in value.required_claims),
         *(f"JudgeStatement_{statement.id}" for statement in value.response.statements),
     }
     assert_closed_required_objects(schema)
@@ -1348,17 +1349,18 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
             ["supported", "unsupported"] if cited else ["not_applicable"]
         )
     # Exercise every factual grade through the real offline composition and replay.
-    payload = wire_payload(result(value), value)
-    for (identifier, leaf), grade, cited in zip(
-        payload["statements"].items(),
+    grades = result(value).model_dump(mode="json")
+    for leaf, grade, cited in zip(
+        grades["statements"],
         ("supported", "unsupported", "contradicted"),
         presence,
         strict=True,
     ):
         leaf["factual"] = grade
         leaf["citation_support"] = (
-            ("supported" if identifier == "s1" else "unsupported") if cited else "not_applicable"
+            ("supported" if leaf["id"] == "s1" else "unsupported") if cited else "not_applicable"
         )
+    payload = wire_payload(grades, value)
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": json.dumps(payload)}])
     evaluated = test.run()
@@ -1405,9 +1407,9 @@ def test_citation_applicability_schema_is_fresh_and_blind_within_presence_patter
     schema = judge_schema(packet)
     changed = deepcopy(packet)
     for entry in changed["required_claims"]:
-        entry["text"] = "Different required claim; no expected grade enters schema."
+        entry["text"] = "x" * len(entry["text"])
     for entry in changed["statements"]:
-        entry["text"] = "Different legal text."
+        entry["text"] = "x" * len(entry["text"])
     assert judge_schema(changed) == schema
     for extra in ("arm", "case_id", "expected_grade"):
         with pytest.raises(ValueError):

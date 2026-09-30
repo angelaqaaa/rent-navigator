@@ -471,7 +471,10 @@ def test_raw_exception_becomes_safe_failure_code(corpus: Corpus) -> None:
     assert outcome.row.response.error.code == "provider_error"
     events = [json.loads(line) for line in harness.raw.getvalue().splitlines()]
     assert events[-1]["event"] == "failure"
-    assert events[-1]["value"] == {"code": "provider_error"}
+    assert events[-1]["value"] == {
+        "code": "provider_error",
+        "diagnostic": {"schema_version": 1, "category": "unknown", "http_status": None},
+    }
     assert (
         ERROR_SENTINEL
         not in harness.raw.getvalue() + harness.metadata.getvalue() + outcome.row.model_dump_json()

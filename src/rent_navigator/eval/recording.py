@@ -1,5 +1,6 @@
 """Full-content recording restricted to declared synthetic scenarios."""
 
+import asyncio
 import json
 import math
 import re
@@ -7,12 +8,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Annotated, Any, Literal, TextIO
+from typing import Annotated, Any, Literal, Self, TextIO
 from uuid import UUID
 
 from anthropic import transform_schema
 from anthropic.types import Message, MessageTokensCount
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from rent_navigator.agent import (
     _FINAL_CHOICE,
@@ -41,7 +42,13 @@ from rent_navigator.models import (
     ToolResult,
     provider_tool_definitions,
 )
-from rent_navigator.provider import MessagesPort, ProviderFailure, _error_code
+from rent_navigator.provider import (
+    FailureEnvelope,
+    MessagesPort,
+    ProviderFailure,
+    _raise_failure,
+    failure_envelope,
+)
 from rent_navigator.security_cases import SecurityCase, load_security_cases
 
 RecordedCase = GoldCase | SecurityCase
@@ -57,6 +64,12 @@ class RawProviderRecord(StrictModel):
     event: Literal["request", "response", "failure"]
     context_provenance: ContextProvenance
     value: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_failure(self) -> Self:
+        if self.event == "failure":
+            FailureEnvelope.model_validate(self.value, strict=True)
+        return self
 
 
 @dataclass(frozen=True)
@@ -373,6 +386,7 @@ class SyntheticRecorder:
         self._stream.flush()
 
     async def _call(self, operation: str, payload: dict[str, Any]) -> Message | MessageTokensCount:
+        failure = None
         try:
             comparable = {
                 key: value
@@ -384,7 +398,9 @@ class SyntheticRecorder:
             self._prepared(payload, operation)
             self._preflight = None
         except Exception:
-            raise ProviderFailure("provider_error") from None
+            failure = ProviderFailure("provider_error")
+        if failure is not None:
+            _raise_failure(failure)
         self._index += 1
         self._write(operation, "request", payload)
         try:
@@ -393,10 +409,14 @@ class SyntheticRecorder:
                 if operation == "count_tokens"
                 else await self._port.create(**payload)
             )
-        except BaseException as error:
-            code = _error_code(error)
-            self._write(operation, "failure", {"code": code})
+        except asyncio.CancelledError as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
             raise
+        except BaseException as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
+            failure = ProviderFailure.from_exception(error)
+        if failure is not None:
+            _raise_failure(failure)
         if operation == "count_tokens" and isinstance(result, MessageTokensCount):
             self._preflight = json.loads(json.dumps(comparable))
         try:
@@ -413,9 +433,11 @@ class SyntheticRecorder:
                     "usage",
                 },
             )
-        except ProviderFailure:
-            self._write(operation, "failure", {"code": "provider_error"})
-            raise
+        except ProviderFailure as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
+            failure = ProviderFailure.from_exception(error)
+        if failure is not None:
+            _raise_failure(failure)
         if isinstance(result, Message):
             self._returned.append(raw)
         self._write(operation, "response", raw)
@@ -565,12 +587,6 @@ def verify_synthetic_records(
                     raise ValueError("Unexpected raw response fields")
                 verifier._returned.append(record.value)
             elif record.event == "failure":
-                from pydantic import TypeAdapter
-
-                from rent_navigator.models import ErrorCode
-
-                if set(record.value) != {"code"}:
-                    raise ValueError("Unexpected raw error fields")
-                TypeAdapter(ErrorCode).validate_python(record.value["code"])
+                FailureEnvelope.model_validate(record.value, strict=True)
     except Exception:
         raise ValueError("Raw provider content does not match the allowed scenario") from None

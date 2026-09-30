@@ -1,5 +1,6 @@
 """Frozen evidence-only judging with separate, auditable provider accounting."""
 
+import asyncio
 import json
 import math
 import time
@@ -8,12 +9,12 @@ from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
 from io import StringIO
-from typing import Annotated, Any, Literal, TextIO, cast
+from typing import Annotated, Any, Literal, Self, TextIO, cast
 from uuid import UUID, uuid4
 
 from anthropic import transform_schema
 from anthropic.types import Message, MessageTokensCount
-from pydantic import Field, TypeAdapter, ValidationError
+from pydantic import Field, TypeAdapter, ValidationError, model_validator
 
 from rent_navigator.corpus import SOURCE_URLS, Chunk, Corpus
 from rent_navigator.eval.models import (
@@ -46,11 +47,14 @@ from rent_navigator.models import (
 )
 from rent_navigator.provider import (
     Deadline,
+    FailureEnvelope,
     MessagesPort,
     ProviderAdapter,
     ProviderFailure,
     SpendBudget,
     _error_code,
+    _raise_failure,
+    failure_envelope,
 )
 from rent_navigator.trace import (
     CostSummary,
@@ -504,6 +508,12 @@ class RawJudgeRecord(StrictModel):
     event: Literal["request", "response", "failure"]
     value: dict[str, Any]
 
+    @model_validator(mode="after")
+    def validate_failure(self) -> Self:
+        if self.event == "failure":
+            FailureEnvelope.model_validate(self.value, strict=True)
+        return self
+
 
 _RESPONSE_FIELDS = {
     "id",
@@ -588,10 +598,13 @@ class JudgeRecorder:
         self._stream.flush()
 
     async def _call(self, operation: str, payload: dict[str, Any]) -> Message | MessageTokensCount:
+        failure = None
         try:
             self.prepared(payload, operation)
         except Exception:
-            raise ProviderFailure("provider_error") from None
+            failure = ProviderFailure("provider_error")
+        if failure is not None:
+            _raise_failure(failure)
         self._index += 1
         self._write(operation, "request", payload)
         try:
@@ -600,14 +613,21 @@ class JudgeRecorder:
                 if operation == "count_tokens"
                 else await self._port.create(**payload)
             )
-        except BaseException as error:
-            self._write(operation, "failure", {"code": _error_code(error)})
+        except asyncio.CancelledError as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
             raise
+        except BaseException as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
+            failure = ProviderFailure.from_exception(error)
+        if failure is not None:
+            _raise_failure(failure)
         try:
             raw = capture_provider_response(result, message_fields=_RESPONSE_FIELDS)
-        except ProviderFailure:
-            self._write(operation, "failure", {"code": "provider_error"})
-            raise
+        except ProviderFailure as error:
+            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
+            failure = ProviderFailure.from_exception(error)
+        if failure is not None:
+            _raise_failure(failure)
         self._write(operation, "response", raw)
         return result
 
@@ -941,7 +961,8 @@ def verify_judge_records(
             raise ValueError("Judge raw identity or event sequence mismatch")
         verifier.prepared(first.value, operation)
         if last.event == "failure":
-            if set(last.value) != {"code"} or last.value["code"] != detail.response_code:
+            failure = FailureEnvelope.model_validate(last.value, strict=True)
+            if failure.code != detail.response_code:
                 raise ValueError("Judge failure record mismatch")
             if operation == "generation" and detail.actual_cost_usd is not None:
                 raise ValueError("Failed provider response cannot invent known usage")

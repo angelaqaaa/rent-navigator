@@ -82,7 +82,10 @@ def test_failed_native_usage_shapes_have_faithful_or_safe_serving_evidence(
     assert harness.budget.stopped and harness.budget.committed_usd == Decimal(".027")
     raw = records(harness)
     if shape in {"object", "non_sdk"}:
-        assert raw[-1].event == "failure" and raw[-1].value == {"code": "provider_error"}
+        assert raw[-1].event == "failure" and raw[-1].value == {
+            "code": "provider_error",
+            "diagnostic": {"schema_version": 1, "category": "local_guard", "http_status": None},
+        }
         assert "synthetic-private-usage-value" not in harness.raw.getvalue()
     elif shape == "absent":
         assert "usage" not in raw[-1].value
@@ -116,7 +119,10 @@ def test_invalid_native_count_never_dispatches_serving_generation(
     assert not harness.fake.creates and outcome.row.serving_cost_usd == 0
     raw = records(harness)
     if shape == "object":
-        assert raw[-1].event == "failure" and raw[-1].value == {"code": "provider_error"}
+        assert raw[-1].event == "failure" and raw[-1].value == {
+            "code": "provider_error",
+            "diagnostic": {"schema_version": 1, "category": "local_guard", "http_status": None},
+        }
     elif shape == "absent":
         assert raw[-1].value == {}
     else:

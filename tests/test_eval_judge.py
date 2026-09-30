@@ -846,7 +846,10 @@ def test_failed_native_usage_shapes_have_faithful_or_safe_judge_evidence(
     assert test.budget.stopped and test.budget.committed_usd == Decimal(".082")
     terminal = test.records()[-1]
     if shape in {"object", "non_sdk"}:
-        assert terminal.event == "failure" and terminal.value == {"code": "provider_error"}
+        assert terminal.event == "failure" and terminal.value == {
+            "code": "provider_error",
+            "diagnostic": {"schema_version": 1, "category": "local_guard", "http_status": None},
+        }
         assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
     else:
         assert terminal.event == "response"

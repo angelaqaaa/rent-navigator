@@ -13,7 +13,7 @@ from rent_navigator.eval.provider_evidence import usage_cost_from_raw
 from rent_navigator.eval.recording import RawProviderRecord, verify_synthetic_records
 from rent_navigator.eval.runner import config_map, row_config_hash
 from rent_navigator.models import ErrorResponse
-from rent_navigator.provider import ProviderFailure
+from rent_navigator.provider import FailureEnvelope, ProviderFailure
 from rent_navigator.trace import (
     PRICING_HASH,
     CostSummary,
@@ -41,10 +41,10 @@ def verify_raw_links(
             raise ValueError("Unlinked raw provider record")
         if item.event == "request" and item.value.get("model") != call.requested_model_id:
             raise ValueError("Raw request model differs from metadata")
-        if item.event == "failure" and (
-            call.response_code == "ok" or item.value.get("code") != call.response_code
-        ):
-            raise ValueError("Raw failure differs from metadata")
+        if item.event == "failure":
+            failure = FailureEnvelope.model_validate(item.value, strict=True)
+            if call.response_code == "ok" or failure.code != call.response_code:
+                raise ValueError("Raw failure differs from metadata")
         if item.event == "response":
             if item.operation == "count_tokens":
                 tokens = item.value.get("input_tokens")

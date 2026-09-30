@@ -109,7 +109,9 @@ async def capture(surface: Surface, corpus: Corpus, port: MessagesPort) -> Captu
     outcome = await run_attempt(
         serving.case,
         PlanEntry(case_id=serving.case.id, arm=serving.arm, repeat=0),
-        identity=AttemptIdentity(run_id=UUID(TOY_RUN_ID), source_sha=TOY_SOURCE_SHA, gold_hash=TOY_HASH),
+        identity=AttemptIdentity(
+            run_id=UUID(TOY_RUN_ID), source_sha=TOY_SOURCE_SHA, gold_hash=TOY_HASH
+        ),
         corpus=corpus,
         messages=port,
         budget=serving.budget,

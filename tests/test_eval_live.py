@@ -43,7 +43,7 @@ SOURCE = "3" * 40
 
 
 def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
-    """Synthetic funded regression; this fixture does not issue execution authority."""
+    """Hypothetical later regression: zero future gates, seven slots, no actual authority."""
     return LivePermit(
         schema_version=2,
         repository="angelaqaaa/rent-navigator",
@@ -54,14 +54,14 @@ def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
         batch_uuid=uuid4(),
         purpose="regression",
         baseline_sha256=baseline_sha256,
-        future_live_batches_remaining=1,
+        future_live_batches_remaining=0,
         funded_slot="synthetic_regression",
         max_actor_calls=77,
         max_judge_calls=39,
-        reserved_usd=Decimal("5.277"),
+        reserved_usd=Decimal("7.22388"),
         incurred_usd=Decimal("0.676401"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("27.584"),
+        still_required_usd=Decimal("30.64364"),
         development_cap_usd=Decimal(42),
         provider_funding_usd=Decimal(55),
         demo_reserved_usd=Decimal(9),
@@ -449,7 +449,7 @@ def test_native_boolean_judge_usage_retains_failed_gate_replay(
     assert getattr(accounting.cost, field) is None
     receipt = json.loads((fixture.directory / "receipt.json").read_text())
     assert Decimal(receipt["actual_usd"]) == Decimal("0.003")
-    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.082")
+    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.13192")
     assert not receipt["complete"]
     failed = verify(fixture, require_pass=False)
     assert not failed.passed and not failed.evaluation_complete
@@ -566,7 +566,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("27.584")
+    assert receipt.permit.still_required_usd == Decimal("30.64364")
 
 
 @pytest.mark.parametrize(

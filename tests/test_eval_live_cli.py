@@ -113,7 +113,7 @@ def test_old_funding_allocation_stops_before_execution(
         baseline_sha256=None,
         funded_slot="wp9_bootstrap_savings_repair",
         future_live_batches_remaining=2,
-        still_required_usd="32.861",
+        still_required_usd="45.09140",
         development_cap_usd="36",
         provider_funding_usd="50",
     )

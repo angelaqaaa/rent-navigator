@@ -84,7 +84,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     assert actor.actual_cost_usd == Decimal("0.004069")
     assert actor.reserved_cost_usd == Decimal("0.027")
     assert judge.actual_cost_usd == Decimal("0.008138")
-    assert judge.reserved_cost_usd == Decimal("0.082")
+    assert judge.reserved_cost_usd == Decimal("0.13192")
     assert actor.usage_complete is True
     assert json.loads(actor.model_dump_json())["actual_cost_usd"] == "0.004069"
 
@@ -98,7 +98,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         Usage(input_tokens=None, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.082")])
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")])
 def test_synthetic_missing_usage_retains_reservation(
     usage: Usage | None, model: RequestedModel, reserved: str
 ) -> None:
@@ -121,18 +121,25 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
         JUDGE_MODEL: {
             "preflight_limit": 24000,
             "reserved_input_tokens": 25000,
-            "max_output_tokens": 3200,
+            "max_output_tokens": 8192,
             "input_per_million": "2",
             "output_per_million": "10",
         },
     }
     assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.027")
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.082")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.13192")
     assert (
         PRICING_HASH
         == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     )
     assert PRICING_HASH != "b36ccff4b6bc11e7343861e7400ba18a710b14659b6cb1a3d7eab72390897b4d"
+    previous = policy_manifest()
+    previous[JUDGE_MODEL]["max_output_tokens"] = 3200
+    old_pricing = sha256(
+        json.dumps(previous, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert old_pricing == "a0fd95da6b8d48fb709704a5fc85e32ec431084bffac743d521beb0beec72d02"
+    assert PRICING_HASH != old_pricing
     manifest[ACTOR_MODEL]["reserved_input_tokens"] = 8000
     assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 21000
 
@@ -140,31 +147,31 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
 def test_current_capacity_forecast_preserves_historical_gap_and_approved_funding() -> None:
     actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
     judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
+    assert actor == Decimal("0.027") and judge == Decimal("0.13192")
     release = 298 * actor + 160 * judge
     gate = 77 * actor + 39 * judge
     development = 3 * actor + judge
     diagnostics = 26 * actor + 7 * judge
     calibration = 13 * judge
     assert (release, gate, development, diagnostics, calibration) == (
-        Decimal("21.166"),
-        Decimal("5.277"),
-        Decimal("0.163"),
-        Decimal("1.276"),
-        Decimal("1.066"),
+        Decimal("29.15320"),
+        Decimal("7.22388"),
+        Decimal("0.21292"),
+        Decimal("1.62544"),
+        Decimal("1.71496"),
     )
-    remaining = release + 3 * gate + 7 * development
-    after_current_gate = release + 2 * gate + 7 * development
-    assert remaining == Decimal("38.138") == 550 * actor + 284 * judge
-    assert after_current_gate == Decimal("32.861")
-    assert remaining == gate + after_current_gate
-    incurred = Decimal("0.676401")
-    assert remaining + incurred == Decimal("38.814401")
-    # Preserve the earlier unfunded checkpoint before the two additional obligations.
-    assert remaining + incurred - Decimal("36") == Decimal("2.814401")
-    future = remaining + calibration + diagnostics
-    assert future == Decimal("40.480") == 576 * actor + 304 * judge
-    assert future + incurred == Decimal("41.156401")
-    assert Decimal("42") - future - incurred == Decimal("0.843599")
+    future = 576 * actor + 291 * judge
+    assert future == release + 3 * gate + 7 * development + diagnostics == Decimal("53.94072")
+    known, historical_hold = Decimal("0.729081"), Decimal("0.082")
+    exposure = future + calibration + known + historical_hold
+    assert exposure == Decimal("56.466761")
+    assert exposure - Decimal("42") == Decimal("14.466761")
+    assert exposure + Decimal("9") + Decimal("4") == Decimal("69.466761")
+    # The previous checkpoint and failed third generation retain their old policy.
+    old_judge = Decimal("0.082")
+    historical_future = 576 * actor + 291 * old_judge
+    assert historical_future == Decimal("39.414")
+    assert historical_hold == old_judge
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:

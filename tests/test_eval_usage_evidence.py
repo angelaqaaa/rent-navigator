@@ -99,7 +99,7 @@ def test_native_boolean_usage_is_faithful_and_partial_real_collection_replays(
     )
     assert call["response_code"] == "provider_error"
     assert call[token] is None and call["actual_cost_usd"] is None
-    hold = Decimal("0.027" if model == ACTOR_MODEL else "0.082")
+    hold = Decimal("0.027" if model == ACTOR_MODEL else "0.13192")
     assert call["reserved_cost_usd"] == str(hold)
     assert budget.committed_usd == hold + (
         port.actor_calls * Decimal("0.0015") if model == JUDGE_MODEL else 0

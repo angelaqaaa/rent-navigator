@@ -229,7 +229,7 @@ jobs:
     if: needs.live-eval-plan.outputs.mode == 'execute'
     needs: [checks, docker, offline-eval, offline-eval-run, live-eval-plan]
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 240
     environment: live-eval
     concurrency:
       group: rent-navigator-paid-live-eval

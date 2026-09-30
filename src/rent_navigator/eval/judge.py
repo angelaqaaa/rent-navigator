@@ -609,7 +609,7 @@ def judge_config_hash() -> str:
         "max_tokens": MODEL_POLICIES[JUDGE_MODEL].max_output_tokens,
         "stream": False,
         "service_tier": "standard_only",
-        "deadline_seconds": 45,
+        "deadline_seconds": 180,
         "retries": 0,
         "policy": policy_manifest(),
     }
@@ -741,8 +741,8 @@ class JudgeRecorder:
         if (
             isinstance(timeout, bool)
             or not isinstance(timeout, int | float)
+            or not 0 < timeout <= 180
             or not math.isfinite(timeout)
-            or not 0 < timeout <= 45
         ):
             raise ValueError("Invalid judge timeout")
         if {key: value for key, value in payload.items() if key != "timeout"} != expected:
@@ -815,15 +815,62 @@ class JudgeRecorder:
         return value
 
 
-class _Tee(StringIO):
-    def __init__(self, target: TextIO) -> None:
-        super().__init__()
-        self._target = target
+class _JudgeMetadataSink(MetadataSink):
+    """Publish calls immediately; hold the endpoint until final success validation."""
 
-    def write(self, text: str) -> int:
-        self._target.write(text)
-        self._target.flush()
-        return super().write(text)
+    def __init__(self, target: TextIO) -> None:
+        self._local = StringIO()
+        super().__init__(self._local)
+        self._target = MetadataSink(target)
+        self._endpoint: TraceRecord | None = None
+        self._published = False
+
+    def emit(self, record: TraceRecord) -> None:
+        # Retain shared metadata validation for both immediate and deferred records.
+        super().emit(record)
+        if record.record_kind == "endpoint":
+            if self._endpoint is not None:
+                raise ValueError("Judge endpoint is already captured")
+            self._endpoint = record
+        else:
+            self._target.emit(record)
+
+    def records(self) -> list[TraceRecord]:
+        if self._endpoint is None:
+            raise ValueError("Judge endpoint candidate is missing")
+        calls = [
+            TraceRecord.model_validate_json(line)
+            for line in self._local.getvalue().splitlines()
+            if json.loads(line)["record_kind"] == "provider_call"
+        ]
+        return [*calls, self._endpoint]
+
+    def fail_endpoint(self, code: ErrorCode) -> None:
+        if self._endpoint is None or self._published:
+            raise ValueError("Judge endpoint cannot be replaced after publication")
+        self._endpoint = TraceRecord.model_validate(
+            self._endpoint.model_copy(update={"response_code": code})
+        )
+
+    def publish(self) -> None:
+        if self._endpoint is None or self._published:
+            raise ValueError("Judge endpoint publication requires one unpublished candidate")
+        self._target.emit(self._endpoint)
+        self._published = True
+
+
+def _judge_accounting(sink: _JudgeMetadataSink, context: TraceContext) -> JudgeAccounting:
+    records = sink.records()
+    generation = [record for record in records if record.provider_operation == "generation"]
+    accounting = JudgeAccounting(
+        config_hash=context.config_hash,
+        requested_model_id=JUDGE_MODEL,
+        returned_model_id=generation[0].returned_model_id if generation else None,
+        cost=provider_cost_totals(records),
+        records=records,
+    )
+    validate_judge_accounting(accounting, context)
+    return accounting
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -1136,65 +1183,79 @@ class RealJudge:
             or context.attempt_id is None
         ):
             raise ValueError("Judge context identity mismatch")
-        deadline = Deadline.start(clock=self._clock)
-        stream = _Tee(self._metadata)
-        trace = TraceRecorder(context, MetadataSink(stream), monotonic=self._clock)
+        deadline = Deadline.start(clock=self._clock, duration_seconds=180.0)
+        sink = _JudgeMetadataSink(self._metadata)
+        trace = TraceRecorder(context, sink, monotonic=self._clock)
         code: Literal["ok"] | ErrorCode = "provider_error"
         judgment: JudgeResult | None = None
+        evaluated: JudgeEvaluation | None = None
+        finished = False
         try:
             async with deadline.limit():
-                packet = build_judge_packet(value)
-                recorder = JudgeRecorder(
-                    self._messages,
-                    packet=packet,
-                    context=context,
-                    run_id=self._run_id,
-                    stream=self._raw,
+                try:
+                    packet = build_judge_packet(value)
+                    recorder = JudgeRecorder(
+                        self._messages,
+                        packet=packet,
+                        context=context,
+                        run_id=self._run_id,
+                        stream=self._raw,
+                    )
+                    provider = ProviderAdapter(recorder, budget=self._budget)
+                    response = await provider.generate(
+                        model=JUDGE_MODEL,
+                        system=JUDGE_SYSTEM,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": json.dumps(
+                                    packet, sort_keys=True, separators=(",", ":")
+                                ),
+                            }
+                        ],
+                        trace=trace,
+                        deadline=deadline,
+                        output_schema=judge_schema(packet),
+                    )
+                    with trace.stage("validation"):
+                        judgment = parse_judgment(response, value)
+                        deadline.check()
+                    code = "ok"
+                except BaseException as error:
+                    code = _error_code(error)
+                    raise
+                finally:
+                    finished = True
+                    trace.finish(code)
+                accounting = _judge_accounting(sink, context)
+                if judgment is None:
+                    raise ProviderFailure("invalid_generated_output")
+                evaluated = JudgeEvaluation(
+                    config_hash=accounting.config_hash,
+                    requested_model_id=accounting.requested_model_id,
+                    returned_model_id=accounting.returned_model_id,
+                    cost=accounting.cost,
+                    records=accounting.records,
+                    judgment=judgment,
                 )
-                provider = ProviderAdapter(recorder, budget=self._budget)
-                response = await provider.generate(
-                    model=JUDGE_MODEL,
-                    system=JUDGE_SYSTEM,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": json.dumps(packet, sort_keys=True, separators=(",", ":")),
-                        }
-                    ],
-                    trace=trace,
-                    deadline=deadline,
-                    output_schema=judge_schema(packet),
-                )
-                with trace.stage("validation"):
-                    judgment = parse_judgment(response, value)
-                    deadline.check()
-                code = "ok"
         except BaseException as error:
             code = _error_code(error)
-        finally:
+        if code == "ok":
+            try:
+                # This is the success boundary; no endpoint has been published yet.
+                deadline.check()
+            except BaseException as error:
+                code = _error_code(error)
+        if not finished:
             trace.finish(code)
-        records = [TraceRecord.model_validate_json(line) for line in stream.getvalue().splitlines()]
-        generation = [record for record in records if record.provider_operation == "generation"]
-        accounting = JudgeAccounting(
-            config_hash=context.config_hash,
-            requested_model_id=JUDGE_MODEL,
-            returned_model_id=generation[0].returned_model_id if generation else None,
-            cost=provider_cost_totals(records),
-            records=records,
-        )
-        validate_judge_accounting(accounting, context)
-        if code != "ok" or judgment is None:
-            raise JudgeFailure(
-                code if code != "ok" else "invalid_generated_output", accounting
-            ) from None
-        return JudgeEvaluation(
-            config_hash=accounting.config_hash,
-            requested_model_id=accounting.requested_model_id,
-            returned_model_id=accounting.returned_model_id,
-            cost=accounting.cost,
-            records=accounting.records,
-            judgment=judgment,
-        )
+        if code != "ok" or evaluated is None:
+            failure_code: ErrorCode = code if code != "ok" else "invalid_generated_output"
+            sink.fail_endpoint(failure_code)
+            accounting = _judge_accounting(sink, context)
+            sink.publish()
+            raise JudgeFailure(failure_code, accounting) from None
+        sink.publish()
+        return evaluated
 
 
 class _VerificationOnly:

@@ -4,6 +4,7 @@ import argparse
 import json
 import shutil
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -103,8 +104,9 @@ def test_paid_entry_rejects_before_client_creation(
     assert not args.output_dir.exists()
 
 
+@pytest.mark.parametrize("development,provider", [("36", "50"), ("42", "55")])
 def test_old_funding_allocation_stops_before_execution(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, development: str, provider: str
 ) -> None:
     args = arguments(tmp_path)
     payload = json.loads(args.permit_file.read_text())
@@ -114,14 +116,40 @@ def test_old_funding_allocation_stops_before_execution(
         funded_slot="wp9_bootstrap_savings_repair",
         future_live_batches_remaining=2,
         still_required_usd="45.09140",
-        development_cap_usd="36",
-        provider_funding_usd="50",
+        development_cap_usd=development,
+        provider_funding_usd=provider,
     )
     args.permit_file.write_text(json.dumps(payload))
     args.data_dir = Path("eval")
 
     def forbidden(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("Old funding allocation must fail before execution prerequisites")
+
+    monkeypatch.setattr(subprocess, "check_output", forbidden)
+    monkeypatch.setattr(live_cli, "verify_offline", forbidden)
+    monkeypatch.setattr(live_cli, "create_client", forbidden)
+    with pytest.raises(ValueError, match="funded budget"):
+        live_cli.live_command(args)
+    assert not args.output_dir.exists()
+
+
+@pytest.mark.parametrize("hold", ["0.001", "0.082"])
+def test_public_unknown_hold_stops_before_client_creation_despite_ample_funding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hold: str
+) -> None:
+    args = arguments(tmp_path)
+    payload = json.loads(args.permit_file.read_text())
+    payload.update(incurred_usd="0.729081", held_usd=hold)
+    args.permit_file.write_text(json.dumps(payload))
+    assert payload["development_cap_usd"] == "62"
+    assert payload["provider_funding_usd"] == "75"
+    assert sum(
+        Decimal(payload[field])
+        for field in ("incurred_usd", "held_usd", "reserved_usd", "still_required_usd")
+    ) < Decimal("62")
+
+    def forbidden(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Unknown holds must fail before client or execution prerequisites")
 
     monkeypatch.setattr(subprocess, "check_output", forbidden)
     monkeypatch.setattr(live_cli, "verify_offline", forbidden)

@@ -1,6 +1,7 @@
 """Structural calibration checks do not establish live semantic accuracy."""
 
 import json
+import shutil
 import socket
 from copy import deepcopy
 from hashlib import sha256
@@ -8,21 +9,31 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
+import judge_calibration
 import pytest
 from anthropic import transform_schema
 from judge_calibration import (
+    APPROVED_APPROVAL_HASH,
+    APPROVED_CORPUS_HASH,
+    APPROVED_GOLD_HASH,
     CALIBRATION_DIRECTORY,
     CALIBRATION_IDS,
+    FIXED_SOURCE_MAPPING,
+    HISTORICAL_CALIBRATION_DIRECTORY,
+    HISTORICAL_FILE_HASHES,
+    approved_calibration_dataset,
     calibration_input,
     calibration_sizes,
     compact_json,
     load_calibration,
+    load_historical_calibration,
     stress_audit_output,
-    wire4_audit_output,
-    wire4_stress_audit_output,
+    wire5_audit_output,
+    wire5_stress_audit_output,
 )
 
 from rent_navigator.corpus import Corpus, load_corpus
+from rent_navigator.eval.data import load_gold
 from rent_navigator.eval.judge import (
     _decode_judgment,
     build_judge_packet,
@@ -49,12 +60,14 @@ def corpus() -> Corpus:
 
 
 def test_exact_thirteen_frozen_packets_and_originals() -> None:
-    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    manifest = json.loads((HISTORICAL_CALIBRATION_DIRECTORY / "manifest.json").read_text())
     assert manifest["fixture_ids"] == list(CALIBRATION_IDS)
     assert set(manifest["files"]) == {f"{identifier}.json" for identifier in CALIBRATION_IDS}
-    assert {path.name for path in CALIBRATION_DIRECTORY.glob("J*.json")} == set(manifest["files"])
+    assert {path.name for path in HISTORICAL_CALIBRATION_DIRECTORY.glob("J*.json")} == set(
+        manifest["files"]
+    )
     for name, digest in manifest["files"].items():
-        assert sha256((CALIBRATION_DIRECTORY / name).read_bytes()).hexdigest() == digest
+        assert sha256((HISTORICAL_CALIBRATION_DIRECTORY / name).read_bytes()).hexdigest() == digest
     for original in manifest["originals"].values():
         assert (
             sha256(original["original_packet_text"].encode()).hexdigest()
@@ -89,6 +102,7 @@ def test_public_boundary_packet_reference_binding_and_blinding(
         "expected_tool_result",
         "observed_tool_result",
         "statements",
+        "approved_facts",
     }
     assert len(packet["statements"]) <= 6
     assert build_judge_packet(calibration_input(packet, corpus)) == packet
@@ -111,8 +125,8 @@ def test_public_boundary_packet_reference_binding_and_blinding(
 
 
 def test_frozen_offline_size_report_retains_historical_configuration() -> None:
-    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
-    raw = (CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
+    manifest = json.loads((HISTORICAL_CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    raw = (HISTORICAL_CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
     assert sha256(raw).hexdigest() == manifest["sizing_file_sha256"]
     assert (
         sha256(raw).hexdigest()
@@ -128,16 +142,35 @@ def test_frozen_offline_size_report_retains_historical_configuration() -> None:
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
 def test_historical_wire3_representative_and_stress_are_not_migrated(identifier: str) -> None:
-    fixture = load_calibration(identifier)
+    fixture = load_historical_calibration(identifier)
     for old_wire in (fixture["representative_audit_output"], stress_audit_output(fixture)):
-        with pytest.raises(ValueError):
-            _decode_judgment(compact_json(old_wire), fixture["provider_packet"])
+        for packet in (fixture["provider_packet"], load_calibration(identifier)["provider_packet"]):
+            with pytest.raises(ValueError):
+                _decode_judgment(compact_json(old_wire), packet)
 
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
-def test_derived_wire4_structural_examples_map_only_unchanged_grades(identifier: str) -> None:
+def test_absent_packet3_or_wire5_fields_never_fall_back_to_historical_contract(
+    identifier: str,
+) -> None:
+    current = load_calibration(identifier)
+    wire = wire5_audit_output(current)
+    with pytest.raises(ValueError):
+        _decode_judgment(
+            compact_json(wire), load_historical_calibration(identifier)["provider_packet"]
+        )
+    for leaf in wire["statements"].values():
+        for part in leaf["parts"]:
+            part["factual_audit"].pop("fact_fields")
+            part["citation_audit"].pop("fact_fields")
+    with pytest.raises(ValueError):
+        _decode_judgment(compact_json(wire), current["provider_packet"])
+
+
+@pytest.mark.parametrize("identifier", CALIBRATION_IDS)
+def test_derived_wire5_structural_examples_map_only_unchanged_grades(identifier: str) -> None:
     fixture = load_calibration(identifier)
-    example = wire4_audit_output(fixture)
+    example = wire5_audit_output(fixture)
     result = _decode_judgment(compact_json(example), fixture["provider_packet"])
     expected = fixture["expected_judgment"]
     assert {item.id: {"result": item.result} for item in result.required_claims} == expected[
@@ -149,7 +182,7 @@ def test_derived_wire4_structural_examples_map_only_unchanged_grades(identifier:
     } == expected["statements"]
     assert result.false_pass == expected["false_pass"]
     assert result.policy_violations == expected["policy_violations"]
-    stress = wire4_stress_audit_output(fixture)
+    stress = wire5_stress_audit_output(fixture)
     assert _decode_judgment(compact_json(stress), fixture["provider_packet"]) == result
     sizes = calibration_sizes(fixture)
     assert sizes["structural_stress_output_utf8_bytes"] > sizes["representative_output_utf8_bytes"]
@@ -163,16 +196,16 @@ def test_derived_wire4_structural_examples_map_only_unchanged_grades(identifier:
 def test_retained_counterexamples_change_only_mechanical_handles(
     identifier: str, original_key: str
 ) -> None:
-    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    manifest = json.loads((HISTORICAL_CALIBRATION_DIRECTORY / "manifest.json").read_text())
     original = manifest["originals"][original_key]
-    packet = deepcopy(load_calibration(identifier)["provider_packet"])
+    packet = deepcopy(load_historical_calibration(identifier)["provider_packet"])
     for row in packet["evidence"]:
         row.pop("reference")
     assert packet == json.loads(original["original_packet_text"])
 
 
 def test_counterexample_targets_preserve_historical_disagreement() -> None:
-    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    manifest = json.loads((HISTORICAL_CALIBRATION_DIRECTORY / "manifest.json").read_text())
     assert manifest["originals"]["Q04"]["original_grade"]["required_claims"]["c3"] == {
         "result": "met"
     }
@@ -214,3 +247,126 @@ def test_control_pairs_keep_relevant_evidence_and_grade_independence() -> None:
         )
         assert left["expected_judgment"]["statements"]["s1"]["factual"] == "supported"
         assert right["expected_judgment"]["statements"]["s1"]["factual"] == "contradicted"
+
+
+@pytest.mark.parametrize("identifier", CALIBRATION_IDS)
+def test_current_fixtures_preserve_entire_history_except_independently_approved_facts(
+    corpus: Corpus, identifier: str
+) -> None:
+    historical = load_historical_calibration(identifier)
+    current = load_calibration(identifier, corpus=corpus)
+    binding = current.pop("fact_authority_derivation")
+    supplied = current["provider_packet"].pop("approved_facts")
+    assert current == historical
+    dataset = load_gold(Path("eval"), corpus)
+    assert dataset.approval.status == "approved"
+    assert dataset.gold_hash == APPROVED_GOLD_HASH
+    assert dataset.approval_hash == APPROVED_APPROVAL_HASH
+    assert corpus.corpus_hash == APPROVED_CORPUS_HASH
+    source_id = FIXED_SOURCE_MAPPING[identifier]
+    source = next((case for case in dataset.cases if case.id == source_id), None)
+    expected = (
+        {"kind": source.kind, "facts": source.request.facts.model_dump(mode="json")}
+        if source is not None
+        and source.kind in {"notice", "rent"}
+        and source.request.mode != "question"
+        else None
+    )
+    assert supplied == expected
+    assert binding["approved_case_id"] == source_id
+    assert binding["historical_fixture_sha256"] == HISTORICAL_FILE_HASHES[f"{identifier}.json"]
+    assert binding["gold_file_sha256"] == dataset.gold_hash
+    assert binding["approval_file_sha256"] == dataset.approval_hash
+    assert binding["packet_policy_version"] == 3 and binding["wire_policy_version"] == 5
+    assert binding["historical_amount_gap"] is (identifier == "J13")
+
+
+def test_current_manifest_and_sizes_bind_new_actual_configuration(corpus: Corpus) -> None:
+    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    assert manifest["fixture_ids"] == list(CALIBRATION_IDS)
+    assert manifest["historical_files_sha256"] == HISTORICAL_FILE_HASHES
+    assert manifest["fixed_source_mapping"] == FIXED_SOURCE_MAPPING
+    assert manifest["approved_source"] == {
+        "gold_file_sha256": APPROVED_GOLD_HASH,
+        "approval_file_sha256": APPROVED_APPROVAL_HASH,
+        "corpus_hash": APPROVED_CORPUS_HASH,
+    }
+    assert manifest["packet_policy_version"] == 3 and manifest["wire_policy_version"] == 5
+    for name, digest in manifest["files"].items():
+        assert sha256((CALIBRATION_DIRECTORY / name).read_bytes()).hexdigest() == digest
+    raw = (CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
+    assert sha256(raw).hexdigest() == manifest["sizing_file_sha256"]
+    sizes = json.loads(raw)
+    assert (
+        sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == judge_config_hash()
+    )
+    assert sizes["provider_calls"] == 0 and sizes["count_calls"] == 0
+    assert sizes["token_measurement"] is None
+    assert sizes["fixtures"] == {
+        identifier: calibration_sizes(load_calibration(identifier, corpus=corpus))
+        for identifier in CALIBRATION_IDS
+    }
+
+
+@pytest.mark.parametrize(
+    "identifier,key,value", [("J13", "proposed_cents", 102500), ("J04", "served_on", "2026-12-01")]
+)
+def test_jointly_rehashed_derived_facts_still_fail_external_source_binding(
+    corpus: Corpus, tmp_path: Path, identifier: str, key: str, value: object
+) -> None:
+    target = tmp_path / "derived"
+    shutil.copytree(CALIBRATION_DIRECTORY, target)
+    path = target / f"{identifier}.json"
+    fixture = json.loads(path.read_text())
+    fixture["provider_packet"]["approved_facts"]["facts"][key] = value
+    path.write_text(compact_json(fixture))
+    manifest_path = target / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"][path.name] = sha256(path.read_bytes()).hexdigest()
+    manifest_path.write_text(compact_json(manifest))
+    assert sha256(path.read_bytes()).hexdigest() == manifest["files"][path.name]
+    with pytest.raises(ValueError, match="independently approved derivation"):
+        load_calibration(identifier, corpus=corpus, directory=target)
+
+
+@pytest.mark.parametrize(
+    "case_id,key,value", [("R04", "proposed_cents", 102500), ("N04", "served_on", "2026-12-01")]
+)
+def test_foreign_self_signed_approved_source_cannot_replace_fixed_authority(
+    corpus: Corpus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case_id: str,
+    key: str,
+    value: object,
+) -> None:
+    target = tmp_path / "foreign"
+    target.mkdir()
+    for name in ("gold.jsonl", "gold-approval.json", "activation.json"):
+        shutil.copyfile(Path("eval") / name, target / name)
+    rows = [json.loads(line) for line in (target / "gold.jsonl").read_text().splitlines()]
+    row = next(row for row in rows if row["id"] == case_id)
+    row["request"]["facts"][key] = value
+    row["expected_tool_args"][key] = value
+    if row["expected_extract"] is not None:
+        row["expected_extract"][key] = value
+    (target / "gold.jsonl").write_text("\n".join(compact_json(row) for row in rows) + "\n")
+    approval = json.loads((target / "gold-approval.json").read_text())
+    approval["gold_sha256"] = sha256((target / "gold.jsonl").read_bytes()).hexdigest()
+    (target / "gold-approval.json").write_text(compact_json(approval))
+    assert load_gold(target, corpus).approval.status == "approved"
+    monkeypatch.setattr(judge_calibration, "APPROVED_DATA_DIRECTORY", target)
+    with pytest.raises(ValueError, match="fixed external approval"):
+        approved_calibration_dataset(corpus)
+
+
+def test_new_derived_manifest_cannot_redefine_historical_byte_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "old"
+    shutil.copytree(HISTORICAL_CALIBRATION_DIRECTORY, target)
+    path = target / "J13.json"
+    path.write_bytes(path.read_bytes() + b"\n")
+    monkeypatch.setattr(judge_calibration, "HISTORICAL_CALIBRATION_DIRECTORY", target)
+    with pytest.raises(ValueError, match="antecedents changed"):
+        load_historical_calibration("J13")

@@ -30,6 +30,8 @@ def ordered_pointers(packet: dict[str, Any], selected: list[str]) -> list[str]:
         else:
             paths.append(path)
 
+    if packet.get("approved_facts") is not None:
+        walk(packet["approved_facts"]["facts"], "/approved_facts/facts")
     for root in ("safety_context", "expected_tool_result", "observed_tool_result"):
         if root in packet:
             walk(packet[root], "/" + root)
@@ -43,6 +45,7 @@ def audit(
     refs: list[str],
     basis: str,
     pointers: list[str] | None = None,
+    fact_pointers: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "observation": observation,
@@ -52,6 +55,7 @@ def audit(
             if row["reference"] in refs
         ],
         "tool_fields": ordered_pointers(packet, pointers or []),
+        "fact_fields": ordered_pointers(packet, fact_pointers or []),
         "basis": basis,
     }
 
@@ -97,14 +101,17 @@ def calibration_witness(identifier: str) -> tuple[dict[str, Any], dict[str, Any]
         citation_refs: list[str],
         basis: str,
         pointers: list[str] | None = None,
+        fact_pointers: list[str] | None = None,
     ) -> None:
         text = next(row["text"] for row in packet["statements"] if row["id"] == sid)
         wire["statements"][sid]["parts"] = [
             {
                 "text": text,
-                "factual_audit": audit(packet, factual_observation, factual_refs, basis, pointers),
+                "factual_audit": audit(
+                    packet, factual_observation, factual_refs, basis, pointers, fact_pointers
+                ),
                 "citation_audit": audit(
-                    packet, citation_observation, citation_refs, basis, pointers
+                    packet, citation_observation, citation_refs, basis, pointers, fact_pointers
                 ),
             }
         ]
@@ -236,16 +243,18 @@ def calibration_witness(identifier: str) -> tuple[dict[str, Any], dict[str, Any]
                 ["e4", "e6"],
                 ["/observed_tool_result/latest_deemed_service_on"],
                 (
-                    "Section 89(3) excludes service day and includes effective day; the "
-                    "executed latest date is supplied."
+                    "Section 89(3) excludes service day and includes effective day. "
+                    "Approved facts supply the March 1, 2027 effective date; the latest "
+                    "service date is a supplied result, not an observed service."
                 ),
             ),
             "s3": (
                 ["e1", "e3"],
                 [],
                 (
-                    "Section 191(1)(a),(c) and N1 instructions "
-                    "expressly permit both hand-delivery forms."
+                    "Section 191(1)(a),(c) and N1 instructions expressly permit both "
+                    "hand-delivery forms. The approved scenario names hand service "
+                    "without proving a service event occurred."
                 ),
             ),
             "s4": (
@@ -256,8 +265,10 @@ def calibration_witness(identifier: str) -> tuple[dict[str, Any], dict[str, Any]
                     "/observed_tool_result/checks/3/status",
                 ],
                 (
-                    "The supplied latest date is December 1; notice_days is null and the "
-                    "notice check is unknown. No new arithmetic is used."
+                    "Approved facts supply the effective date, hand method and null "
+                    "actual service date. The supplied latest date is December 1; "
+                    "notice_days is null and notice check unknown. No new arithmetic "
+                    "or service event is inferred."
                 ),
             ),
             "s5": (
@@ -278,7 +289,20 @@ def calibration_witness(identifier: str) -> tuple[dict[str, Any], dict[str, Any]
             ),
         }
         for sid, (refs, pointers, basis) in specs.items():
-            statement(sid, "explicit", refs, "explicit", refs, basis, pointers)
+            fact_pointers = {
+                "s1": [
+                    "/approved_facts/facts/scope/ordinary",
+                    "/approved_facts/facts/scope/period_start",
+                ],
+                "s2": ["/approved_facts/facts/effective_on"],
+                "s3": ["/approved_facts/facts/service_method"],
+                "s4": [
+                    "/approved_facts/facts/effective_on",
+                    "/approved_facts/facts/served_on",
+                    "/approved_facts/facts/service_method",
+                ],
+            }.get(sid, [])
+            statement(sid, "explicit", refs, "explicit", refs, basis, pointers, fact_pointers)
     elif identifier == "J08":
         for number, ref in ((1, "e4"), (2, "e1")):
             sid = f"s{number}"
@@ -342,10 +366,12 @@ def calibration_witness(identifier: str) -> tuple[dict[str, Any], dict[str, Any]
             "explicit",
             ["e1", "e4"],
             (
-                "The supplied cap and guideline failure support the amount comparison; "
-                "no grader arithmetic is introduced."
+                "The approved proposed-cents input supplies the exact proposed amount, "
+                "displayed in CAD. The supplied cap and failed guideline check provide "
+                "the comparison under the own guideline law; no new calculation is introduced."
             ),
             ["/observed_tool_result/cap_cents_exact", "/observed_tool_result/checks/5/status"],
+            ["/approved_facts/facts/proposed_cents"],
         )
         statement(
             "s2",

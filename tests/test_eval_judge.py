@@ -217,6 +217,7 @@ def test_packet_only_allowed_data_deduplicates_and_preserves_citation_membership
         "expected_tool_result",
         "observed_tool_result",
         "statements",
+        "approved_facts",
     }
     assert len(packet["evidence"]) == len(
         {chunk.id for chunk in (*value.evidence, *value.cited_evidence)}
@@ -653,18 +654,19 @@ def test_native_boolean_count_is_retained_without_judge_generation(
     test.verify(caught.value.accounting)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def isolated_count_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(os, "environ", {})
+
     def forbidden(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("Count replay cannot access credentials, clients, or network")
 
     def protected_open(original: Any) -> Any:
         def guarded(path: Any, *args: Any, **kwargs: Any) -> Any:
-            if isinstance(path, (str, Path)) and Path(path).name in {
-                ".env",
-                ".env.local",
-                "credentials.json",
-            }:
+            if isinstance(path, str | Path) and (
+                any(part.startswith(".env") for part in Path(path).parts)
+                or Path(path).name == "credentials.json"
+            ):
                 forbidden()
             return original(path, *args, **kwargs)
 
@@ -1275,7 +1277,7 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     if changed_part == "wire_policy":
         monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": "different"})
     elif changed_part == "citation_selection":
-        assert module._WIRE_POLICY["version"] == 4
+        assert module._WIRE_POLICY["version"] == 5
         assert "citation_audit" in module._WIRE_POLICY
         monkeypatch.setattr(
             module,
@@ -1824,9 +1826,10 @@ def test_private_response_text_is_decoded_once_before_mapping(
     calls: list[str] = []
 
     def observed_loads(text: str, **kwargs: Any) -> Any:
-        calls.append(text)
-        assert callable(kwargs.get("object_pairs_hook"))
-        assert callable(kwargs.get("parse_constant"))
+        if text == raw_text:
+            calls.append(text)
+            assert callable(kwargs.get("object_pairs_hook"))
+            assert callable(kwargs.get("parse_constant"))
         return original_loads(text, **kwargs)
 
     monkeypatch.setattr(json, "loads", observed_loads)

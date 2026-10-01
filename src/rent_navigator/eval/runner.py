@@ -11,7 +11,7 @@ from io import StringIO
 from typing import Annotated, Any, Literal, Protocol, TextIO
 from uuid import UUID, uuid4
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from rent_navigator.agent import agent_config_hash, answer
 from rent_navigator.corpus import Chunk, Corpus
@@ -32,6 +32,7 @@ from rent_navigator.guards import redact_text
 from rent_navigator.index import SearchHit
 from rent_navigator.models import (
     ASK_REQUEST_ADAPTER,
+    AskRequest,
     AskResponse,
     CanonicalUUID,
     ErrorCode,
@@ -221,6 +222,70 @@ def validate_judge_accounting(value: JudgeAccounting, context: TraceContext) -> 
         raise ValueError("Judge returned model differs from call metadata")
 
 
+def _complete_fact_json(value: object) -> str:
+    if isinstance(value, NoticeFacts | RentFacts):
+        return value.model_dump_json()
+    return json.dumps(value)
+
+
+class ApprovedNoticeFacts(StrictModel):
+    """Complete approved scenario premises, validated by the declared notice kind."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    kind: Literal["notice"]
+    facts: NoticeFacts
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def complete_notice_facts(cls, value: object) -> NoticeFacts:
+        return NoticeFacts.model_validate_json(_complete_fact_json(value))
+
+
+class ApprovedRentFacts(StrictModel):
+    """Complete approved scenario premises, validated by the declared rent kind."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    kind: Literal["rent"]
+    facts: RentFacts
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def complete_rent_facts(cls, value: object) -> RentFacts:
+        return RentFacts.model_validate_json(_complete_fact_json(value))
+
+
+ApprovedFacts = Annotated[ApprovedNoticeFacts | ApprovedRentFacts, Field(discriminator="kind")]
+APPROVED_FACTS_ADAPTER: TypeAdapter[ApprovedFacts | None] = TypeAdapter(ApprovedFacts | None)
+
+
+def validate_approved_facts(value: object) -> ApprovedFacts | None:
+    """Revalidate complete actual facts before any base-class serialization can strip them."""
+    if isinstance(value, ApprovedNoticeFacts | ApprovedRentFacts):
+        value = {"kind": value.kind, "facts": json.loads(_complete_fact_json(value.facts))}
+    return APPROVED_FACTS_ADAPTER.validate_json(json.dumps(value))
+
+
+def approved_facts_from_request(request: AskRequest) -> ApprovedFacts | None:
+    """Read scenario facts by the declared mode; never infer them from observed outputs."""
+    envelope = (
+        validate_approved_facts(
+            {"kind": request.mode, "facts": json.loads(_complete_fact_json(request.facts))}
+        )
+        if request.mode != "question"
+        else None
+    )
+    ASK_REQUEST_ADAPTER.validate_json(request.model_dump_json())
+    return envelope
+
+
+def approved_facts_from_case(case: GoldCase) -> ApprovedFacts | None:
+    """Revalidate original approved-case equalities before reading its request premises."""
+    GoldCase.model_validate_json(case.model_dump_json())
+    return approved_facts_from_request(case.request)
+
+
 class JudgeSafetyContext(StrictModel):
     """Trusted policy context; invariants need not appear as repeated answer text."""
 
@@ -262,7 +327,20 @@ class JudgeInput:
     response: AskResponse
     actual_tool_result: ToolResult | None
     cited_evidence: tuple[Chunk, ...]
+    approved_facts: ApprovedFacts | None
     safety_context: JudgeSafetyContext | None = None
+
+    def __post_init__(self) -> None:
+        envelope = validate_approved_facts(self.approved_facts)
+        object.__setattr__(self, "approved_facts", envelope)
+        if self.safety_context is not None:
+            confirmed = self.safety_context.confirmed_facts
+            if (None if confirmed is None else json.loads(_complete_fact_json(confirmed))) != (
+                None if envelope is None else envelope.facts.model_dump(mode="json")
+            ):
+                raise ValueError(
+                    "Safety confirmed facts must exactly match approved scenario facts"
+                )
 
 
 class JudgePort(Protocol):
@@ -509,6 +587,7 @@ async def run_attempt(
                         cited_evidence=tuple(
                             corpus.chunk(citation.id) for citation in response.citations
                         ),
+                        approved_facts=approved_facts_from_case(case),
                     ),
                     context=judge_context,
                 )

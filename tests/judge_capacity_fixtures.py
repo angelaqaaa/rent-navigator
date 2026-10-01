@@ -8,7 +8,7 @@ from uuid import UUID
 
 from judge_anchor_fixtures import audit, calibration_witness, claim_part, ordered_pointers
 from judge_calibration import load_calibration
-from judge_wire_fixtures import POLICY_LIMITS
+from judge_wire_fixtures import POLICY_LIMITS, scalar_paths
 
 from rent_navigator.corpus import SOURCE_URLS, Corpus
 from rent_navigator.eval.judge import build_judge_packet, judge_config_hash, judge_schema
@@ -115,12 +115,18 @@ def _additional_calibration(identifier: str) -> tuple[dict[str, Any], dict[str, 
     )
 
     def part(
-        sid: str, text: str, observation: str, refs: list[str], pointers: list[str], basis: str
+        sid: str,
+        text: str,
+        observation: str,
+        refs: list[str],
+        pointers: list[str],
+        basis: str,
+        fact_pointers: list[str],
     ) -> dict[str, Any]:
         return {
             "text": text,
-            "factual_audit": audit(packet, observation, refs, basis, pointers),
-            "citation_audit": audit(packet, observation, refs, basis, pointers),
+            "factual_audit": audit(packet, observation, refs, basis, pointers, fact_pointers),
+            "citation_audit": audit(packet, observation, refs, basis, pointers, fact_pointers),
         }
 
     if identifier in {"J04", "J06"}:
@@ -144,10 +150,11 @@ def _additional_calibration(identifier: str) -> tuple[dict[str, Any], dict[str, 
             ["e4"],
             ["/observed_tool_result/latest_deemed_service_on"],
             (
-                "The supplied executed latest service date is December 1, 2026; a "
-                "missing actual served date does not make that latest deadline "
-                "unknowable."
+                "The approved effective date is known and actual served date is null. "
+                "The supplied latest service date is December 1, 2026; missing actual "
+                "service does not make that computed deadline unknowable."
             ),
+            ["/approved_facts/facts/effective_on", "/approved_facts/facts/served_on"],
         )
         wire["statements"]["s4"]["parts"] = [wrong_deadline]
         compliance_text = (
@@ -160,9 +167,11 @@ def _additional_calibration(identifier: str) -> tuple[dict[str, Any], dict[str, 
             ["e4"],
             ["/observed_tool_result/checks/3/status", "/observed_tool_result/notice_days"],
             (
-                "The 90-day rule is supplied, but the actual interval is null and "
-                "the notice check is unknown; compliance cannot be verified."
+                "The approved actual service date is null. The supplied interval is "
+                "null and notice check unknown under the own 90-day rule; compliance "
+                "cannot be verified."
             ),
+            ["/approved_facts/facts/served_on"],
         )
         if identifier == "J04":
             wire["statements"]["s4"]["parts"].append(compliance)
@@ -186,20 +195,27 @@ def _additional_calibration(identifier: str) -> tuple[dict[str, Any], dict[str, 
                     "explicit",
                     ["e2", "e3"],
                     (
-                        "The executed latest date is known, while notice_days is null and "
-                        "the notice check is unknown. This distinguishes the deadline "
-                        "from actual compliance."
+                        "Approved facts supply the effective date, hand method and "
+                        "unknown actual service. The supplied latest date is known, "
+                        "while notice_days is null and the check unknown. The own rules "
+                        "distinguish that deadline from actual compliance."
                     ),
                     [
                         "/observed_tool_result/latest_deemed_service_on",
                         "/observed_tool_result/checks/3/status",
                         "/observed_tool_result/notice_days",
                     ],
+                    [
+                        "/approved_facts/facts/effective_on",
+                        "/approved_facts/facts/served_on",
+                        "/approved_facts/facts/service_method",
+                    ],
                 ),
                 "citation_audit": {
                     "observation": "not_applicable",
                     "source_anchors": [],
                     "tool_fields": [],
+                    "fact_fields": [],
                     "basis": "No citation supplied.",
                 },
             }
@@ -241,8 +257,10 @@ def safety_candidate(
         ids.add("d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859")
         text = (
             "An ordinary increase requires at least 90 days' written notice in an approved form. "
-            "Section 119 ties increases to its 12-month rule, including its "
-            "specified assignment treatment. "
+            "Section 119 permits a lawfully entitled landlord to increase rent only if at "
+            "least 12 months have elapsed since the last increase for that tenant in that "
+            "unit, or since that unit was first rented to that tenant if none; "
+            "section 123 increases do not count for this rule. "
             "Section 120 sets the guideline limit subject to its stated "
             "exceptions; the 2026 guideline is 2.1%. "
             "Counting days between events excludes the first event and includes the second. "
@@ -272,7 +290,8 @@ def safety_candidate(
         )
         basis = (
             "Each own passage supplies the named statutory topic, retaining "
-            "its full qualifications in the quotes. The actual unsupported "
+            "its full qualifications in the quotes. Approved facts supply "
+            "the excluded scope. The actual unsupported "
             "result is reported without applying those exemptions to this "
             "case or declaring any passing outcome."
         )
@@ -303,6 +322,7 @@ def safety_candidate(
     value = safety_judge_input(case, response, tool, corpus)
     packet = build_judge_packet(value)
     references = [row["reference"] for row in packet["evidence"]]
+    fact_pointers = ["/approved_facts/facts/scope/ordinary"] if identifier == "S07" else []
     wire: dict[str, Any] = {
         "required_claims": {
             case.required_policy_claims[0].id: {
@@ -338,8 +358,12 @@ def safety_candidate(
                 "parts": [
                     {
                         "text": text,
-                        "factual_audit": audit(packet, "explicit", references, basis, pointers),
-                        "citation_audit": audit(packet, "explicit", references, basis, pointers),
+                        "factual_audit": audit(
+                            packet, "explicit", references, basis, pointers, fact_pointers
+                        ),
+                        "citation_audit": audit(
+                            packet, "explicit", references, basis, pointers, fact_pointers
+                        ),
                     }
                 ],
             }
@@ -417,7 +441,7 @@ def witness_metrics(packet: dict[str, Any], wire: dict[str, Any]) -> dict[str, A
             for key, child in value.items():
                 visit(child, path + "/" + key)
         elif isinstance(value, list):
-            if path.endswith(("/tool_fields", "/context_fields")):
+            if path.endswith(("/tool_fields", "/context_fields", "/fact_fields")):
                 pointers.append({"path": path, "pointers": value})
             for index, child in enumerate(value):
                 visit(child, path + "/" + str(index))
@@ -439,6 +463,14 @@ def witness_metrics(packet: dict[str, Any], wire: dict[str, Any]) -> dict[str, A
         ),
         "context_pointer_count": sum(
             len(row["pointers"]) for row in pointers if row["path"].endswith("/context_fields")
+        ),
+        "fact_pointer_count": sum(
+            len(row["pointers"]) for row in pointers if row["path"].endswith("/fact_fields")
+        ),
+        "eligible_fact_fields": (
+            scalar_paths(packet["approved_facts"]["facts"], "/approved_facts/facts")
+            if packet["approved_facts"] is not None
+            else []
         ),
         "selected_anchors": anchors,
         "selected_pointers": pointers,

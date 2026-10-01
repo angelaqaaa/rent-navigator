@@ -1,0 +1,176 @@
+{
+  "adjudication_notes": [],
+  "derivation": "Derived from Q01: preserve two true year statements and canonical guideline evidence, replace each own citation with the Board-role passage and add it as cited-only evidence.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      },
+      "c2": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "unsupported",
+        "factual": "supported"
+      },
+      "s2": {
+        "citation_support": "unsupported",
+        "factual": "supported"
+      }
+    }
+  },
+  "fact_authority_derivation": {
+    "approval_file_sha256": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+    "approved_case_id": "Q01",
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "fact_source": "null",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "historical_amount_gap": false,
+    "historical_fixture_file": "tests/fixtures/judge_calibration/J08.json",
+    "historical_fixture_sha256": "fa6cda9b1d19637b33f8b842c67af85d7f72502d6a89b531208c9914b010d413",
+    "packet_policy_version": 3,
+    "schema_version": 1,
+    "wire_policy_version": 5
+  },
+  "fixture_id": "J08",
+  "provider_packet": {
+    "approved_facts": null,
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "Rent increase guideline",
+        "id": "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2",
+        "reference": "e1",
+        "text": "Rent increase guideline\n\nThe rent increase guideline for 2027 is 1.9%.\n\nThe guideline is the maximum a landlord can increase most tenants’ rent during a year without the approval of the Landlord and Tenant Board.\n\nFor most tenants, your rent can’t go up by more than the rent increase guideline for every year.\n\nThe guideline applies to most private residential rental units covered by the Residential Tenancies Act, 2006. This applies to most tenants, such as those living in:\n\nrented houses, apartments, basement apartments and condos\n\ncare homes\n\nmobile homes\n\nland lease communities\n\nThe guideline does not apply to:\n\nnew buildings, additions to existing buildings and most new basement apartments that are occupied for the first time for residential purposes after November 15, 2018\n\nrental units upon turnover of a tenancy (the landlord and new tenant agree on the rent amount)\n\ncommunity housing units\n\nlong-term care homes\n\ncommercial properties\n\nSocial housing is covered by the Residential Tenancies Act, 2006, but has different rules regarding rent control and rent increase notices."
+      },
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "RTA s. 120 — Guideline increase",
+        "id": "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "reference": "e2",
+        "text": "Guideline increase\n\n120 (1) No landlord may increase the rent charged to a tenant, or to an assignee under section 95, during the term of their tenancy by more than the guideline, except in accordance with section 126 or 127 or an agreement under section 121 or 123. 2006, c. 17, s. 120 (1).\n\nGuideline\n\n(2) The Minister shall determine the guideline in effect for each calendar year as follows:\n\n1. Subject to the limitation set out in paragraph 2, the guideline for a calendar year is the percentage change from year to year in the Consumer Price Index for Ontario for prices of goods and services as reported monthly by Statistics Canada, averaged over the 12-month period that ends at the end of May of the previous calendar year, rounded to the first decimal point.\n\n2. The guideline for a calendar year shall be not more than 2.5 per cent. 2012, c. 6, s. 1.\n\nPublication of guideline\n\n(3) The Minister shall have the guideline for each calendar year published in The Ontario Gazette not later than August 31 of the preceding year. 2012, c. 6, s. 1.\n\nGuideline for 2021\n\n(3.1) The guideline for the calendar year 2021 is zero per cent, despite subsection (2) and despite the guideline published under subsection (3) in The Ontario Gazette for 2021. 2020, c. 23, Sched. 7, s. 1.\n\nSame\n\n(3.2) The Minister is not required to have the guideline for the calendar year 2021, as set out in subsection (3.1), published in The Ontario Gazette. 2020, c. 23, Sched. 7, s. 1.\n\nTransition\n\n(4) The guideline for the calendar year in which the commencement date occurs is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nSame\n\n(5) If the commencement date occurs on or after September 1 in a calendar year, the guideline for the following calendar year is the guideline established for that year under this section as it read immediately before the commencement date. 2012, c. 6, s. 1.\n\nReview by Minister\n\n(6) The Minister shall initiate a review of the operation of this section within four years after the commencement date and thereafter within four years after the end of the previous review. 2012, c. 6, s. 1.\n\nDefinition\n\n(7) In subsections (4), (5) and (6),\n\n“commencement date” means the day section 1 of the Residential Tenancies Amendment Act (Rent Increase Guideline), 2012 comes into force. 2012, c. 6, s. 1."
+      },
+      {
+        "canonical": false,
+        "cited_by": [
+          "s1",
+          "s2"
+        ],
+        "heading": "About the LTB",
+        "id": "4bf7f7bd7f9fefeb51aca011a810d975bdbaccdb4b2db7690e77c5dde0bc752a",
+        "reference": "e3",
+        "text": "About the LTB\n\nThe Landlord and Tenant Board resolves disputes between tenants and landlords. It is similar to a court.\n\nEither a landlord or a tenant can apply to the LTB. Their disputes can be worked out through mediation or adjudication.\n\nIn mediation, an LTB mediator helps a landlord and tenant reach an agreement they are both satisfied with.\n\nIn adjudication, a hearing is held. After the hearing, an LTB member makes a decision based on the evidence that the landlord and tenant present, and then issues an order. An order is the final, written version of the LTB member's decision.\n\nThe LTB also provides landlords and tenants with information about the rights and responsibilities they have under the Act."
+      },
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "Previous rent increase guidelines",
+        "id": "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+        "reference": "e4",
+        "text": "Previous rent increase guidelines\n\nThe chart below illustrates yearly rent increases, in Ontario, from 1991 to 2027.\n\nYear | guideline (%)\n\n2027 | 1.9\n\n2026 | 2.1\n\n2025 | 2.5\n\n2024 | 2.5\n\n2023 | 2.5\n\n2022 | 1.2\n\n2021 | 0footnote 1[1]\n\n2020 | 2.2\n\n2019 | 1.8\n\n2018 | 1.8\n\n2017 | 1.5\n\n2016 | 2.0\n\n2015 | 1.6\n\n2014 | 0.8\n\n2013 | 2.5\n\n2012 | 3.1\n\n2011 | 0.7\n\n2010 | 2.1\n\n2009 | 1.8\n\n2008 | 1.4\n\n2007 | 2.6\n\n2006 | 2.1\n\n2005 | 1.5\n\n2004 | 2.9\n\n2003 | 2.9\n\n2002 | 3.9\n\n2001 | 2.9\n\n2000 | 2.6\n\n1999 | 3.0\n\n1998 | 3.0\n\n1997 | 2.8\n\n1996 | 2.8\n\n1995 | 2.9\n\n1994 | 3.2\n\n1993 | 4.9\n\n1992 | 6.0\n\n1991 | 5.4"
+      }
+    ],
+    "expected_tool_result": null,
+    "observed_tool_result": null,
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "The rent-increase guideline for 2026 is 2.1%."
+      },
+      {
+        "id": "c2",
+        "text": "The rent-increase guideline for 2027 is 1.9%."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "4bf7f7bd7f9fefeb51aca011a810d975bdbaccdb4b2db7690e77c5dde0bc752a"
+        ],
+        "id": "s1",
+        "text": "For 2026, the rent increase guideline is 2.1%."
+      },
+      {
+        "citation_ids": [
+          "4bf7f7bd7f9fefeb51aca011a810d975bdbaccdb4b2db7690e77c5dde0bc752a"
+        ],
+        "id": "s2",
+        "text": "For 2027, the rent increase guideline is 1.9%."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "s1 express this required meaning: The rent-increase guideline for 2026 is 2.1%.",
+        "result": "met"
+      },
+      "c2": {
+        "answer_statement_ids": [
+          "s2"
+        ],
+        "coverage_basis": "s2 express this required meaning: The rent-increase guideline for 2027 is 1.9%.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e3"
+          ],
+          "summary": "The own Board-role passage contains no annual guideline rate.",
+          "tool_fields": []
+        },
+        "citation_support": "unsupported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e4"
+          ],
+          "summary": "The canonical historical guideline table gives 2026 as 2.1%.",
+          "tool_fields": []
+        }
+      },
+      "s2": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e3"
+          ],
+          "summary": "The own Board-role passage contains no annual guideline rate.",
+          "tool_fields": []
+        },
+        "citation_support": "unsupported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "Canonical guideline evidence gives 2027 as 1.9%.",
+          "tool_fields": []
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "Q01",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "True annual guidelines with irrelevant own Board citation"
+}

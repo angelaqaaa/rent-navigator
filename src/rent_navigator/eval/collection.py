@@ -33,6 +33,7 @@ from rent_navigator.eval.runner import (
     JudgeInput,
     JudgePort,
     PlanEntry,
+    approved_facts_from_case,
     build_plan,
     config_map,
     protocol_hash,
@@ -917,6 +918,7 @@ def _verify_real_judges(
         assert isinstance(row.response, AskResponse)
         case = cases[row.case_id]
         value = JudgeInput(
+            approved_facts=approved_facts_from_case(case),
             required_claims=tuple(case.required_claims),
             evidence=tuple(
                 corpus.chunk(identifier) for identifier in sorted(set(case.evidence_ids))

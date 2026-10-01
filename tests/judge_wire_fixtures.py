@@ -20,8 +20,27 @@ def answer_anchor(statement: dict[str, Any]) -> dict[str, str]:
     return {"statement_id": statement["id"], "quote": statement["text"]}
 
 
+def scalar_paths(value: object, root: str) -> list[str]:
+    """Test-only exact scalar/null pointer enumeration, including RFC6901 escaping."""
+    if isinstance(value, dict):
+        return [
+            pointer
+            for key in sorted(value)
+            for pointer in scalar_paths(
+                value[key], root + "/" + key.replace("~", "~0").replace("/", "~1")
+            )
+        ]
+    if isinstance(value, list):
+        return [
+            pointer
+            for index, child in enumerate(value)
+            for pointer in scalar_paths(child, root + "/" + str(index))
+        ]
+    return [root]
+
+
 def add_audit_bases(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, Any]:
-    """Add structural wire4 witnesses, preserving supplied grades, keys and IDs.
+    """Add structural wire5 witnesses, preserving supplied grades, keys and IDs.
 
     Grade-compatible observations are synthetic inputs, not inferred judgments.
     Callers test inconsistent observations by mutating the returned wire explicitly.
@@ -32,6 +51,17 @@ def add_audit_bases(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, A
     statements = {statement["id"]: statement for statement in packet["statements"]}
     claims = {claim["id"]: claim for claim in packet["required_claims"]}
     evidence = packet["evidence"]
+    fact_paths = (
+        scalar_paths(packet["approved_facts"]["facts"], "/approved_facts/facts")
+        if packet.get("approved_facts") is not None
+        else []
+    )
+    tool_paths = [
+        pointer
+        for root in ("expected_tool_result", "observed_tool_result")
+        if packet.get(root) is not None
+        for pointer in scalar_paths(packet[root], "/" + root)
+    ]
     policy = packet.get("safety_context", {}).get("policy_claims") is True
     for identifier, leaf in data["required_claims"].items():
         if policy:
@@ -86,7 +116,8 @@ def add_audit_bases(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, A
                 "contradicted": "conflicting",
             }.get(leaf.get("factual") if isinstance(leaf.get("factual"), str) else "", "explicit"),
             "source_anchors": [source_anchor(evidence[0])] if evidence else [],
-            "tool_fields": [],
+            "tool_fields": tool_paths[:1] if not evidence and not fact_paths else [],
+            "fact_fields": fact_paths[:1] if not evidence else [],
             "basis": "Synthetic factual fixture for boundary validation.",
         }
         citation = (
@@ -96,6 +127,7 @@ def add_audit_bases(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, A
                 else "insufficient",
                 "source_anchors": [source_anchor(own[0])] if own else [],
                 "tool_fields": [],
+                "fact_fields": [],
                 "basis": "Synthetic own-citation fixture for boundary validation.",
             }
             if citations
@@ -103,6 +135,7 @@ def add_audit_bases(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, A
                 "observation": "not_applicable",
                 "source_anchors": [],
                 "tool_fields": [],
+                "fact_fields": [],
                 "basis": "No citation supplied.",
             }
         )

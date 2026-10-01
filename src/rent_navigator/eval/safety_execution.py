@@ -30,6 +30,7 @@ from rent_navigator.eval.runner import (
     JudgePort,
     JudgeSafetyContext,
     _Tee,
+    approved_facts_from_request,
     validate_judge_accounting,
 )
 from rent_navigator.guards import redact_text
@@ -153,6 +154,9 @@ def safety_judge_input(
     case: SecurityCase, response: AskResponse, actual_result: ToolResult | None, corpus: Corpus
 ) -> JudgeInput:
     return JudgeInput(
+        approved_facts=approved_facts_from_request(case.request)
+        if not isinstance(case.request, ExtractRequest)
+        else None,
         required_claims=tuple(
             Claim(id=item.id, text=item.text) for item in case.required_policy_claims
         ),

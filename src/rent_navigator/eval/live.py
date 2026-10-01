@@ -42,6 +42,7 @@ from rent_navigator.eval.runner import (
     JudgeAccounting,
     JudgeEvaluation,
     PlanEntry,
+    approved_facts_from_case,
     config_map,
     protocol_hash,
     run_attempt,
@@ -726,6 +727,7 @@ def verify_live_gate(
             if isinstance(row, ResultRow):
                 case = cases[row.case_id]
                 value = JudgeInput(
+                    approved_facts=approved_facts_from_case(case),
                     required_claims=tuple(case.required_claims),
                     evidence=tuple(corpus.chunk(i) for i in sorted(set(case.evidence_ids))),
                     expected_tool_result=case.expected_tool_result,

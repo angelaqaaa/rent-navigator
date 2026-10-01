@@ -1,0 +1,231 @@
+{
+  "adjudication_notes": [],
+  "derivation": "Derived from J05: keep only its corrected s4, rename to s1 and remove citations. Retain original canonical evidence and both tool results; remove only cited-only evidence absent from this uncited packet. No arm label enters provider data.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "not_applicable",
+        "factual": "supported"
+      }
+    }
+  },
+  "fact_authority_derivation": {
+    "approval_file_sha256": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+    "approved_case_id": "N04",
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "fact_source": "GoldCase.request.facts",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "historical_amount_gap": false,
+    "historical_fixture_file": "tests/fixtures/judge_calibration/J07.json",
+    "historical_fixture_sha256": "567f7f07445fd0bc9a0847b016a3909ad9a2683457bea950137f5db862b1b0fe",
+    "packet_policy_version": 3,
+    "schema_version": 1,
+    "wire_policy_version": 5
+  },
+  "fixture_id": "J07",
+  "provider_packet": {
+    "approved_facts": {
+      "facts": {
+        "effective_on": "2027-03-01",
+        "scope": {
+          "ordinary": "confirmed",
+          "period_start": "confirmed"
+        },
+        "served_on": null,
+        "service_method": "hand"
+      },
+      "kind": "notice"
+    },
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "RTA s. 191 — How notice or document given",
+        "id": "78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2",
+        "reference": "e1",
+        "text": "How notice or document given\n\n191 (1) A notice or document is sufficiently given to a person other than the Board,\n\n(a) by handing it to the person;\n\n(b) if the person is a landlord, by handing it to an employee of the landlord exercising authority in respect of the residential complex to which the notice or document relates;\n\n(c) if the person is a tenant, subtenant or occupant, by handing it to an apparently adult person in the rental unit;\n\n(d) by leaving it in the mail box where mail is ordinarily delivered to the person;\n\n(e) if there is no mail box, by leaving it at the place where mail is ordinarily delivered to the person;\n\n(f) by sending it by mail to the last known address where the person resides or carries on business; or\n\n(g) by any other means allowed in the Rules. 2006, c. 17, s. 191 (1).\n\nSame, tenant or former tenant no longer in possession\n\n(1.0.1) Despite subsection (1), a notice or document is sufficiently given to a tenant or former tenant who is no longer in possession of a rental unit,\n\n(a) by handing it to the tenant or former tenant;\n\n(b) by sending it by mail to the address where the tenant or former tenant resides;\n\n(c) by handing it to an apparently adult person where the tenant or former tenant resides; or\n\n(d) by any other means allowed in the Rules. 2020, c. 16, Sched. 4, s. 29.\n\nSame, Part V.1\n\n(1.1) Despite subsection (1), for the purposes of Part V.1, a notice or document is sufficiently given to a person other than the Board,\n\n(a) by handing it to the person;\n\n(b) by handing it to an apparently adult person in the member unit;\n\n(c) by leaving it in the mail box where mail is ordinarily delivered to the person;\n\n(d) if there is no mail box, by sliding it under the door of the member unit or through a mail slot in the door or leaving it at the place where mail is ordinarily delivered to the person;\n\n(e) by sending it by mail to the last known address where the person resides or carries on business;\n\n(f) if the person is a non-profit housing co-operative,\n\n(i) by delivering it personally or sending it by mail to,\n\n(A) the head office of the co-operative as shown on the records of the Ministry of Finance, or\n\n(B) the co-operative’s business office, or\n\n(ii) by handing it to a manager or co-ordinator of the co-operative exercising authority in respect of the residential complex, as defined in Part V.1, to which the notice or document relates; or\n\n(g) by any other means allowed in the Rules. 2013, c. 3, s. 42.\n\nWhen notice deemed valid"
+      },
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "RTA s. 116 — Notice of rent increase required",
+        "id": "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+        "reference": "e2",
+        "text": "Notice of rent increase required\n\n116 (1) A landlord shall not increase the rent charged to a tenant for a rental unit without first giving the tenant at least 90 days written notice of the landlord’s intention to do so. 2006, c. 17, s. 116 (1).\n\nSame\n\n(2) Subsection (1) applies even if the rent charged is increased in accordance with an order under section 126. 2006, c. 17, s. 116 (2).\n\nContents of notice\n\n(3) The notice shall be in a form approved by the Board and shall set out the landlord’s intention to increase the rent and the amount of the new rent. 2006, c. 17, s. 116 (3).\n\nIncrease void without notice\n\n(4) An increase in rent is void if the landlord has not given the notice required by this section, and the landlord must give a new notice before the landlord can take the increase. 2006, c. 17, s. 116 (4)."
+      },
+      {
+        "canonical": true,
+        "cited_by": [],
+        "heading": "Legislation Act s. 89",
+        "id": "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+        "reference": "e3",
+        "text": "Computation of time\n\nHolidays\n\n89 (1) Time limits that would otherwise expire on a holiday are extended to include the next day that is not a holiday. 2006, c. 21, Sched. F, s. 89 (1).\n\nDays on which offices closed\n\n(2) Time limits for registering or filing documents or for doing anything else that expire on a day when the place for doing so is not open during its regular hours of business are extended to include the next day the place is open during its regular hours of business. 2006, c. 21, Sched. F, s. 89 (2).\n\nNumber of days between events\n\n(3) A reference to a number of days between two events excludes the day on which the first event happens and includes the day on which the second event happens, even if the reference is to “at least” or “not less than” a number of days. 2006, c. 21, Sched. F, s. 89 (3).\n\nSpecified day included\n\n(4) A period of time described as beginning or ending on, at or with a specified day includes that day. 2006, c. 21, Sched. F, s. 89 (4).\n\nSpecified day excluded\n\n(5) A period of time described as beginning before or after a specified day excludes that day. 2006, c. 21, Sched. F, s. 89 (5).\n\nMonths\n\n(6) If a period of time is described as a number of months before or after a specified day, the following rules apply:\n\n1. The number of months is counted from the specified day, excluding the month in which the specified day falls.\n\n2. The period includes the day in the last month counted that has the same calendar number as the specified day or, if that month has no day with that number, its last day.\n\n3. Repealed: 2009, c. 33, Sched. 2, s. 43 (33).\n\n2006, c. 21, Sched. F, s. 89 (6); 2009, c. 33, Sched. 2, s. 43 (33); 2024, c. 2, Sched. 15, s. 16.\n\nLeap years\n\n(7) The anniversary of an event that took place on February 29 falls on February 28, except in a leap year. 2006, c. 21, Sched. F, s. 89 (7)."
+      }
+    ],
+    "expected_tool_result": {
+      "cap_cents_exact": null,
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "missing_fact",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "unknown"
+        }
+      ],
+      "deemed_served_on": null,
+      "earliest_notice_on": null,
+      "earliest_spacing_on": null,
+      "guideline_percent": null,
+      "latest_deemed_service_on": "2026-12-01",
+      "latest_dispatch_on": "2026-12-01",
+      "notice_days": null,
+      "rule_ids": [
+        "calendar.s89",
+        "notice.90_days",
+        "scope.ordinary"
+      ],
+      "status": "cannot_determine",
+      "tool": "notice_deadline_check"
+    },
+    "observed_tool_result": {
+      "cap_cents_exact": null,
+      "checks": [
+        {
+          "id": "scope",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "supported_year",
+          "reason": "satisfied",
+          "rule_ids": [],
+          "status": "pass"
+        },
+        {
+          "id": "period_start",
+          "reason": "satisfied",
+          "rule_ids": [
+            "scope.ordinary"
+          ],
+          "status": "pass"
+        },
+        {
+          "id": "notice",
+          "reason": "missing_fact",
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days"
+          ],
+          "status": "unknown"
+        }
+      ],
+      "deemed_served_on": null,
+      "earliest_notice_on": null,
+      "earliest_spacing_on": null,
+      "guideline_percent": null,
+      "latest_deemed_service_on": "2026-12-01",
+      "latest_dispatch_on": "2026-12-01",
+      "notice_days": null,
+      "rule_ids": [
+        "calendar.s89",
+        "notice.90_days",
+        "scope.ordinary"
+      ],
+      "status": "cannot_determine",
+      "tool": "notice_deadline_check"
+    },
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "Without the hand-service date, compliance with the 90-day notice interval cannot be determined."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [],
+        "id": "s1",
+        "text": "The latest hand-service date is December 1, 2026 for this effective date. Because the actual service date is missing, whether the 90-day notice requirement was met cannot be determined."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "s1 express this required meaning: Without the hand-service date, compliance with the 90-day notice interval cannot be determined.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [],
+          "summary": "No citation supplied.",
+          "tool_fields": []
+        },
+        "citation_support": "not_applicable",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e2",
+            "e3"
+          ],
+          "summary": "The supplied result gives the latest service date but not the actual interval.",
+          "tool_fields": [
+            "/observed_tool_result/latest_deemed_service_on",
+            "/observed_tool_result/notice_days"
+          ]
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "N04",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "Uncited corrected deadline distinction"
+}

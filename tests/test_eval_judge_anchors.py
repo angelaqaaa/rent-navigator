@@ -11,13 +11,14 @@ import anthropic
 import pytest
 from judge_anchor_fixtures import audit, calibration_witness, claim_part, safety_witness
 from judge_wire_fixtures import POLICY_LIMITS
+from test_eval_judge import isolated_count_replay as isolated_count_replay
 
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.eval.judge import _decode_judgment, judge_schema
 
 
 @pytest.fixture(autouse=True)
-def offline_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def offline_only(monkeypatch: pytest.MonkeyPatch, isolated_count_replay: None) -> None:
     def prohibited(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("Anchor controls cannot access credentials or a network")
 
@@ -121,6 +122,7 @@ def test_true_fact_with_irrelevant_own_citation_and_uncited_variant() -> None:
         "observation": "not_applicable",
         "source_anchors": [],
         "tool_fields": [],
+        "fact_fields": [],
         "basis": "No citation supplied.",
     }
     assert decode(packet, wire).statements[0].citation_support == "not_applicable"
@@ -361,7 +363,7 @@ def mutate_ordinary(packet: dict[str, Any], wire: dict[str, Any], mutation: str)
         statement["factual"] = (
             "supported" if mutation == "factual_explicit_without_witness" else "contradicted"
         )
-        factual["source_anchors"], factual["tool_fields"] = [], []
+        factual["source_anchors"], factual["tool_fields"], factual["fact_fields"] = [], [], []
     elif mutation in {"citation_explicit_tool_only", "citation_conflict_tool_only"}:
         cited["observation"] = (
             "explicit" if mutation == "citation_explicit_tool_only" else "conflicting"
@@ -584,6 +586,7 @@ def test_complete_policy_review_ids_must_follow_trusted_statement_order(corpus: 
 def test_null_context_leaves_allowed_but_never_ordinary_tool_roots(corpus: Corpus) -> None:
     _, packet, wire = safety_witness(corpus, "S07")
     packet["safety_context"]["confirmed_facts"] = None
+    packet["approved_facts"] = None
     packet["observed_tool_result"] = None
     part = wire["statements"]["s1"]["parts"][0]
     wire["statements"]["s1"]["factual"] = "unsupported"
@@ -664,6 +667,7 @@ def test_uncited_audit_requires_exact_fixed_object(mutation: str) -> None:
         "observation": "not_applicable",
         "source_anchors": [],
         "tool_fields": [],
+        "fact_fields": [],
         "basis": "No citation supplied.",
     }
     wire["statements"]["s1"]["parts"][0]["citation_audit"] = cited

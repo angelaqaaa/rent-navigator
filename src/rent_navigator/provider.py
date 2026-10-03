@@ -26,7 +26,9 @@ from anthropic.types import Message, MessageParam, MessageTokensCount, ToolChoic
 from anthropic.types import Usage as SDKUsage
 from pydantic import (
     ConfigDict,
+    Discriminator,
     Field,
+    Tag,
     TypeAdapter,
     ValidationError,
     field_validator,
@@ -101,13 +103,72 @@ class FailureDiagnostic(StrictModel):
         return self
 
 
+class FailureDiagnosticV2(StrictModel):
+    """Versioned rejection labels without retaining a provider error body."""
+
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    schema_version: Literal[2]
+    category: Literal[
+        "sdk_timeout",
+        "sdk_connection",
+        "http_error",
+        "sdk_response_validation",
+        "local_timeout",
+        "cancelled",
+        "local_guard",
+        "unknown",
+    ]
+    http_status: Annotated[int, Field(strict=True)] | None
+    rejection_reason: Literal["schema_complexity", "unclassified"] | None
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def strict_version(cls, value: object) -> object:
+        if type(value) is not int or value != 2:
+            raise ValueError("failure diagnostic version must be integer 2")
+        return value
+
+    @model_validator(mode="after")
+    def category_status_reason(self) -> Self:
+        if self.category == "http_error":
+            valid = self.http_status is not None and 400 <= self.http_status <= 599
+        elif self.category == "sdk_response_validation":
+            valid = self.http_status is None or 100 <= self.http_status <= 599
+        else:
+            valid = self.http_status is None
+        if not valid:
+            raise ValueError("failure category and HTTP status are inconsistent")
+        rejected_request = self.category == "http_error" and self.http_status == 400
+        if rejected_request != (self.rejection_reason is not None):
+            raise ValueError("failure category, HTTP status and rejection reason are inconsistent")
+        return self
+
+
+def _diagnostic_version(value: object) -> int | None:
+    if isinstance(value, FailureDiagnostic | FailureDiagnosticV2):
+        version: object = value.schema_version
+    elif isinstance(value, dict):
+        version = value.get("schema_version")
+    else:
+        return None
+    if type(version) is int and version == 1:
+        return 1
+    if type(version) is int and version == 2:
+        return 2
+    return None
+
+
 class FailureEnvelope(StrictModel):
     """Bind a safe error code to the exact versioned diagnostic semantics."""
 
     model_config = ConfigDict(frozen=True, revalidate_instances="always")
 
     code: ErrorCode
-    diagnostic: FailureDiagnostic
+    diagnostic: Annotated[
+        Annotated[FailureDiagnostic, Tag(1)] | Annotated[FailureDiagnosticV2, Tag(2)],
+        Discriminator(_diagnostic_version),
+    ]
 
     @model_validator(mode="after")
     def code_category(self) -> Self:
@@ -125,15 +186,21 @@ class FailureEnvelope(StrictModel):
 class ProviderFailure(Exception):
     """Retain only a fixed safe code/message and the validated diagnostic."""
 
-    def __init__(self, code: ErrorCode, *, diagnostic: FailureDiagnostic | None = None) -> None:
+    def __init__(
+        self,
+        code: ErrorCode,
+        *,
+        diagnostic: FailureDiagnostic | FailureDiagnosticV2 | None = None,
+    ) -> None:
         envelope = FailureEnvelope(
             code=code,
             diagnostic=diagnostic
             if diagnostic is not None
-            else FailureDiagnostic(
-                schema_version=1,
+            else FailureDiagnosticV2(
+                schema_version=2,
                 category="local_timeout" if code == "deadline_exceeded" else "local_guard",
                 http_status=None,
+                rejection_reason=None,
             ),
         )
         self.code = envelope.code
@@ -147,10 +214,40 @@ class ProviderFailure(Exception):
         return cls(envelope.code, diagnostic=envelope.diagnostic)
 
 
-def classify_failure(error: BaseException) -> FailureDiagnostic:
-    """Classify typed exceptions without reading their text, request or response."""
+def _http_400_rejection_reason(
+    error: APIStatusError,
+) -> Literal["schema_complexity", "unclassified"]:
+    try:
+        body = error.body
+        if type(body) is not dict:
+            return "unclassified"
+        if "error" in body:
+            root_type = body.get("type")
+            if type(root_type) is str and root_type == "invalid_request_error":
+                return "unclassified"
+            detail = body["error"]
+            if type(detail) is not dict:
+                return "unclassified"
+        else:
+            detail = body
+        error_type = detail.get("type")
+        message = detail.get("message")
+        if (
+            type(error_type) is str
+            and type(message) is str
+            and error_type == "invalid_request_error"
+            and message == "Schema is too complex for compilation."
+        ):
+            return "schema_complexity"
+    except BaseException:
+        return "unclassified"
+    return "unclassified"
+
+
+def classify_failure(error: BaseException) -> FailureDiagnostic | FailureDiagnosticV2:
+    """Classify typed errors with one bounded HTTP 400 body observation."""
     if isinstance(error, ProviderFailure):
-        return FailureDiagnostic.model_validate(error.diagnostic)
+        return FailureEnvelope(code=error.code, diagnostic=error.diagnostic).diagnostic
     category: Literal[
         "sdk_timeout",
         "sdk_connection",
@@ -161,6 +258,7 @@ def classify_failure(error: BaseException) -> FailureDiagnostic:
         "unknown",
     ] = "unknown"
     status: int | None = None
+    reason: Literal["schema_complexity", "unclassified"] | None = None
     if isinstance(error, APITimeoutError):
         category = "sdk_timeout"
     elif isinstance(error, APIConnectionError):
@@ -175,11 +273,15 @@ def classify_failure(error: BaseException) -> FailureDiagnostic:
             status = value if type(value) is int and 100 <= value <= 599 else None
         elif type(value) is int and 400 <= value <= 599:
             category, status = "http_error", value
+            if status == 400:
+                reason = _http_400_rejection_reason(error)
     elif isinstance(error, asyncio.CancelledError):
         category = "cancelled"
     elif isinstance(error, TimeoutError):
         category = "local_timeout"
-    return FailureDiagnostic(schema_version=1, category=category, http_status=status)
+    return FailureDiagnosticV2(
+        schema_version=2, category=category, http_status=status, rejection_reason=reason
+    )
 
 
 def failure_envelope(error: BaseException) -> FailureEnvelope:

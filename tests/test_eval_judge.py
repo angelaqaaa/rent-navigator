@@ -47,7 +47,13 @@ from rent_navigator.eval.runner import (
     validate_judge_accounting,
 )
 from rent_navigator.model_policy import JUDGE_MODEL
-from rent_navigator.provider import ProviderFailure, SpendLedger
+from rent_navigator.provider import (
+    FailureDiagnostic,
+    FailureEnvelope,
+    ProviderFailure,
+    SpendLedger,
+    failure_envelope,
+)
 from rent_navigator.trace import PRICING_HASH, TraceContext, TraceRecord
 
 SENTINEL = "synthetic-exception-must-not-appear"
@@ -372,6 +378,111 @@ def test_missing_generation_usage_retains_reservation_and_safe_failure(
     assert test.budget.committed_usd == Decimal("0.13192") and test.budget.stopped
     assert SENTINEL not in test.metadata.getvalue() + test.raw.getvalue() + str(caught.value)
     test.verify(accounting)
+
+
+def rejection_error(*, grammar_complexity: bool) -> BaseException:
+    request = httpx2.Request(
+        "POST", f"https://synthetic.invalid/{SENTINEL}", headers={"secret": SENTINEL}
+    )
+    return anthropic.BadRequestError(
+        SENTINEL,
+        response=httpx2.Response(400, request=request, headers={"request-id": SENTINEL}),
+        body={
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Schema is too complex for compilation."
+                if grammar_complexity
+                else SENTINEL,
+            },
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "version,reason", [(1, None), (2, "schema_complexity"), (2, "unclassified")]
+)
+def test_real_judge_preserves_exact_failure_version_reason_and_unknown_hold(
+    value: JudgeInput, version: int, reason: str | None
+) -> None:
+    test = harness(value)
+    if version == 1:
+        original = ProviderFailure(
+            "provider_error",
+            diagnostic=FailureDiagnostic(schema_version=1, category="http_error", http_status=400),
+        )
+    else:
+        original = ProviderFailure.from_exception(
+            rejection_error(grammar_complexity=reason == "schema_complexity")
+        )
+    expected = failure_envelope(original).model_dump(mode="json")
+    test.port.response = original
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    accounting = caught.value.accounting
+    assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
+    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert test.budget.committed_usd == Decimal("0.13192") and test.budget.stopped
+    assert len(test.port.counts) == len(test.port.creates) == 1
+    terminal = test.records()[-1]
+    assert terminal.event == "failure" and terminal.operation == "generation"
+    assert terminal.value == expected
+    assert terminal.value["diagnostic"]["schema_version"] == version
+    if version == 1:
+        assert set(terminal.value["diagnostic"]) == {"schema_version", "category", "http_status"}
+    else:
+        assert terminal.value["diagnostic"]["rejection_reason"] == reason
+    assert (
+        FailureEnvelope.model_validate_json(json.dumps(terminal.value)).model_dump(mode="json")
+        == expected
+    )
+    assert SENTINEL not in test.metadata.getvalue() + test.raw.getvalue() + str(caught.value)
+    assert "Schema is too complex" not in test.metadata.getvalue() + test.raw.getvalue()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+    test.verify(accounting)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_reason",
+        "null_reason",
+        "unsupported_reason",
+        "v1_with_reason",
+        "unknown_version",
+        "boolean_version",
+        "status_mismatch",
+        "extra_payload",
+    ],
+)
+def test_raw_failure_envelope_rejects_invalid_version_reason_and_payload(
+    value: JudgeInput, mutation: str
+) -> None:
+    test = harness(value)
+    test.port.response = rejection_error(grammar_complexity=True)
+    with pytest.raises(JudgeFailure) as caught:
+        test.run()
+    terminal = test.records()[-1]
+    diagnostic = terminal.value["diagnostic"]
+    if mutation == "missing_reason":
+        del diagnostic["rejection_reason"]
+    elif mutation == "null_reason":
+        diagnostic["rejection_reason"] = None
+    elif mutation == "unsupported_reason":
+        diagnostic["rejection_reason"] = "unknown"
+    elif mutation == "v1_with_reason":
+        diagnostic["schema_version"] = 1
+    elif mutation == "unknown_version":
+        diagnostic["schema_version"] = 3
+    elif mutation == "boolean_version":
+        diagnostic["schema_version"] = True
+    elif mutation == "status_mismatch":
+        diagnostic["http_status"] = 429
+    else:
+        terminal.value["body"] = SENTINEL
+    with pytest.raises(ValidationError):
+        RawJudgeRecord.model_validate_json(terminal.model_dump_json())
+    assert caught.value.accounting.cost.actual_cost_usd is None
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.13192")
 
 
 def test_absent_usage_on_returned_response_is_incomplete(value: JudgeInput) -> None:
@@ -850,7 +961,12 @@ def test_failed_native_usage_shapes_have_faithful_or_safe_judge_evidence(
     if shape in {"object", "non_sdk"}:
         assert terminal.event == "failure" and terminal.value == {
             "code": "provider_error",
-            "diagnostic": {"schema_version": 1, "category": "local_guard", "http_status": None},
+            "diagnostic": {
+                "schema_version": 2,
+                "category": "local_guard",
+                "http_status": None,
+                "rejection_reason": None,
+            },
         }
         assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
     else:

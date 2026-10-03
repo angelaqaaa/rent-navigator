@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections import UserDict
 from decimal import Decimal
 from typing import Any, cast, get_args
 
@@ -18,12 +19,14 @@ from anthropic import (
     RateLimitError,
 )
 from pydantic import ValidationError
+from test_eval_judge import isolated_count_replay as isolated_count_replay
 from test_provider import RecordingMessages, assert_accounting, perform, reply
 
 from rent_navigator.models import ErrorCode
 from rent_navigator.provider import (
     Deadline,
     FailureDiagnostic,
+    FailureDiagnosticV2,
     FailureEnvelope,
     ProviderFailure,
     SpendLedger,
@@ -92,9 +95,10 @@ def test_actual_adapter_preserves_sdk_diagnostic_and_conservative_accounting(
     failure = outcome.failure
     assert failure is not None and failure.code == code
     assert failure.diagnostic.model_dump(mode="json") == {
-        "schema_version": 1,
+        "schema_version": 2,
         "category": category,
         "http_status": status,
+        "rejection_reason": "unclassified" if category == "http_error" and status == 400 else None,
     }
     assert failure.__context__ is None and failure.__cause__ is None
     assert set(vars(failure)) == {"code", "message", "diagnostic"}
@@ -326,9 +330,12 @@ def test_locally_constructed_failures_use_exact_code_category_mapping(code: Erro
     assert envelope.diagnostic.category == (
         "local_timeout" if code == "deadline_exceeded" else "local_guard"
     )
+    assert isinstance(envelope.diagnostic, FailureDiagnosticV2)
+    assert envelope.diagnostic.rejection_reason is None
     assert FailureEnvelope.model_validate_json(envelope.model_dump_json()) == envelope
 
 
+@pytest.mark.parametrize("version", [1, 2])
 @pytest.mark.parametrize(
     "code,category,status",
     [
@@ -345,9 +352,14 @@ def test_locally_constructed_failures_use_exact_code_category_mapping(code: Erro
     ],
 )
 def test_failure_envelope_rejects_code_category_mismatch(
-    code: str, category: str, status: int | None
+    code: str, category: str, status: int | None, version: int
 ) -> None:
-    wire = {"code": code, "diagnostic": diagnostic_wire(category=category, http_status=status)}
+    diagnostic = diagnostic_wire(category=category, http_status=status)
+    if version == 2:
+        diagnostic = diagnostic_v2_wire(
+            category=category, http_status=status, rejection_reason=None
+        )
+    wire = {"code": code, "diagnostic": diagnostic}
     with pytest.raises(ValidationError):
         FailureEnvelope.model_validate_json(json.dumps(wire))
 
@@ -378,3 +390,504 @@ def test_diagnostic_and_envelope_are_immutable_and_revalidate_constructed_values
         ProviderFailure(
             "provider_error", diagnostic=diagnostic.model_copy(update={"http_status": True})
         )
+
+
+def diagnostic_v2_wire(**updates: Any) -> dict[str, Any]:
+    return {
+        "schema_version": 2,
+        "category": "http_error",
+        "http_status": 400,
+        "rejection_reason": "unclassified",
+        **updates,
+    }
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_versioned_envelopes_round_trip_without_migration(version: int) -> None:
+    diagnostic = diagnostic_wire() if version == 1 else diagnostic_v2_wire()
+    wire = {"code": "provider_error", "diagnostic": diagnostic}
+    envelope = FailureEnvelope.model_validate_json(json.dumps(wire))
+    assert json.loads(envelope.model_dump_json()) == wire
+    assert set(envelope.diagnostic.model_dump()) == set(diagnostic)
+    assert type(envelope.diagnostic) is (FailureDiagnostic if version == 1 else FailureDiagnosticV2)
+    wrapped = ProviderFailure("provider_error", diagnostic=envelope.diagnostic)
+    for _ in range(3):
+        wrapped = ProviderFailure.from_exception(wrapped)
+        assert failure_envelope(wrapped).model_dump(mode="json") == wire
+        assert wrapped.__context__ is None and wrapped.__cause__ is None
+
+
+@pytest.mark.parametrize("field", ["schema_version", "category", "http_status", "rejection_reason"])
+def test_v2_json_requires_all_four_fields_even_when_nullable(field: str) -> None:
+    wire = diagnostic_v2_wire()
+    del wire[field]
+    with pytest.raises(ValidationError):
+        FailureDiagnosticV2.model_validate_json(json.dumps(wire))
+    with pytest.raises(ValidationError):
+        FailureEnvelope.model_validate_json(
+            json.dumps({"code": "provider_error", "diagnostic": wire})
+        )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("schema_version", True),
+        ("schema_version", False),
+        ("schema_version", "2"),
+        ("schema_version", 2.0),
+        ("schema_version", 1),
+        ("schema_version", 3),
+        ("schema_version", None),
+        ("category", "provider_error"),
+        ("category", None),
+        ("http_status", True),
+        ("http_status", "400"),
+        ("http_status", 400.0),
+        ("http_status", None),
+        ("http_status", 399),
+        ("http_status", 600),
+        ("rejection_reason", None),
+        ("rejection_reason", "unknown"),
+        ("rejection_reason", SENTINEL),
+        ("rejection_reason", True),
+        ("rejection_reason", 0),
+        ("body", SENTINEL),
+    ],
+)
+def test_v2_json_rejects_coercions_unknown_values_and_payload_fields(
+    field: str, value: Any
+) -> None:
+    with pytest.raises(ValidationError):
+        FailureDiagnosticV2.model_validate_json(json.dumps(diagnostic_v2_wire(**{field: value})))
+
+
+@pytest.mark.parametrize(
+    "category,status",
+    [
+        ("http_error", 429),
+        ("sdk_response_validation", 400),
+        ("sdk_timeout", None),
+        ("sdk_connection", None),
+        ("local_timeout", None),
+        ("cancelled", None),
+        ("local_guard", None),
+        ("unknown", None),
+    ],
+)
+@pytest.mark.parametrize("reason", ["schema_complexity", "unclassified", None])
+def test_v2_rejection_reason_is_null_outside_http_error_400(
+    category: str, status: int | None, reason: str | None
+) -> None:
+    wire = diagnostic_v2_wire(category=category, http_status=status, rejection_reason=reason)
+    if reason is not None:
+        with pytest.raises(ValidationError):
+            FailureDiagnosticV2.model_validate_json(json.dumps(wire))
+    else:
+        assert (
+            FailureDiagnosticV2.model_validate_json(json.dumps(wire)).model_dump(mode="json")
+            == wire
+        )
+
+
+@pytest.mark.parametrize("reason", ["schema_complexity", "unclassified"])
+def test_v2_http_error_400_accepts_only_its_two_nonnull_reasons(reason: str) -> None:
+    wire = diagnostic_v2_wire(rejection_reason=reason)
+    diagnostic = FailureDiagnosticV2.model_validate_json(json.dumps(wire))
+    assert diagnostic.model_dump(mode="json") == wire
+
+
+@pytest.mark.parametrize("version", [True, False, "1", "2", 1.0, 2.0, 0, 3, None])
+def test_envelope_discriminator_never_coerces_or_defaults_version(version: object) -> None:
+    wire = {"code": "provider_error", "diagnostic": diagnostic_v2_wire(schema_version=version)}
+    with pytest.raises(ValidationError):
+        FailureEnvelope.model_validate_json(json.dumps(wire))
+
+
+def test_envelope_union_is_explicit_in_schema_and_v1_fields_stay_exact() -> None:
+    assert set(FailureDiagnostic.model_fields) == {"schema_version", "category", "http_status"}
+    assert set(FailureDiagnosticV2.model_fields) == {
+        "schema_version",
+        "category",
+        "http_status",
+        "rejection_reason",
+    }
+    schema = FailureEnvelope.model_json_schema()["properties"]["diagnostic"]
+    assert len(schema["oneOf"]) == 2
+    assert {entry["$ref"] for entry in schema["oneOf"]} == {
+        "#/$defs/FailureDiagnostic",
+        "#/$defs/FailureDiagnosticV2",
+    }
+    definitions = FailureEnvelope.model_json_schema()["$defs"]
+    assert definitions["FailureDiagnostic"]["properties"]["schema_version"]["const"] == 1
+    assert definitions["FailureDiagnosticV2"]["properties"]["schema_version"]["const"] == 2
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("schema_version", True),
+        ("http_status", True),
+        ("rejection_reason", None),
+        ("category", "sdk_connection"),
+    ],
+)
+def test_v2_is_frozen_and_revalidates_copied_and_constructed_values(
+    field: str, value: object
+) -> None:
+    diagnostic = FailureDiagnosticV2.model_validate_json(json.dumps(diagnostic_v2_wire()))
+    with pytest.raises(ValidationError, match="frozen"):
+        setattr(diagnostic, field, value)
+    corrupted = diagnostic.model_copy(update={field: value})
+    with pytest.raises(ValidationError):
+        ProviderFailure("provider_error", diagnostic=corrupted)
+    constructed = FailureDiagnosticV2.model_construct(**diagnostic_v2_wire(**{field: value}))
+    with pytest.raises(ValidationError):
+        ProviderFailure("provider_error", diagnostic=constructed)
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_rewrapping_revalidates_a_mutated_provider_failure(version: int) -> None:
+    diagnostic = (
+        FailureDiagnostic.model_validate(diagnostic_wire())
+        if version == 1
+        else FailureDiagnosticV2.model_validate(diagnostic_v2_wire())
+    )
+    failure = ProviderFailure("provider_error", diagnostic=diagnostic)
+    failure.diagnostic = diagnostic.model_copy(update={"http_status": True})
+    with pytest.raises(ValidationError):
+        ProviderFailure.from_exception(failure)
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["sdk_timeout", "sdk_connection", "local_timeout", "cancelled", "local_guard", "unknown"],
+)
+def test_v2_non_http_category_cannot_claim_a_status(category: str) -> None:
+    with pytest.raises(ValidationError):
+        FailureDiagnosticV2.model_validate_json(
+            json.dumps(diagnostic_v2_wire(category=category, rejection_reason=None))
+        )
+
+
+@pytest.mark.parametrize("status", [None, 100, 200, 400, 599])
+def test_v2_response_validation_keeps_its_original_status_range(status: int | None) -> None:
+    wire = diagnostic_v2_wire(
+        category="sdk_response_validation", http_status=status, rejection_reason=None
+    )
+    assert FailureDiagnosticV2.model_validate_json(json.dumps(wire)).model_dump(mode="json") == wire
+
+
+def grammar_body(*, nested: bool) -> dict[str, Any]:
+    error = {"type": "invalid_request_error", "message": "Schema is too complex for compilation."}
+    return {"error": error} if nested else error
+
+
+def status_error_with_body(body: object, *, status: int = 400) -> BaseException:
+    error = sdk_error("400")
+    cast(Any, error).status_code = status
+    cast(Any, error).body = body
+    return error
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_typed_400_exact_structured_sentence_classifies_schema_complexity(nested: bool) -> None:
+    error = status_error_with_body(grammar_body(nested=nested))
+    classified = classify_failure(error)
+    assert classified.model_dump(mode="json") == diagnostic_v2_wire(
+        rejection_reason="schema_complexity"
+    )
+    outcome = asyncio.run(perform(RecordingMessages(create_error=error), SpendLedger(Decimal("1"))))
+    assert outcome.failure is not None
+    assert outcome.failure.diagnostic == classified
+    assert SENTINEL not in str(outcome.failure) + repr(outcome.failure) + outcome.log
+    assert "Schema is too complex" not in failure_envelope(outcome.failure).model_dump_json()
+    assert outcome.failure.__context__ is None and outcome.failure.__cause__ is None
+    assert_accounting(outcome, actual=None, reserved="0.027", complete=False)
+
+
+class HostileDictionary(dict[str, Any]):
+    def get(self, *args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Dictionary subclasses must not be inspected")
+
+    def __getitem__(self, key: str) -> Any:
+        raise AssertionError("Dictionary subclasses must not be inspected")
+
+    def __contains__(self, key: object) -> bool:
+        raise AssertionError("Dictionary subclasses must not be inspected")
+
+
+class StringSubclass(str):
+    pass
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        None,
+        [],
+        SENTINEL,
+        UserDict(
+            {"type": "invalid_request_error", "message": "Schema is too complex for compilation."}
+        ),
+        {},
+        {"error": None, **grammar_body(nested=False)},
+        {"error": grammar_body(nested=False), "type": "invalid_request_error"},
+        {"error": {"error": grammar_body(nested=False)}},
+        {"error": {}, **grammar_body(nested=False)},
+        {"error": [grammar_body(nested=False)]},
+        {"error": {"type": "invalid_request_error"}},
+        {"error": {"message": "Schema is too complex for compilation."}},
+        {"error": {"type": True, "message": "Schema is too complex for compilation."}},
+        {"error": {"type": "invalid_request_error", "message": None}},
+        {
+            "error": {
+                "type": StringSubclass("invalid_request_error"),
+                "message": "Schema is too complex for compilation.",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": StringSubclass("Schema is too complex for compilation."),
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "schema is too complex for compilation.",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Schema is too complex for compilation",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": " Schema is too complex for compilation.",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Schema is too complex for compilation.\n",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": SENTINEL + "Schema is too complex for compilation.",
+            }
+        },
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Schema is too complex for compilation." + SENTINEL * 10000,
+            }
+        },
+        {
+            "error": {
+                "type": "validation_error",
+                "message": "Schema is too complex for compilation.",
+            }
+        },
+        HostileDictionary(grammar_body(nested=False)),
+        {"error": HostileDictionary(grammar_body(nested=False))},
+    ],
+    ids=[
+        "null",
+        "list",
+        "string",
+        "custom-mapping",
+        "empty",
+        "nested-null-root-valid",
+        "ambiguous",
+        "recursive",
+        "nested-empty-root-valid",
+        "nested-list",
+        "missing-message",
+        "missing-type",
+        "bool-type",
+        "null-message",
+        "type-subclass",
+        "message-subclass",
+        "case",
+        "punctuation",
+        "leading-space",
+        "trailing-newline",
+        "sentinel-prefix",
+        "long-sentinel-suffix",
+        "wrong-type",
+        "root-subclass",
+        "nested-subclass",
+    ],
+)
+def test_typed_400_malformed_ambiguous_and_near_matches_are_unclassified(body: object) -> None:
+    failure = ProviderFailure.from_exception(status_error_with_body(body))
+    assert failure.diagnostic.model_dump(mode="json") == diagnostic_v2_wire()
+    assert SENTINEL not in failure_envelope(failure).model_dump_json() + str(failure) + repr(
+        failure
+    )
+    assert set(vars(failure)) == {"code", "message", "diagnostic"}
+    assert failure.__context__ is None and failure.__cause__ is None
+
+
+class ObservedBodyStatus(HostileStatus):
+    def __init__(self, status: int, failure: BaseException | None = None) -> None:
+        super().__init__(
+            SENTINEL,
+            response=httpx2.Response(
+                status, request=httpx2.Request("POST", "https://synthetic.invalid")
+            ),
+            body=grammar_body(nested=True),
+        )
+        self.body_reads = 0
+        self.body_failure = failure
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "body":
+            self.body_reads += 1
+            if self.body_failure is not None:
+                raise self.body_failure
+            return object.__getattribute__(self, name)
+        return super().__getattribute__(name)
+
+
+@pytest.mark.parametrize("status", [100, 200, 399, 401, 429, 500, 599])
+def test_other_http_statuses_never_observe_body(status: int) -> None:
+    error = ObservedBodyStatus(status)
+    diagnostic = classify_failure(error)
+    assert diagnostic.schema_version == 2
+    assert isinstance(diagnostic, FailureDiagnosticV2) and diagnostic.rejection_reason is None
+    assert error.body_reads == 0
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError(SENTINEL),
+        asyncio.CancelledError(SENTINEL),
+        TimeoutError(SENTINEL),
+        SystemExit(SENTINEL),
+    ],
+)
+def test_hostile_typed_400_body_observed_once_and_safely_unclassified(
+    failure: BaseException,
+) -> None:
+    error = ObservedBodyStatus(400, failure)
+    assert classify_failure(error).model_dump(mode="json") == diagnostic_v2_wire()
+    assert error.body_reads == 1
+
+
+def test_typed_400_body_is_read_only_once_by_pure_classifier() -> None:
+    error = ObservedBodyStatus(400)
+    assert classify_failure(error).model_dump(mode="json") == diagnostic_v2_wire(
+        rejection_reason="schema_complexity"
+    )
+    assert error.body_reads == 1
+
+
+class NoBodyResponseValidation(APIResponseValidationError):
+    body_reads = 0
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "body":
+            self.body_reads += 1
+            raise AssertionError("Response validation never inspects body")
+        if name in {"request", "response", "headers", "message", "request_id"}:
+            raise AssertionError("Response validation never inspects provider payload")
+        return super().__getattribute__(name)
+
+
+def test_response_validation_400_is_not_an_http_rejection_or_body_observation() -> None:
+    error = NoBodyResponseValidation(
+        httpx2.Response(400, request=httpx2.Request("POST", "https://synthetic.invalid")),
+        body=grammar_body(nested=True),
+        message=SENTINEL,
+    )
+    diagnostic = classify_failure(error)
+    assert diagnostic.model_dump(mode="json") == diagnostic_v2_wire(
+        category="sdk_response_validation", rejection_reason=None
+    )
+    assert error.body_reads == 0
+
+
+class PayloadObservationGuard:
+    def __getattribute__(self, name: str) -> Any:
+        if name in {"body", "request", "response", "headers", "message", "request_id"}:
+            fields = object.__getattribute__(self, "__dict__")
+            if "observed_payloads" in fields:
+                fields["observed_payloads"].append(name)
+                raise AssertionError("This category cannot observe provider payload")
+        return super().__getattribute__(name)
+
+    def __str__(self) -> str:
+        raise AssertionError("No exception text may be inspected")
+
+    def __repr__(self) -> str:
+        raise AssertionError("No exception representation may be inspected")
+
+
+class GuardedConnection(PayloadObservationGuard, APIConnectionError):
+    pass
+
+
+class GuardedTimeout(PayloadObservationGuard, APITimeoutError):
+    pass
+
+
+class GuardedLocalTimeout(PayloadObservationGuard, TimeoutError):
+    pass
+
+
+class GuardedCancellation(PayloadObservationGuard, asyncio.CancelledError):
+    pass
+
+
+class GuardedUnknown(PayloadObservationGuard, Exception):
+    pass
+
+
+@pytest.mark.parametrize(
+    "kind,category",
+    [
+        ("connection", "sdk_connection"),
+        ("timeout", "sdk_timeout"),
+        ("local_timeout", "local_timeout"),
+        ("cancelled", "cancelled"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_non_http_categories_never_inspect_exception_payload_or_text(
+    kind: str, category: str
+) -> None:
+    request = httpx2.Request("POST", "https://synthetic.invalid")
+    errors: dict[str, BaseException] = {
+        "connection": GuardedConnection(message=SENTINEL, request=request),
+        "timeout": GuardedTimeout(request),
+        "local_timeout": GuardedLocalTimeout(SENTINEL),
+        "cancelled": GuardedCancellation(SENTINEL),
+        "unknown": GuardedUnknown(SENTINEL),
+    }
+    error = errors[kind]
+    cast(Any, error).observed_payloads = []
+    failure = ProviderFailure.from_exception(error)
+    assert failure.diagnostic.model_dump(mode="json") == diagnostic_v2_wire(
+        category=category, http_status=None, rejection_reason=None
+    )
+    assert cast(Any, error).observed_payloads == []
+    assert (
+        SENTINEL not in str(failure) + repr(failure) + failure_envelope(failure).model_dump_json()
+    )
+
+
+def test_untyped_matching_status_and_body_cannot_classify_rejection() -> None:
+    error = HostileUnknown(SENTINEL)
+    cast(Any, error).status_code = 400
+    cast(Any, error).body = grammar_body(nested=True)
+    assert classify_failure(error).model_dump(mode="json") == diagnostic_v2_wire(
+        category="unknown", http_status=None, rejection_reason=None
+    )

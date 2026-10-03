@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from io import StringIO
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -26,6 +27,12 @@ from anthropic.types import (
     Usage as SDKUsage,
 )
 from pydantic import TypeAdapter
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 
 import rent_navigator.provider as provider_module
 from rent_navigator.model_policy import policy_manifest
@@ -61,6 +68,11 @@ SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 _DEFAULT_USAGE = object()
+
+
+@pytest.fixture
+def real_sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 class Clock:
@@ -928,7 +940,9 @@ def test_deadline_limit_cancels_awaited_work_without_background_tasks() -> None:
 
 
 def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         requests: list[httpx2.Request] = []
@@ -952,12 +966,26 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
             )
 
         constructor_calls: list[dict[str, Any]] = []
+        transports: list[httpx2.AsyncClient] = []
+        client: AsyncAnthropic | None = None
 
         def construct(**kwargs: Any) -> AsyncAnthropic:
             constructor_calls.append(kwargs)
-            return AsyncAnthropic(
-                **kwargs, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
-            )
+            transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+            transports.append(transport)
+            real_sdk_boundary.transports.append(transport)
+            original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    constructed = AsyncAnthropic(**kwargs, http_client=transport)
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not requests
+            assert constructed.credentials is None and constructed._token_cache is None
+            return constructed
 
         monkeypatch.setattr(provider_module, "AsyncAnthropic", construct)
         monkeypatch.setattr(
@@ -971,8 +999,8 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
                 monkeypatch.setattr(logging.getLogger(name), "disabled", False)
                 monkeypatch.setattr(logging.getLogger(name), "level", logging.getLogger(name).level)
         caplog.set_level(logging.DEBUG)
-        client = create_client(api_key="synthetic-test-key")
         try:
+            client = create_client(api_key="synthetic-test-key")
             assert constructor_calls == [
                 {
                     "api_key": "synthetic-test-key",
@@ -1010,7 +1038,13 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
             assert "synthetic-test-key" not in caplog.text
             assert SYNTHETIC_CONTENT not in trace_stream.getvalue()
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                for transport in transports:
+                    await transport.aclose()
+                assert transports and all(transport.is_closed for transport in transports)
 
     asyncio.run(scenario())
 
@@ -1031,7 +1065,9 @@ def test_client_rejects_custom_headers_without_constructing_sdk(
 
 @pytest.mark.parametrize("failed_operation", ["count", "generation"])
 def test_real_sdk_does_not_retry_failed_mock_transport_calls(
-    failed_operation: str, monkeypatch: pytest.MonkeyPatch
+    failed_operation: str,
+    monkeypatch: pytest.MonkeyPatch,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         paths: list[str] = []
@@ -1045,11 +1081,25 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
                 json={"type": "error", "error": {"type": "api_error", "message": SYNTHETIC_ERROR}},
             )
 
+        transports: list[httpx2.AsyncClient] = []
+        client: AsyncAnthropic | None = None
+
         def construct(**kwargs: Any) -> AsyncAnthropic:
-            return AsyncAnthropic(
-                **kwargs,
-                http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
-            )
+            transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+            transports.append(transport)
+            real_sdk_boundary.transports.append(transport)
+            original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    constructed = AsyncAnthropic(**kwargs, http_client=transport)
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not paths
+            assert constructed.credentials is None and constructed._token_cache is None
+            return constructed
 
         monkeypatch.setattr(provider_module, "AsyncAnthropic", construct)
         monkeypatch.setattr(os, "environ", {})
@@ -1058,8 +1108,8 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
             if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
                 monkeypatch.setattr(logging.getLogger(name), "disabled", False)
                 monkeypatch.setattr(logging.getLogger(name), "level", logging.getLogger(name).level)
-        client = create_client(api_key="synthetic-test-key")
         try:
+            client = create_client(api_key="synthetic-test-key")
             clock, ledger = Clock(), SpendLedger(Decimal("1"))
             trace, stream = recorder(clock)
             adapter = ProviderAdapter(cast(MessagesPort, client.messages), budget=ledger)
@@ -1091,7 +1141,13 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
                 generation_count=int(generation),
             )
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                for transport in transports:
+                    await transport.aclose()
+                assert transports and all(transport.is_closed for transport in transports)
 
     asyncio.run(scenario())
 
@@ -1235,6 +1291,7 @@ def test_queued_cancellation_after_count_return_never_dispatches_generation() ->
 
 def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request(
     monkeypatch: pytest.MonkeyPatch,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         paths: list[str] = []
@@ -1261,20 +1318,38 @@ def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request
             )
 
         monkeypatch.setattr(os, "environ", {})
-        client = AsyncAnthropic(
-            api_key="synthetic-test-key",
-            base_url="https://api.anthropic.com",
-            max_retries=0,
-            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
-        )
+        transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+        real_sdk_boundary.transports.append(transport)
+        client: AsyncAnthropic | None = None
+        original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
         try:
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    client = AsyncAnthropic(
+                        api_key="synthetic-test-key",
+                        base_url="https://api.anthropic.com",
+                        max_retries=0,
+                        http_client=transport,
+                    )
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not paths
+            assert client.credentials is None and client._token_cache is None
             ledger, clock = SpendLedger(Decimal("1")), Clock()
             adapter = ProviderAdapter(cast(MessagesPort, client.messages), budget=ledger)
             outcome = await observe_cancelled_child(adapter, clock)
             assert paths == ["/v1/messages/count_tokens"]
             assert_no_generation_after_queued_cancellation(outcome, ledger)
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                await transport.aclose()
+                assert transport.is_closed
 
     asyncio.run(scenario())
 

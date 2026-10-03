@@ -16,9 +16,14 @@ from anthropic import APIStatusError, AsyncAnthropic
 from anthropic.types import Message, MessageTokensCount
 from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA
 from pydantic import ValidationError
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 from test_eval_judge import RUN_ID
 from test_eval_judge import harness as judge_harness
-from test_eval_judge_sdk import offline_sdk_boundary as offline_sdk_boundary
 from test_eval_runner import _harness as serving_harness
 
 import rent_navigator.eval.judge as judge_module
@@ -46,6 +51,7 @@ from rent_navigator.eval.runner import (
     PlanEntry,
     run_attempt,
 )
+from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL
 from rent_navigator.models import ErrorResponse
 from rent_navigator.provider import (
     FailureDiagnostic,
@@ -59,6 +65,11 @@ Surface = Literal["serving", "judge"]
 Operation = Literal["count_tokens", "generation"]
 Raw = RawProviderRecord | RawJudgeRecord
 SENTINEL = "synthetic-sensitive-message-body-header-request-value"
+
+
+@pytest.fixture(autouse=True)
+def offline_sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 @pytest.fixture(scope="module")
@@ -205,12 +216,20 @@ def assert_capture(
 @pytest.mark.parametrize("operation", ["count_tokens", "generation"])
 @pytest.mark.parametrize("mode", [400, 429, 500, 529, "timeout", "connection", "validation"])
 def test_locked_sdk_failures_retain_only_typed_diagnostic(
-    corpus: Corpus, surface: Surface, operation: Operation, mode: int | str
+    corpus: Corpus,
+    surface: Surface,
+    operation: Operation,
+    mode: int | str,
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     paths: list[str] = []
+    requests: list[httpx2.Request] = []
+    boundary = offline_sdk_boundary
 
     async def handler(request: httpx2.Request) -> httpx2.Response:
         paths.append(request.url.path)
+        requests.append(request)
         if operation == "generation" and request.url.path.endswith("count_tokens"):
             return httpx2.Response(200, json={"input_tokens": 1000})
         if mode == "timeout":
@@ -226,14 +245,43 @@ def test_locked_sdk_failures_retain_only_typed_diagnostic(
         )
 
     async def run() -> Captured:
-        async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as transport:
-            async with AsyncAnthropic(
-                api_key="synthetic-test-only",
-                http_client=transport,
-                max_retries=0,
-                _strict_response_validation=True,
-            ) as client:
-                return await capture(surface, corpus, cast(MessagesPort, client.messages))
+        transport = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+        boundary.transports.append(transport)
+        client: AsyncAnthropic | None = None
+        before = [(owner, name, getattr(owner, name)) for owner, name in FILESYSTEM_APIS]
+        attempts_before = len(boundary.attempts)
+        lower_accesses: list[object] = []
+
+        def lower_denial(path: object, *args: Any, **kwargs: Any) -> Any:
+            lower_accesses.append(path)
+            raise AssertionError("Underlying constructor filesystem must not be reached")
+
+        try:
+            with monkeypatch.context() as lower:
+                for owner, name in FILESYSTEM_APIS:
+                    lower.setattr(owner, name, lower_denial)
+                with constructor_filesystem_boundary(monkeypatch, boundary):
+                    client = AsyncAnthropic(
+                        api_key="synthetic-test-only",
+                        http_client=transport,
+                        max_retries=0,
+                        _strict_response_validation=True,
+                    )
+                assert not lower_accesses
+            assert boundary.attempts[attempts_before:] == [("Path.open", boundary.pointer)]
+            assert all(getattr(owner, name) is original for owner, name, original in before)
+            assert client.credentials is None and client._token_cache is None
+            assert client.max_retries == 0 and client._strict_response_validation is True
+            assert not requests
+            return await capture(surface, corpus, cast(MessagesPort, client.messages))
+        finally:
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                await transport.aclose()
+                assert transport.is_closed
+                assert all(getattr(owner, name) is original for owner, name, original in before)
 
     evidence = asyncio.run(run())
     expected_category = {
@@ -253,6 +301,15 @@ def test_locked_sdk_failures_retain_only_typed_diagnostic(
         if operation == "count_tokens"
         else ["/v1/messages/count_tokens", "/v1/messages"]
     )
+    assert boundary.transports and all(transport.is_closed for transport in boundary.transports)
+    for request in requests:
+        assert request.url.scheme == "https" and request.url.host == "api.anthropic.com"
+        assert request.headers["x-api-key"] == "synthetic-test-only"
+        assert request.headers["anthropic-version"] == "2023-06-01"
+        assert request.headers["x-stainless-retry-count"] == "0"
+        assert json.loads(request.content)["model"] == (
+            JUDGE_MODEL if surface == "judge" else ACTOR_MODEL
+        )
 
 
 @pytest.mark.parametrize("surface", ["serving", "judge"])

@@ -16,6 +16,12 @@ import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
 from anthropic.types import Message, MessageTokensCount, TextBlock, ToolUseBlock
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 
 import rent_navigator.agent as agent_module
 from rent_navigator.agent import agent_config_hash, answer
@@ -73,6 +79,11 @@ REFUSALS = {
 @pytest.fixture(scope="module")
 def corpus() -> Corpus:
     return load_corpus()
+
+
+@pytest.fixture
+def sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 def request_for(mode: Literal["question", "notice", "rent"] = "rent") -> AskRequest:
@@ -811,7 +822,9 @@ def test_config_identity_is_deterministic_and_separates_all_modes_and_arms() -> 
     assert agent_config_hash("rent", "production") == agent_config_hash("rent", "production")
 
 
-def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(corpus: Corpus) -> None:
+def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(
+    corpus: Corpus, monkeypatch: pytest.MonkeyPatch, sdk_boundary: SDKBoundary
+) -> None:
     request = request_for()
     result = expected_tool(request, corpus)
     replies = [selection(request), final_message([sorted(rule_ids(result, corpus))[0]])]
@@ -831,15 +844,30 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(corp
 
     async def run() -> tuple[AskResponse, Harness]:
         harness = Harness(request, corpus, RecordingMessages([]))
-        async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as transport:
-            async with AsyncAnthropic(
-                api_key="synthetic-test-only", http_client=transport, max_retries=0
-            ) as client:
-                response = await harness.run(
-                    provider=ProviderAdapter(
-                        cast(MessagesPort, client.messages), budget=harness.ledger
-                    )
+        transport = httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
+        sdk_boundary.transports.append(transport)
+        client: AsyncAnthropic | None = None
+        before = [(owner, name, getattr(owner, name)) for owner, name in FILESYSTEM_APIS]
+        try:
+            with constructor_filesystem_boundary(monkeypatch, sdk_boundary):
+                client = AsyncAnthropic(
+                    api_key="synthetic-test-only", http_client=transport, max_retries=0
                 )
+            assert client.credentials is None and client._token_cache is None
+            assert sdk_boundary.attempts == [("Path.open", sdk_boundary.pointer)]
+            assert not requests
+            assert all(getattr(owner, name) is original for owner, name, original in before)
+            response = await harness.run(
+                provider=ProviderAdapter(cast(MessagesPort, client.messages), budget=harness.ledger)
+            )
+        finally:
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                await transport.aclose()
+            assert all(item.is_closed for item in sdk_boundary.transports)
+            assert all(getattr(owner, name) is original for owner, name, original in before)
         return response, harness
 
     response, harness = asyncio.run(run())

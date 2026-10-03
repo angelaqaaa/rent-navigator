@@ -15,6 +15,12 @@ import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
 from judge_wire_fixtures import add_audit_bases, answer_anchor, source_anchor
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 from test_eval_judge import harness, message, result, wire_payload
 
 from rent_navigator.corpus import load_corpus
@@ -43,6 +49,11 @@ def value() -> JudgeInput:
     corpus = load_corpus()
     case = next(case for case in load_gold(Path("eval"), corpus).cases if case.id == "R04")
     return build_smoke_input(case, corpus)
+
+
+@pytest.fixture
+def sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 def test_handles_are_sorted_bijective_and_schema_binds_each_own_citation(value: JudgeInput) -> None:
@@ -420,7 +431,10 @@ def test_output_over_limit_failure_cannot_be_rehashed_into_success(value: JudgeI
 
 @pytest.mark.parametrize("bad_basis", [False, True])
 def test_locked_sdk_audit_text_and_shared_output_limit_with_exact_replay(
-    value: JudgeInput, bad_basis: bool
+    value: JudgeInput,
+    bad_basis: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    sdk_boundary: SDKBoundary,
 ) -> None:
     packet = build_judge_packet(value)
     wire = add_audit_bases(
@@ -474,17 +488,34 @@ def test_locked_sdk_audit_text_and_shared_output_limit_with_exact_replay(
     budget = SpendLedger(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as transport:
-            async with AsyncAnthropic(
-                api_key="synthetic-test-only", http_client=transport, max_retries=0
-            ) as client:
-                return await RealJudge(
-                    cast(MessagesPort, client.messages),
-                    budget=budget,
-                    metadata=metadata,
-                    raw_provider=raw,
-                    run_id=run_id,
-                ).evaluate(value, context=context)
+        transport = httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
+        sdk_boundary.transports.append(transport)
+        client: AsyncAnthropic | None = None
+        before = [(owner, name, getattr(owner, name)) for owner, name in FILESYSTEM_APIS]
+        try:
+            with constructor_filesystem_boundary(monkeypatch, sdk_boundary):
+                client = AsyncAnthropic(
+                    api_key="synthetic-test-only", http_client=transport, max_retries=0
+                )
+            assert client.credentials is None and client._token_cache is None
+            assert sdk_boundary.attempts == [("Path.open", sdk_boundary.pointer)]
+            assert not requests
+            assert all(getattr(owner, name) is original for owner, name, original in before)
+            return await RealJudge(
+                cast(MessagesPort, client.messages),
+                budget=budget,
+                metadata=metadata,
+                raw_provider=raw,
+                run_id=run_id,
+            ).evaluate(value, context=context)
+        finally:
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                await transport.aclose()
+            assert all(item.is_closed for item in sdk_boundary.transports)
+            assert all(getattr(owner, name) is original for owner, name, original in before)
 
     accounting: JudgeAccounting
     if bad_basis:

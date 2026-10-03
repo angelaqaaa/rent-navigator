@@ -2,10 +2,11 @@
 
 import asyncio
 import builtins
+import io
 import json
 import os
-import socket
-from collections.abc import Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -18,6 +19,12 @@ import pytest
 from anthropic import AsyncAnthropic as RealAsyncAnthropic
 from anthropic import DefaultAsyncHttpxClient
 from judge_wire_fixtures import add_audit_bases
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 
 import rent_navigator.provider as provider_module
 from rent_navigator.corpus import load_corpus
@@ -49,33 +56,8 @@ GRAMMAR_MESSAGE = "Schema is too complex for compilation."
 
 
 @pytest.fixture(autouse=True)
-def offline_sdk_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Replace the mapping without reading or retaining inherited environment values.
-    monkeypatch.setattr(os, "environ", {})
-    original_open, original_path_open = builtins.open, Path.open
-
-    def reject_environment_file(path: object) -> None:
-        if isinstance(path, str | Path) and any(
-            part.startswith(".env") for part in Path(path).parts
-        ):
-            raise AssertionError("SDK controls must not read environment files")
-
-    def guarded_open(file: Any, *args: Any, **kwargs: Any) -> Any:
-        reject_environment_file(file)
-        return original_open(file, *args, **kwargs)
-
-    def guarded_path_open(path: Path, *args: Any, **kwargs: Any) -> Any:
-        reject_environment_file(path)
-        return original_path_open(path, *args, **kwargs)
-
-    def prohibited(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("SDK controls use only the in-memory transport")
-
-    monkeypatch.setattr(builtins, "open", guarded_open)
-    monkeypatch.setattr(Path, "open", guarded_path_open)
-    monkeypatch.setattr(socket.socket, "connect", prohibited)
-    monkeypatch.setattr(socket, "create_connection", prohibited)
-    monkeypatch.setattr(socket, "getaddrinfo", prohibited)
+def offline_sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 def synthetic_input() -> tuple[JudgeInput, dict[str, Any], TraceContext]:
@@ -125,35 +107,50 @@ def synthetic_message(text: str) -> dict[str, Any]:
     }
 
 
-def production_client(
+@asynccontextmanager
+async def production_client(
     monkeypatch: pytest.MonkeyPatch,
     handle: Callable[[httpx2.Request], Coroutine[None, None, httpx2.Response]],
-) -> RealAsyncAnthropic:
+    boundary: SDKBoundary,
+) -> AsyncIterator[RealAsyncAnthropic]:
     assert anthropic.__version__ == "1.7.0" and httpx2.__version__ == "2.13.0"
     os.environ.pop("PYTEST_CURRENT_TEST", None)
     assert dict(os.environ) == {}
     constructor_calls: list[dict[str, Any]] = []
+    transports: list[httpx2.AsyncClient] = []
+    client: RealAsyncAnthropic | None = None
 
     def construct(**kwargs: Any) -> RealAsyncAnthropic:
         constructor_calls.append(kwargs)
-        return RealAsyncAnthropic(
-            **kwargs,
-            http_client=DefaultAsyncHttpxClient(transport=httpx2.MockTransport(handle)),
-        )
+        transport = DefaultAsyncHttpxClient(transport=httpx2.MockTransport(handle))
+        transports.append(transport)
+        boundary.transports.append(transport)
+        with constructor_filesystem_boundary(monkeypatch, boundary):
+            return RealAsyncAnthropic(**kwargs, http_client=transport)
 
     monkeypatch.setattr(provider_module, "AsyncAnthropic", construct)
-    client = create_client(api_key=SYNTHETIC_KEY)
-    assert constructor_calls == [
-        {
-            "api_key": SYNTHETIC_KEY,
-            "base_url": "https://api.anthropic.com",
-            "max_retries": 0,
-            "timeout": 45.0,
-        }
-    ]
-    assert client.max_retries == 0 and client.timeout == 45.0
-    assert client._strict_response_validation is False
-    return client
+    try:
+        client = create_client(api_key=SYNTHETIC_KEY)
+        assert constructor_calls == [
+            {
+                "api_key": SYNTHETIC_KEY,
+                "base_url": "https://api.anthropic.com",
+                "max_retries": 0,
+                "timeout": 45.0,
+            }
+        ]
+        assert client.max_retries == 0 and client.timeout == 45.0
+        assert client._strict_response_validation is False
+        assert client.credentials is None and client._token_cache is None
+        yield client
+    finally:
+        try:
+            if client is not None:
+                await client.close()
+        finally:
+            for transport in transports:
+                await transport.aclose()
+            assert all(transport.is_closed for transport in transports)
 
 
 def assert_closed_objects(value: object) -> None:
@@ -263,6 +260,7 @@ def assert_final_sdk_requests(
 def test_locked_sdk_preserves_wire_schema_original_text_and_failed_billing(
     duplicate_root: bool,
     monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     value, packet, context = synthetic_input()
     original_text = "\n " + json.dumps(synthetic_wire(value, packet), indent=2) + " \n"
@@ -283,7 +281,7 @@ def test_locked_sdk_preserves_wire_schema_original_text_and_failed_billing(
     budget = SpendLedger(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with production_client(monkeypatch, handle) as client:
+        async with production_client(monkeypatch, handle, offline_sdk_boundary) as client:
             return await RealJudge(
                 cast(MessagesPort, client.messages),
                 budget=budget,
@@ -321,6 +319,7 @@ def test_locked_sdk_preserves_wire_schema_original_text_and_failed_billing(
 
 def test_locked_sdk_honors_decreasing_judge_http_timeout_above_shared_client_default(
     monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     value, packet, context = synthetic_input()
     text = json.dumps(synthetic_wire(value, packet))
@@ -345,7 +344,7 @@ def test_locked_sdk_honors_decreasing_judge_http_timeout_above_shared_client_def
     budget = DelayedBudget(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with production_client(monkeypatch, handle) as client:
+        async with production_client(monkeypatch, handle, offline_sdk_boundary) as client:
             return await RealJudge(
                 cast(MessagesPort, client.messages),
                 budget=budget,
@@ -375,6 +374,7 @@ def test_locked_sdk_generation_400_diagnostic_privacy_and_unknown_hold(
     body_shape: str,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     value, packet, context = synthetic_input()
     body_sentinel, header_sentinel = "synthetic-sensitive-error-body", "synthetic-sensitive-header"
@@ -394,7 +394,7 @@ def test_locked_sdk_generation_400_diagnostic_privacy_and_unknown_hold(
     budget = SpendLedger(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with production_client(monkeypatch, handle) as client:
+        async with production_client(monkeypatch, handle, offline_sdk_boundary) as client:
             return await RealJudge(
                 cast(MessagesPort, client.messages),
                 budget=budget,
@@ -447,6 +447,7 @@ def test_locked_sdk_generation_400_diagnostic_privacy_and_unknown_hold(
 def test_locked_sdk_missing_serving_usage_does_not_infer_free_cost(
     usage: dict[str, int] | None,
     monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     value, packet, context = synthetic_input()
     response = synthetic_message(json.dumps(synthetic_wire(value, packet)))
@@ -466,7 +467,7 @@ def test_locked_sdk_missing_serving_usage_does_not_infer_free_cost(
     budget = SpendLedger(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with production_client(monkeypatch, handle) as client:
+        async with production_client(monkeypatch, handle, offline_sdk_boundary) as client:
             return await RealJudge(
                 cast(MessagesPort, client.messages),
                 budget=budget,
@@ -503,6 +504,7 @@ def test_locked_sdk_missing_serving_usage_does_not_infer_free_cost(
 
 def test_locked_sdk_count_400_never_admits_generation_or_reserves_cost(
     monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
 ) -> None:
     value, packet, context = synthetic_input()
     requests: list[httpx2.Request] = []
@@ -528,7 +530,7 @@ def test_locked_sdk_count_400_never_admits_generation_or_reserves_cost(
     budget = CountOnlyBudget(Decimal("1"))
 
     async def evaluate() -> JudgeEvaluation:
-        async with production_client(monkeypatch, handle) as client:
+        async with production_client(monkeypatch, handle, offline_sdk_boundary) as client:
             return await RealJudge(
                 cast(MessagesPort, client.messages),
                 budget=budget,
@@ -564,3 +566,146 @@ def test_locked_sdk_count_400_never_admits_generation_or_reserves_cost(
         accounting=accounting,
         run_id=RUN_ID,
     )
+
+
+def test_original_sdk_constructor_cannot_reach_underlying_profile_open(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    boundary = offline_sdk_boundary
+    underlying: list[object] = []
+    requests: list[httpx2.Request] = []
+
+    def underlying_denial(path: object, *args: Any, **kwargs: Any) -> Any:
+        underlying.append(path)
+        raise AssertionError("Underlying filesystem must not be reached")
+
+    async def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        raise AssertionError("Constructor must not dispatch HTTP")
+
+    async def prove() -> None:
+        with monkeypatch.context() as lower:
+            for owner, name in FILESYSTEM_APIS:
+                lower.setattr(owner, name, underlying_denial)
+            async with production_client(monkeypatch, handle, boundary) as client:
+                assert client.credentials is None and client._token_cache is None
+                assert boundary.attempts == [("Path.open", boundary.pointer)]
+                assert not underlying and not requests
+        assert boundary.transports and all(t.is_closed for t in boundary.transports)
+
+    asyncio.run(prove())
+
+
+@pytest.mark.parametrize("api", range(len(FILESYSTEM_APIS)))
+@pytest.mark.parametrize("string_path", [False, True])
+@pytest.mark.parametrize("kind", ["different_active_config", "config", "credentials", "env"])
+def test_constructor_scope_rejects_other_absolute_paths_before_underlying_access(
+    api: int,
+    string_path: bool,
+    kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    boundary = offline_sdk_boundary
+    paths = {
+        "different_active_config": boundary.home / "other" / "active_config",
+        "config": boundary.home / ".config" / "anthropic" / "configs" / "default.json",
+        "credentials": boundary.home / ".config" / "anthropic" / "credentials" / "default.json",
+        "env": boundary.home / ".env",
+    }
+    path: Path | str = os.fspath(paths[kind]) if string_path else paths[kind]
+    underlying: list[object] = []
+
+    def underlying_denial(value: object, *args: Any, **kwargs: Any) -> Any:
+        underlying.append(value)
+        raise AssertionError("Underlying filesystem must not be reached")
+
+    with monkeypatch.context() as lower:
+        for owner, name in FILESYSTEM_APIS:
+            lower.setattr(owner, name, underlying_denial)
+        with constructor_filesystem_boundary(monkeypatch, boundary):
+            owner, name = FILESYSTEM_APIS[api]
+            with pytest.raises(AssertionError, match="constructor filesystem access is denied"):
+                getattr(owner, name)(path)
+        assert not underlying
+
+
+@pytest.mark.parametrize("api", range(len(FILESYSTEM_APIS)))
+def test_constructor_scope_synthesizes_only_exact_missing_pointer(
+    api: int,
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    boundary = offline_sdk_boundary
+    with constructor_filesystem_boundary(monkeypatch, boundary):
+        owner, name = FILESYSTEM_APIS[api]
+        with pytest.raises(FileNotFoundError, match="Synthetic active profile is absent"):
+            getattr(owner, name)(boundary.pointer)
+        for other in (boundary.pointer + "/.", boundary.pointer.replace("/.config/", "//.config/")):
+            with pytest.raises(AssertionError):
+                getattr(owner, name)(other)
+    assert len(boundary.attempts) == 3
+
+
+@pytest.mark.parametrize("api", [1, 2, 3, 6, 7])
+def test_constructor_scope_covers_named_filesystem_path_arguments(
+    api: int,
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    boundary = offline_sdk_boundary
+    owner, name = FILESYSTEM_APIS[api]
+    argument = "file" if owner in (builtins, io) else "path"
+    with constructor_filesystem_boundary(monkeypatch, boundary):
+        with pytest.raises(AssertionError):
+            getattr(owner, name)(**{argument: os.fspath(boundary.home / ".env")})
+        with pytest.raises(FileNotFoundError):
+            getattr(owner, name)(**{argument: boundary.pointer})
+
+
+def test_unexpected_absolute_lookup_in_original_constructor_is_denied_and_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    boundary = offline_sdk_boundary
+    unexpected_home = boundary.home / "other-home"
+    before = [(owner, name, getattr(owner, name)) for owner, name in FILESYSTEM_APIS]
+    requests: list[httpx2.Request] = []
+
+    async def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        raise AssertionError("Constructor must not dispatch HTTP")
+
+    async def prove() -> None:
+        with monkeypatch.context() as override:
+            override.setattr(Path, "home", classmethod(lambda cls: unexpected_home))
+            with pytest.raises(AssertionError, match="constructor filesystem access is denied"):
+                async with production_client(monkeypatch, handle, boundary):
+                    raise AssertionError("Unexpected constructor must not succeed")
+        assert Path.home() == boundary.home
+        assert boundary.attempts == [
+            ("Path.open", os.fspath(unexpected_home / ".config" / "anthropic" / "active_config"))
+        ]
+        assert boundary.transports and all(t.is_closed for t in boundary.transports)
+        assert not requests
+
+    asyncio.run(prove())
+    assert all(getattr(owner, name) is original for owner, name, original in before)
+    assert load_corpus().corpus_hash == synthetic_input()[2].corpus_hash
+
+
+def test_constructor_scope_restores_all_access_functions_after_success_and_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_sdk_boundary: SDKBoundary,
+) -> None:
+    before = [(owner, name, getattr(owner, name)) for owner, name in FILESYSTEM_APIS]
+    with constructor_filesystem_boundary(monkeypatch, offline_sdk_boundary):
+        assert all(getattr(owner, name) is not original for owner, name, original in before)
+    assert all(getattr(owner, name) is original for owner, name, original in before)
+    with pytest.raises(AssertionError):
+        with constructor_filesystem_boundary(monkeypatch, offline_sdk_boundary):
+            raise AssertionError("Synthetic scope failure")
+    assert all(getattr(owner, name) is original for owner, name, original in before)
+    assert Path.home() == offline_sdk_boundary.home
+    assert load_corpus().corpus_hash == synthetic_input()[2].corpus_hash

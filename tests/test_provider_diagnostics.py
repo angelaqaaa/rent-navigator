@@ -891,3 +891,215 @@ def test_untyped_matching_status_and_body_cannot_classify_rejection() -> None:
     assert classify_failure(error).model_dump(mode="json") == diagnostic_v2_wire(
         category="unknown", http_status=None, rejection_reason=None
     )
+
+
+class LifecycleStatus(HostileStatus):
+    def __init__(self, behavior: str) -> None:
+        super().__init__(
+            SENTINEL,
+            response=httpx2.Response(
+                400, request=httpx2.Request("POST", "https://synthetic.invalid")
+            ),
+            body=grammar_body(nested=True),
+        )
+        self.behavior = behavior
+        self.body_reads = 0
+        self.status_reads = 0
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "status_code":
+            self.status_reads += 1
+            if self.behavior == "hostile_status":
+                raise AssertionError(SENTINEL)
+        if name == "body":
+            self.body_reads += 1
+            if self.behavior == "hostile_first" or (
+                self.body_reads > 1 and self.behavior == "raising"
+            ):
+                raise AssertionError(SENTINEL)
+            if self.body_reads > 1:
+                return {"error": {"type": "invalid_request_error", "message": SENTINEL}}
+            return object.__getattribute__(self, name)
+        return super().__getattribute__(name)
+
+
+@pytest.mark.parametrize("operation", ["count", "generation"])
+@pytest.mark.parametrize("behavior", ["changing", "raising", "hostile_first"])
+def test_direct_adapter_normalizes_original_sdk_lifecycle_once(
+    operation: str, behavior: str
+) -> None:
+    original = LifecycleStatus(behavior)
+    initial_keys = set(vars(original))
+    fake = RecordingMessages(
+        count_error=original if operation == "count" else None,
+        create_error=original if operation == "generation" else None,
+    )
+    ledger = SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger))
+    failure = outcome.failure
+    assert failure is not None and failure.code == "provider_error"
+    reason = "unclassified" if behavior == "hostile_first" else "schema_complexity"
+    assert failure.diagnostic.model_dump(mode="json") == diagnostic_v2_wire(rejection_reason=reason)
+    assert original.body_reads == original.status_reads == 1
+    assert set(vars(original)) == initial_keys
+    assert failure.__context__ is None and failure.__cause__ is None
+    for _ in range(3):
+        failure = ProviderFailure.from_exception(failure)
+        assert failure_envelope(failure).diagnostic.model_dump(mode="json") == diagnostic_v2_wire(
+            rejection_reason=reason
+        )
+        assert _error_code(failure) == "provider_error"
+        assert original.body_reads == original.status_reads == 1
+        assert failure.__context__ is None and failure.__cause__ is None
+    assert (
+        SENTINEL
+        not in outcome.log
+        + str(failure)
+        + repr(failure)
+        + failure_envelope(failure).model_dump_json()
+    )
+    generation = operation == "generation"
+    assert len(fake.counts) == 1 and len(fake.creates) == int(generation)
+    assert_accounting(
+        outcome,
+        actual=None if generation else "0",
+        reserved="0.027" if generation else "0",
+        complete=not generation,
+        generation_count=int(generation),
+    )
+    assert ledger.committed_usd == Decimal("0.027" if generation else "0")
+    assert ledger.stopped is generation
+
+
+class SDKConnectionAndTimeout(GuardedConnection, TimeoutError):
+    pass
+
+
+class SDKTimeoutAndTimeout(GuardedTimeout, TimeoutError):
+    pass
+
+
+class SDKStatusAndTimeout(LifecycleStatus, TimeoutError):
+    pass
+
+
+class CodeOnlyValidation(PayloadObservationGuard, NoBodyResponseValidation):
+    status_reads = 0
+    status_forbidden = False
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "status_code":
+            self.status_reads += 1
+            if self.status_forbidden:
+                raise AssertionError(SENTINEL)
+        return super().__getattribute__(name)
+
+
+class SDKValidationAndTimeout(CodeOnlyValidation, TimeoutError):
+    pass
+
+
+@pytest.mark.parametrize(
+    "kind,code",
+    [
+        ("status", "provider_error"),
+        ("status_timeout", "provider_error"),
+        ("status_hostile_status", "provider_error"),
+        ("status_hostile_body", "provider_error"),
+        ("connection", "provider_error"),
+        ("connection_timeout", "provider_error"),
+        ("timeout", "deadline_exceeded"),
+        ("timeout_timeout", "deadline_exceeded"),
+        ("validation", "provider_error"),
+        ("validation_timeout", "provider_error"),
+        ("validation_hostile_status", "provider_error"),
+        ("local_timeout", "deadline_exceeded"),
+        ("cancelled", "deadline_exceeded"),
+        ("unknown", "provider_error"),
+    ],
+)
+def test_code_only_classification_never_reads_sdk_body_status_or_text(kind: str, code: str) -> None:
+    request = httpx2.Request("POST", "https://synthetic.invalid")
+    response = httpx2.Response(400, request=request)
+    errors: dict[str, BaseException] = {
+        "status": LifecycleStatus("raising"),
+        "status_timeout": SDKStatusAndTimeout("raising"),
+        "status_hostile_status": LifecycleStatus("hostile_status"),
+        "status_hostile_body": LifecycleStatus("hostile_first"),
+        "connection": GuardedConnection(message=SENTINEL, request=request),
+        "connection_timeout": SDKConnectionAndTimeout(message=SENTINEL, request=request),
+        "timeout": GuardedTimeout(request),
+        "timeout_timeout": SDKTimeoutAndTimeout(request),
+        "validation": CodeOnlyValidation(
+            response, body=grammar_body(nested=True), message=SENTINEL
+        ),
+        "validation_timeout": SDKValidationAndTimeout(
+            response, body=grammar_body(nested=True), message=SENTINEL
+        ),
+        "validation_hostile_status": CodeOnlyValidation(
+            response, body=grammar_body(nested=True), message=SENTINEL
+        ),
+        "local_timeout": GuardedLocalTimeout(SENTINEL),
+        "cancelled": GuardedCancellation(SENTINEL),
+        "unknown": GuardedUnknown(SENTINEL),
+    }
+    error = errors[kind]
+    cast(Any, error).observed_payloads = []
+    if isinstance(error, CodeOnlyValidation):
+        error.status_reads = 0
+        error.status_forbidden = kind == "validation_hostile_status"
+    assert _error_code(error) == code
+    assert cast(Any, error).observed_payloads == []
+    if isinstance(error, LifecycleStatus):
+        assert error.body_reads == error.status_reads == 0
+    if isinstance(error, NoBodyResponseValidation):
+        assert error.body_reads == 0
+    if isinstance(error, CodeOnlyValidation):
+        assert error.status_reads == 0
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_code_only_provider_failure_preserves_validated_explicit_version(version: int) -> None:
+    wire = diagnostic_wire(category="local_guard", http_status=None)
+    diagnostic: FailureDiagnostic | FailureDiagnosticV2
+    if version == 2:
+        diagnostic = FailureDiagnosticV2.model_validate(
+            diagnostic_v2_wire(category="local_guard", http_status=None, rejection_reason=None)
+        )
+    else:
+        diagnostic = FailureDiagnostic.model_validate(wire)
+    failure = ProviderFailure("budget_exhausted", diagnostic=diagnostic)
+    assert _error_code(failure) == "budget_exhausted"
+    assert failure.diagnostic.schema_version == version
+    assert set(failure.diagnostic.model_dump()) == set(
+        wire if version == 1 else diagnostic.model_dump()
+    )
+
+
+@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("mutation", ["code", "status", "version"])
+def test_code_only_provider_failure_revalidates_corrupted_values(
+    version: int, mutation: str
+) -> None:
+    diagnostic = (
+        FailureDiagnostic.model_validate(diagnostic_wire())
+        if version == 1
+        else FailureDiagnosticV2.model_validate(diagnostic_v2_wire())
+    )
+    failure = ProviderFailure("provider_error", diagnostic=diagnostic)
+    if mutation == "code":
+        failure.code = "deadline_exceeded"
+    else:
+        failure.diagnostic = diagnostic.model_copy(
+            update={"http_status" if mutation == "status" else "schema_version": True}
+        )
+    with pytest.raises(ValidationError):
+        _error_code(failure)
+
+
+def test_code_only_provider_failure_revalidates_required_v2_reason() -> None:
+    diagnostic = FailureDiagnosticV2.model_validate(diagnostic_v2_wire())
+    failure = ProviderFailure("provider_error", diagnostic=diagnostic)
+    failure.diagnostic = diagnostic.model_copy(update={"rejection_reason": None})
+    with pytest.raises(ValidationError):
+        _error_code(failure)

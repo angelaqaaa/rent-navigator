@@ -516,7 +516,15 @@ def _usage(message: Message) -> Usage | None:
 
 
 def _error_code(error: BaseException) -> ErrorCode:
-    return failure_envelope(error).code
+    if isinstance(error, ProviderFailure):
+        return FailureEnvelope(code=error.code, diagnostic=error.diagnostic).code
+    if isinstance(error, APITimeoutError):
+        return "deadline_exceeded"
+    if isinstance(error, (APIConnectionError, APIResponseValidationError, APIStatusError)):
+        return "provider_error"
+    if isinstance(error, (asyncio.CancelledError, TimeoutError)):
+        return "deadline_exceeded"
+    return "provider_error"
 
 
 def _reject_paid_features(value: object) -> None:

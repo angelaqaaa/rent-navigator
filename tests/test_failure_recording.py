@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, NoReturn, cast
 from uuid import UUID, uuid4
 
 import httpx2
@@ -18,8 +18,11 @@ from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA
 from pydantic import ValidationError
 from test_eval_judge import RUN_ID
 from test_eval_judge import harness as judge_harness
+from test_eval_judge_sdk import offline_sdk_boundary as offline_sdk_boundary
 from test_eval_runner import _harness as serving_harness
 
+import rent_navigator.eval.judge as judge_module
+import rent_navigator.eval.recording as recording_module
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.eval.data import load_gold
 from rent_navigator.eval.evidence import verify_raw_links
@@ -44,7 +47,12 @@ from rent_navigator.eval.runner import (
     run_attempt,
 )
 from rent_navigator.models import ErrorResponse
-from rent_navigator.provider import FailureDiagnostic, MessagesPort, ProviderFailure
+from rent_navigator.provider import (
+    FailureDiagnostic,
+    MessagesPort,
+    ProviderFailure,
+    failure_envelope,
+)
 from rent_navigator.trace import CostSummary, TraceRecord, provider_cost_totals
 
 Surface = Literal["serving", "judge"]
@@ -144,18 +152,31 @@ async def capture(surface: Surface, corpus: Corpus, port: MessagesPort) -> Captu
 
 
 def assert_capture(
-    evidence: Captured, surface: Surface, operation: Operation, category: str, status: int | None
+    evidence: Captured,
+    surface: Surface,
+    operation: Operation,
+    category: str,
+    status: int | None,
+    *,
+    expected_version: Literal[1, 2] = 2,
+    rejection_reason: Literal["schema_complexity", "unclassified"] | None = None,
 ) -> None:
     code = (
         "deadline_exceeded"
         if category in {"sdk_timeout", "local_timeout", "cancelled"}
         else "provider_error"
     )
-    assert evidence.raw[-1].event == "failure"
-    assert evidence.raw[-1].value == {
-        "code": code,
-        "diagnostic": {"schema_version": 1, "category": category, "http_status": status},
+    diagnostic: dict[str, Any] = {
+        "schema_version": expected_version,
+        "category": category,
+        "http_status": status,
     }
+    if expected_version == 2:
+        diagnostic["rejection_reason"] = rejection_reason or (
+            "unclassified" if category == "http_error" and status == 400 else None
+        )
+    assert evidence.raw[-1].event == "failure"
+    assert evidence.raw[-1].value == {"code": code, "diagnostic": diagnostic}
     assert evidence.code == evidence.metadata[-1].response_code == code
     assert evidence.metadata[-2].response_code == code
     assert SENTINEL not in evidence.text
@@ -263,7 +284,12 @@ def test_local_and_normalized_failures_preserve_diagnostic(
         fake.responses[0] = error
     evidence = asyncio.run(capture(surface, corpus, fake))
     assert_capture(
-        evidence, surface, operation, category, 429 if category == "http_error" else None
+        evidence,
+        surface,
+        operation,
+        category,
+        429 if category == "http_error" else None,
+        expected_version=1 if category == "http_error" else 2,
     )
 
 
@@ -305,7 +331,7 @@ def test_failure_replay_rejects_code_only_and_tampered_envelopes(
     elif mutation == "bool_version":
         diagnostic["schema_version"] = True
     elif mutation == "wrong_version":
-        diagnostic["schema_version"] = 2
+        diagnostic["schema_version"] = 3
     elif mutation == "bool_status":
         diagnostic.update(category="http_error", http_status=True)
     elif mutation == "string_status":
@@ -351,6 +377,91 @@ class DirectPort:
         if isinstance(self.outcome, BaseException):
             raise self.outcome
         return cast(Message, self.outcome)
+
+
+class LifecycleSDK400(APIStatusError):
+    def __init__(self, behavior: str) -> None:
+        self.behavior, self.body_reads = behavior, 0
+        super().__init__(
+            SENTINEL,
+            response=httpx2.Response(
+                400,
+                request=httpx2.Request(
+                    "POST", "https://synthetic.invalid", headers={"sensitive": SENTINEL}
+                ),
+                headers={"sensitive": SENTINEL},
+            ),
+            body=None,
+        )
+
+    @property
+    def body(self) -> dict[str, Any]:
+        self.body_reads += 1
+        if self.behavior == "hostile" or self.body_reads > 1 and self.behavior == "raise":
+            raise RuntimeError(SENTINEL)
+        return {
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Schema is too complex for compilation."
+                if self.body_reads == 1
+                else SENTINEL,
+            },
+        }
+
+    @body.setter
+    def body(self, value: object) -> None:
+        assert value is None
+
+
+@pytest.mark.parametrize("surface", ["serving", "judge"])
+@pytest.mark.parametrize("operation", ["count_tokens", "generation"])
+@pytest.mark.parametrize("behavior", ["change", "raise", "hostile"])
+def test_original_sdk_400_is_normalized_once_through_recording_and_accounting(
+    corpus: Corpus,
+    surface: Surface,
+    operation: Operation,
+    behavior: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    error = LifecycleSDK400(behavior)
+    port = DirectPort(operation, error)
+    propagated: list[ProviderFailure] = []
+    module = judge_module if surface == "judge" else recording_module
+    original_raise = module._raise_failure
+
+    def observe_safe_raise(failure: ProviderFailure) -> NoReturn:
+        try:
+            original_raise(failure)
+        finally:
+            propagated.append(failure)
+        raise AssertionError("Safe failure raising must not return")
+
+    monkeypatch.setattr(module, "_raise_failure", observe_safe_raise)
+    evidence = asyncio.run(capture(surface, corpus, port))
+    assert error.body_reads == 1
+    assert_capture(
+        evidence,
+        surface,
+        operation,
+        "http_error",
+        400,
+        rejection_reason="unclassified" if behavior == "hostile" else "schema_complexity",
+    )
+    assert len(propagated) == 1
+    safe = propagated[0]
+    assert safe.__context__ is None and safe.__cause__ is None
+    assert failure_envelope(safe).model_dump(mode="json") == evidence.raw[-1].value
+    for _ in range(3):
+        safe = ProviderFailure.from_exception(safe)
+        assert failure_envelope(safe).model_dump(mode="json") == evidence.raw[-1].value
+        assert safe.__context__ is None and safe.__cause__ is None
+    assert error.body_reads == 1
+    assert not any(isinstance(value, BaseException) for value in vars(safe).values())
+    assert SENTINEL not in evidence.text + str(safe) + repr(safe)
+    assert port.calls == (
+        ["count_tokens"] if operation == "count_tokens" else ["count_tokens", "generation"]
+    )
 
 
 def direct_recorder(
@@ -457,7 +568,12 @@ def test_recorder_preserves_cancellation_after_recording_safe_diagnostic(
     terminal = json.loads(stream.getvalue().splitlines()[-1])
     assert terminal["value"] == {
         "code": "deadline_exceeded",
-        "diagnostic": {"schema_version": 1, "category": "cancelled", "http_status": None},
+        "diagnostic": {
+            "schema_version": 2,
+            "category": "cancelled",
+            "http_status": None,
+            "rejection_reason": None,
+        },
     }
     assert SENTINEL not in stream.getvalue()
     assert port.calls == (

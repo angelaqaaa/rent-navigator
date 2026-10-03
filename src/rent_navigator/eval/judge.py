@@ -827,8 +827,8 @@ class JudgeRecorder:
             self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
             raise
         except BaseException as error:
-            self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
             failure = ProviderFailure.from_exception(error)
+            self._write(operation, "failure", failure_envelope(failure).model_dump(mode="json"))
         if failure is not None:
             _raise_failure(failure)
         try:

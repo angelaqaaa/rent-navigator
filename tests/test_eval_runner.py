@@ -473,7 +473,12 @@ def test_raw_exception_becomes_safe_failure_code(corpus: Corpus) -> None:
     assert events[-1]["event"] == "failure"
     assert events[-1]["value"] == {
         "code": "provider_error",
-        "diagnostic": {"schema_version": 1, "category": "unknown", "http_status": None},
+        "diagnostic": {
+            "schema_version": 2,
+            "category": "unknown",
+            "http_status": None,
+            "rejection_reason": None,
+        },
     }
     assert (
         ERROR_SENTINEL

@@ -24,6 +24,7 @@ Python 3.12, uv, FastAPI/Uvicorn, Pydantic 2, Anthropic SDK, SQLite FTS5, PyYAML
 | Exact offline + stochastic live CI gates | Single gate | Arithmetic and generated explanations fail differently |
 | Metadata tracing from WP1 | Later observability | Measurements need complete attempts, including failures |
 | Single blind judge vote with compact evidence-linked audit bases and approved scenario facts | Bare grades; repeated votes until passing | Make coverage, fact authority and own-citation reasoning inspectable without changing grades, thresholds or calling twice; thirteen fixed positive/negative calibration packets require independent review before real validation |
+| Exact subtree sharing after SDK schema transformation | Rewrite the wire or normalize constraints | Reduce repeated audit objects and statement definitions while preserving the fully expanded schema, including annotations; version the encoding separately from wire5 and packet3 |
 | Same-tool baseline; blind judge and audit | Tool-free baseline/multiple judges | Compare the whole grounded system with the same tools/model without external context; expose judge disagreement without claiming a causal ranking effect |
 | N=16; twelve bounded packages | N=20; ten larger packages | Preserve six retrieval questions while splitting risky seams |
 | Paid single-service deployment | Sleeping free tier | Reliable recruiting demo with minimal operations |

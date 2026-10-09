@@ -19,6 +19,7 @@ import httpx2
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
+from judge_schema_resolution import resolve_judge_schema
 from judge_wire_fixtures import add_audit_bases
 from pydantic import ValidationError
 
@@ -46,6 +47,7 @@ from rent_navigator.eval.runner import (
     JudgeSafetyContext,
     validate_judge_accounting,
 )
+from rent_navigator.eval.schema_factor import SCHEMA_REPRESENTATION
 from rent_navigator.model_policy import JUDGE_MODEL
 from rent_navigator.provider import (
     FailureDiagnostic,
@@ -1202,9 +1204,19 @@ def sized_input(value: JudgeInput, claim_count: int, statement_count: int) -> Ju
 
 
 def resolved(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
+    expanded = resolve_judge_schema({"$defs": deepcopy(schema["$defs"]), "allOf": [deepcopy(node)]})
+    result = expanded["allOf"][0]
+    assert isinstance(result, dict)
+    return result
+
+
+def stored_node(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
+    """Locate an actual stored node for a mutation, without copying its target."""
     while "$ref" in node:
+        assert set(node) == {"$ref"}
         assert node["$ref"].startswith("#/$defs/")
-        node = schema["$defs"][node["$ref"].split("/")[-1]]
+        name = node["$ref"][len("#/$defs/") :].replace("~1", "/").replace("~0", "~")
+        node = schema["$defs"][name]
     return node
 
 
@@ -1381,6 +1393,7 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
         "grade_schema",
         "cited_schema",
         "uncited_schema",
+        "schema_representation",
         "structural_rubric",
     ],
 )
@@ -1400,6 +1413,12 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
             "_WIRE_POLICY",
             {**module._WIRE_POLICY, "citation_audit": "different own-citation rule"},
         )
+    elif changed_part == "schema_representation":
+        representation = deepcopy(SCHEMA_REPRESENTATION)
+        representation["version"] = 2
+        monkeypatch.setattr(
+            module, "_WIRE_POLICY", {**module._WIRE_POLICY, "schema_representation": representation}
+        )
     elif changed_part in {"grade_schema", "cited_schema", "uncited_schema"}:
         template = deepcopy(module._wire_schema_template())
         definition_name = {
@@ -1414,6 +1433,21 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     else:
         monkeypatch.setattr(module, "JUDGE_SYSTEM", JUDGE_SYSTEM + "\nDifferent wire contract.")
     assert judge_config_hash() != identity
+
+
+def test_exact_schema_representation_policy_is_separate_from_semantic_versions() -> None:
+    from rent_navigator.eval import judge as module
+
+    assert SCHEMA_REPRESENTATION == {
+        "name": "exact_subtree_factoring",
+        "version": 1,
+        "stage": "post_sdk_transform",
+        "classes": ["audit_object", "statement_definition"],
+    }
+    assert module._WIRE_POLICY["schema_representation"] == SCHEMA_REPRESENTATION
+    assert module._WIRE_POLICY["version"] == 5
+    assert module._PACKET_POLICY["version"] == 3
+    assert judge_config_hash() != "0746c08afcab0cba0018051f2ea1fe259d3e9cc92e6801b5b9d07d2af1198634"
 
 
 def with_citation_presence(value: JudgeInput, presence: tuple[bool, ...]) -> JudgeInput:
@@ -1444,10 +1478,10 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
     value = with_citation_presence(value, presence)
     packet = build_judge_packet(value)
     schema = judge_schema(packet)
-    assert set(schema["$defs"]) == {
+    assert {
         *(f"JudgeClaim_{claim.id}" for claim in value.required_claims),
         *(f"JudgeStatement_{statement.id}" for statement in value.response.statements),
-    }
+    } <= set(schema["$defs"])
     assert_closed_required_objects(schema)
     statement_map = schema["properties"]["statements"]
     assert list(statement_map["properties"]) == statement_map["required"] == ["s1", "s2", "s3"]
@@ -1456,7 +1490,7 @@ def test_citation_applicability_schema_binds_actual_presence_with_independent_fa
         assert statement_map["properties"][statement.id] == {
             "$ref": f"#/$defs/JudgeStatement_{statement.id}"
         }
-        definition = schema["$defs"][f"JudgeStatement_{statement.id}"]
+        definition = resolved(schema, statement_map["properties"][statement.id])
         assert definition["title"] == name
         assert definition["properties"]["factual"]["enum"] == [
             "supported",
@@ -1536,8 +1570,9 @@ def test_citation_applicability_schema_is_fresh_and_blind_within_presence_patter
     with pytest.raises(ValueError):
         judge_schema(changed)
     assert packet == original
-    schema["$defs"]["JudgeStatement_s1"]["properties"]["factual"]["enum"].clear()
-    assert judge_schema(packet) != schema
+    statement = stored_node(schema, schema["$defs"]["JudgeStatement_s1"])
+    stored_node(schema, statement["properties"]["factual"])["enum"].clear()
+    assert resolve_judge_schema(judge_schema(packet)) != resolve_judge_schema(schema)
     assert module._wire_schema_template() == template
     assert JudgeResult.model_json_schema() == internal
     assert template["$defs"]["JudgeUncitedStatementResult"]["properties"]["factual"]["enum"]
@@ -1859,9 +1894,9 @@ def test_recorder_and_raw_replay_independently_reject_schema_shape_tampering(
                 if location == "statement_leaf"
                 else location
             )
-            node = resolved(schema, schema["properties"][name])
+            node = stored_node(schema, schema["properties"][name])
             if location.endswith("leaf"):
-                node = resolved(schema, next(iter(node["properties"].values())))
+                node = stored_node(schema, next(iter(node["properties"].values())))
         if mutation == "missing_required":
             node["required"].pop()
         elif mutation == "open":

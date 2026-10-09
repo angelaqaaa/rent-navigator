@@ -10,11 +10,13 @@ from typing import Any
 import anthropic
 import pytest
 from judge_anchor_fixtures import audit, calibration_witness, claim_part, safety_witness
+from judge_calibration import calibration_input
+from judge_schema_resolution import resolve_judge_schema
 from judge_wire_fixtures import POLICY_LIMITS
 from test_eval_judge import isolated_count_replay as isolated_count_replay
 
 from rent_navigator.corpus import Corpus, load_corpus
-from rent_navigator.eval.judge import _decode_judgment, judge_schema
+from rent_navigator.eval.judge import _decode_judgment, build_judge_packet, judge_schema
 
 
 @pytest.fixture(autouse=True)
@@ -692,18 +694,76 @@ def test_generic_claim_count_is_packet_derived_not_four() -> None:
     wire["required_claims"] = {f"c{i}": deepcopy(leaf) for i in range(1, 8)}
     schema = judge_schema(packet)
     assert len(schema["properties"]["required_claims"]["required"]) == 7
+    expanded = resolve_judge_schema(schema)
+    assert len(expanded["properties"]["required_claims"]["properties"]) == 7
     assert len(decode(packet, wire).required_claims) == 7
 
 
-def test_generic_claim_ids_and_mapping_keep_packet_order_with_escaped_schema_refs() -> None:
+@pytest.mark.parametrize(
+    "ids,expected_refs",
+    [
+        (
+            ["z~tail", "a/path", "odd space", "c1"],
+            [
+                "#/$defs/JudgeClaim_z~0tail",
+                "#/$defs/JudgeClaim_a~1path",
+                "#/$defs/JudgeClaim_odd%20space",
+                "#/$defs/JudgeClaim_c1",
+            ],
+        ),
+        (
+            ["z%tail", "a%20path", "租约", "+tail"],
+            [
+                "#/$defs/JudgeClaim_z%25tail",
+                "#/$defs/JudgeClaim_a%2520path",
+                "#/$defs/JudgeClaim_%E7%A7%9F%E7%BA%A6",
+                "#/$defs/JudgeClaim_%2Btail",
+            ],
+        ),
+        (
+            ["a%2Fpath", "c1", "Café", "literal%"],
+            [
+                "#/$defs/JudgeClaim_a%252Fpath",
+                "#/$defs/JudgeClaim_c1",
+                "#/$defs/JudgeClaim_Caf%C3%A9",
+                "#/$defs/JudgeClaim_literal%25",
+            ],
+        ),
+        (
+            ["%20", "A+B", "雪/租~%", "a%2520b"],
+            [
+                "#/$defs/JudgeClaim_%2520",
+                "#/$defs/JudgeClaim_A%2BB",
+                "#/$defs/JudgeClaim_%E9%9B%AA~1%E7%A7%9F~0%25",
+                "#/$defs/JudgeClaim_a%252520b",
+            ],
+        ),
+    ],
+)
+def test_generic_claim_ids_and_mapping_keep_packet_order_with_escaped_schema_refs(
+    corpus: Corpus, ids: list[str], expected_refs: list[str]
+) -> None:
     packet, wire = calibration_witness("J02")
-    ids = ["z~tail", "a/path", "odd space", "c1"]
     for row, identifier in zip(packet["required_claims"], ids, strict=True):
         row["id"] = identifier
     wire["required_claims"] = dict(zip(ids, wire["required_claims"].values(), strict=True))
+    value = calibration_input(packet, corpus)
+    assert [claim.id for claim in value.required_claims] == ids
+    packet = build_judge_packet(value)
+    assert [row["id"] for row in packet["required_claims"]] == ids
+    before = deepcopy(packet)
     schema = judge_schema(packet)
-    for identifier in ids:
+    for identifier, expected_ref in zip(ids, expected_refs, strict=True):
         ref = schema["properties"]["required_claims"]["properties"][identifier]["$ref"]
-        escaped = ref.rsplit("/", 1)[1]
-        assert escaped.replace("~1", "/").replace("~0", "~") in schema["$defs"]
+        assert ref == expected_ref
+        assert f"JudgeClaim_{identifier}" in schema["$defs"]
+    expanded = resolve_judge_schema(schema)
+    assert list(expanded["properties"]["required_claims"]["properties"]) == ids
+    assert expanded["properties"]["required_claims"]["required"] == ids
+    for identifier in ids:
+        assert (
+            expanded["properties"]["required_claims"]["properties"][identifier]
+            == schema["$defs"][f"JudgeClaim_{identifier}"]
+        )
     assert [row.id for row in decode(packet, wire).required_claims] == ids
+    assert packet == before

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from io import StringIO
 from typing import Annotated, Any, Literal, Self, TextIO, cast
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from anthropic import transform_schema
@@ -35,6 +36,7 @@ from rent_navigator.eval.runner import (
     validate_approved_facts,
     validate_judge_accounting,
 )
+from rent_navigator.eval.schema_factor import SCHEMA_REPRESENTATION, factor_judge_schema
 from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES, policy_manifest
 from rent_navigator.models import (
     AskResponse,
@@ -214,6 +216,7 @@ _AUDIT_OBSERVATIONS = ("explicit", "necessary_implication", "insufficient", "con
 _POLICY_OBSERVATIONS = ("no_observed_conflict", "observed_conflict", "insufficient_packet_evidence")
 _WIRE_POLICY = {
     "version": 5,
+    "schema_representation": SCHEMA_REPRESENTATION,
     "format": "closed root; independently sized closed trusted ID-keyed objects",
     "claim_ids": "exact packet.required_claims IDs",
     "statement_ids": "exact packet.statements IDs, independently sized",
@@ -622,15 +625,22 @@ def judge_schema(packet: dict[str, Any]) -> dict[str, Any]:
             {
                 identifier: {
                     "$ref": "#/$defs/"
-                    + ("JudgeClaim_" if field == "required_claims" else "JudgeStatement_")
-                    + identifier.replace("~", "~0").replace("/", "~1")
+                    + quote(
+                        (
+                            ("JudgeClaim_" if field == "required_claims" else "JudgeStatement_")
+                            + identifier
+                        )
+                        .replace("~", "~0")
+                        .replace("/", "~1"),
+                        safe="~",
+                    )
                 }
                 for identifier in identifiers
             }
         )
     # The SDK moves unsupported length/uniqueness constraints into descriptions;
     # the original-content decoder enforces every bound and ordering independently.
-    return transform_schema(schema)
+    return factor_judge_schema(transform_schema(schema))
 
 
 def judge_config_hash() -> str:

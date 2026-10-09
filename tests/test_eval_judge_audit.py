@@ -14,6 +14,7 @@ from uuid import UUID
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
+from judge_schema_resolution import resolve_judge_schema
 from judge_wire_fixtures import add_audit_bases, answer_anchor, source_anchor
 from sdk_test_boundary import (
     FILESYSTEM_APIS,
@@ -66,13 +67,15 @@ def test_handles_are_sorted_bijective_and_schema_binds_each_own_citation(value: 
     assert build_judge_packet(replace(value, evidence=tuple(reversed(value.evidence)))) == packet
     schema = judge_schema(packet)
     assert transform_schema(schema) == schema
-    claim = schema["$defs"]["JudgeClaim_c1"]["properties"]["parts"]["items"]["properties"]
+    expanded = resolve_judge_schema(schema)
+    claim = expanded["properties"]["required_claims"]["properties"]["c1"]["properties"]["parts"][
+        "items"
+    ]["properties"]
     anchors = claim["answer_anchors"]["items"]["anyOf"]
     assert [item["properties"]["statement_id"]["enum"][0] for item in anchors] == ["s1", "s2", "s3"]
     assert "maxLength: 360" in claim["basis"]["description"]
     for statement in value.response.statements:
-        ref = schema["properties"]["statements"]["properties"][statement.id]["$ref"]
-        leaf = schema["$defs"][ref.rsplit("/", 1)[1]]
+        leaf = expanded["properties"]["statements"]["properties"][statement.id]
         assert set(leaf["required"]) == {"factual", "citation_support", "parts"}
         assert leaf["additionalProperties"] is False
         citation = leaf["properties"]["parts"]["items"]["properties"]["citation_audit"]

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from judge_schema_resolution import resolve_judge_schema
 from pydantic import ValidationError
 from test_eval_judge import harness, message, result, wire_payload
 from test_eval_judge import isolated_count_replay as isolated_count_replay
@@ -417,7 +418,8 @@ def test_schema_enum_and_bound_follow_all_actual_fact_leaves(
 ) -> None:
     packet = fact_packet(value, cases[identifier], "The approved scenario supplies these premises.")
     schema = judge_schema(packet)
-    part = schema["$defs"]["JudgeStatement_s1"]["properties"]["parts"]["items"]
+    expanded = resolve_judge_schema(schema)
+    part = expanded["properties"]["statements"]["properties"]["s1"]["properties"]["parts"]["items"]
     for name in ("factual_audit", "citation_audit"):
         audit_schema = part["properties"][name]
         assert "fact_fields" in audit_schema["required"]

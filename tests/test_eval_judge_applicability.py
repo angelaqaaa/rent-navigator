@@ -12,7 +12,8 @@ from typing import Any
 import anthropic
 import pytest
 from anthropic import transform_schema
-from test_eval_judge import RUN_ID, harness, message, result, wire_payload
+from judge_schema_resolution import resolve_judge_schema
+from test_eval_judge import RUN_ID, harness, message, result, stored_node, wire_payload
 
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.eval.data import load_gold
@@ -74,9 +75,11 @@ def patterned_value(corpus: Corpus, pattern: str) -> JudgeInput:
 
 def assert_applicability(schema: dict[str, Any], packet: dict[str, Any]) -> None:
     internal_factual = JudgeStatementResult.model_json_schema()["properties"]["factual"]["enum"]
+    expanded = resolve_judge_schema(schema)
     for statement in packet["statements"]:
         name = f"JudgeStatement_{statement['id']}"
-        definition = schema["$defs"][name]
+        assert name in schema["$defs"]
+        definition = expanded["properties"]["statements"]["properties"][statement["id"]]
         domain = ["supported", "unsupported"] if statement["citation_ids"] else ["not_applicable"]
         assert definition["additionalProperties"] is False
         assert (
@@ -108,9 +111,11 @@ def test_locked_sdk_transform_preserves_exact_applicability_schema(
     assert_applicability(schema, packet)
     assert transform_schema(deepcopy(schema)) == schema
     assert packet == before and JudgeStatementResult.model_json_schema() == internal
-    schema["$defs"]["JudgeStatement_s1"]["properties"]["citation_support"]["enum"].append(
+    statement = stored_node(schema, schema["$defs"]["JudgeStatement_s1"])
+    stored_node(schema, statement["properties"]["citation_support"])["enum"].append(
         "not_applicable"
     )
+    assert resolve_judge_schema(judge_schema(packet)) != resolve_judge_schema(schema)
     assert_applicability(judge_schema(packet), packet)
 
 

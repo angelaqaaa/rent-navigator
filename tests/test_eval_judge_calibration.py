@@ -40,6 +40,7 @@ from rent_navigator.eval.judge import (
     judge_config_hash,
     judge_schema,
 )
+from rent_navigator.eval.schema_factor import SCHEMA_REPRESENTATION
 
 
 @pytest.fixture(autouse=True)
@@ -281,8 +282,13 @@ def test_current_fixtures_preserve_entire_history_except_independently_approved_
     assert binding["historical_amount_gap"] is (identifier == "J13")
 
 
-def test_current_manifest_and_sizes_bind_new_actual_configuration(corpus: Corpus) -> None:
-    manifest = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+def test_retained_v2_manifest_and_sizes_bind_original_preparation(corpus: Corpus) -> None:
+    manifest_raw = (CALIBRATION_DIRECTORY / "manifest.json").read_bytes()
+    assert len(manifest_raw) == 3851
+    assert sha256(manifest_raw).hexdigest() == (
+        "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81"
+    )
+    manifest = json.loads(manifest_raw)
     assert manifest["fixture_ids"] == list(CALIBRATION_IDS)
     assert manifest["historical_files_sha256"] == HISTORICAL_FILE_HASHES
     assert manifest["fixed_source_mapping"] == FIXED_SOURCE_MAPPING
@@ -295,17 +301,79 @@ def test_current_manifest_and_sizes_bind_new_actual_configuration(corpus: Corpus
     for name, digest in manifest["files"].items():
         assert sha256((CALIBRATION_DIRECTORY / name).read_bytes()).hexdigest() == digest
     raw = (CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
+    assert len(raw) == 8457
+    assert sha256(raw).hexdigest() == (
+        "4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b"
+    )
     assert sha256(raw).hexdigest() == manifest["sizing_file_sha256"]
     sizes = json.loads(raw)
-    assert (
-        sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == judge_config_hash()
-    )
+    historical = "0746c08afcab0cba0018051f2ea1fe259d3e9cc92e6801b5b9d07d2af1198634"
+    assert sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == historical
+    assert judge_config_hash() != historical
     assert sizes["provider_calls"] == 0 and sizes["count_calls"] == 0
     assert sizes["token_measurement"] is None
-    assert sizes["fixtures"] == {
-        identifier: calibration_sizes(load_calibration(identifier, corpus=corpus))
-        for identifier in CALIBRATION_IDS
+    for identifier in CALIBRATION_IDS:
+        fresh = calibration_sizes(load_calibration(identifier, corpus=corpus))
+        for field in (
+            "packet_characters",
+            "packet_utf8_bytes",
+            "representative_output_characters",
+            "representative_output_utf8_bytes",
+            "structural_stress_output_characters",
+            "structural_stress_output_utf8_bytes",
+        ):
+            assert sizes["fixtures"][identifier][field] == fresh[field]
+
+
+def test_current_schema_representation_metadata(corpus: Corpus) -> None:
+    directory = Path("tests/fixtures/judge_schema_representation_v1")
+    manifest_raw = (directory / "manifest.json").read_bytes()
+    sizes_raw = (directory / "sizes.json").read_bytes()
+    legacy = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
+    config = judge_config_hash()
+    assert json.loads(manifest_raw) == {
+        "schema_version": 1,
+        "purpose": "offline_judge_schema_representation",
+        "representation": SCHEMA_REPRESENTATION,
+        "packet_policy_version": 3,
+        "wire_policy_version": 5,
+        "fixture_directory": "tests/fixtures/judge_calibration_v2",
+        "fixture_ids": list(CALIBRATION_IDS),
+        "files": legacy["files"],
+        "approved_source": legacy["approved_source"],
+        "legacy_manifest_sha256": (
+            "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81"
+        ),
+        "legacy_sizes_sha256": ("4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b"),
+        "prepared_judge_config_hash": config,
+        "sizing_file_sha256": sha256(sizes_raw).hexdigest(),
     }
+    assert json.loads(sizes_raw) == {
+        "schema_version": 1,
+        "purpose": "offline_factored_structural_calibration_sizes",
+        "representation": SCHEMA_REPRESENTATION,
+        "packet_policy_version": 3,
+        "wire_policy_version": 5,
+        "judge_config_hash": config,
+        "provider_calls": 0,
+        "count_calls": 0,
+        "token_measurement": None,
+        "fixtures": {
+            identifier: calibration_sizes(load_calibration(identifier, corpus=corpus))
+            for identifier in CALIBRATION_IDS
+        },
+        "limitations": (
+            "Exact Unicode and UTF-8 sizes only; retained packets and outputs unchanged. "
+            "Structural controls do not establish semantics, token fit or provider acceptance."
+        ),
+    }
+    for raw in (manifest_raw, sizes_raw):
+        assert (
+            raw
+            == (
+                json.dumps(json.loads(raw), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+            ).encode()
+        )
 
 
 @pytest.mark.parametrize(

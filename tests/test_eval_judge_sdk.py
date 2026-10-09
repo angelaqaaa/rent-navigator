@@ -18,6 +18,7 @@ import httpx2
 import pytest
 from anthropic import AsyncAnthropic as RealAsyncAnthropic
 from anthropic import DefaultAsyncHttpxClient
+from judge_schema_resolution import resolve_judge_schema
 from judge_wire_fixtures import add_audit_bases
 from sdk_test_boundary import (
     FILESYSTEM_APIS,
@@ -216,18 +217,19 @@ def assert_final_sdk_requests(
     ]
     assert schema["properties"]["required_claims"]["required"] == ["c1", "c2"]
     assert schema["properties"]["statements"]["required"] == ["s1", "s2", "s3"]
-    assert list(schema["$defs"]) == [
+    assert {
         "JudgeClaim_c1",
         "JudgeClaim_c2",
         "JudgeStatement_s1",
         "JudgeStatement_s2",
         "JudgeStatement_s3",
-    ]
+    } <= set(schema["$defs"])
+    expanded = resolve_judge_schema(schema)
     for identifier in ("c1", "c2"):
         assert schema["properties"]["required_claims"]["properties"][identifier] == {
             "$ref": "#/$defs/JudgeClaim_" + identifier
         }
-        claim = schema["$defs"]["JudgeClaim_" + identifier]
+        claim = expanded["properties"]["required_claims"]["properties"][identifier]
         assert claim["required"] == ["kind", "result", "parts"]
         assert claim["properties"]["parts"]["items"]["required"] == [
             "text",
@@ -239,7 +241,7 @@ def assert_final_sdk_requests(
         assert schema["properties"]["statements"]["properties"][identifier] == {
             "$ref": "#/$defs/JudgeStatement_" + identifier
         }
-        statement = schema["$defs"]["JudgeStatement_" + identifier]
+        statement = expanded["properties"]["statements"]["properties"][identifier]
         assert statement["required"] == ["factual", "citation_support", "parts"]
         assert statement["properties"]["parts"]["items"]["required"] == [
             "text",

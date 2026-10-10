@@ -71,18 +71,44 @@ def test_handles_are_sorted_bijective_and_schema_binds_each_own_citation(value: 
     claim = expanded["properties"]["required_claims"]["properties"]["c1"]["properties"]["parts"][
         "items"
     ]["properties"]
-    anchors = claim["answer_anchors"]["items"]["anyOf"]
-    assert [item["properties"]["statement_id"]["enum"][0] for item in anchors] == ["s1", "s2", "s3"]
+    anchors = claim["answer_anchors"]["items"]
+    quote = transform_schema(
+        {
+            "type": "string",
+            "minLength": 1,
+            "description": (
+                "An exact contiguous quotation from the original text selected by its ID."
+            ),
+        }
+    )
+    assert anchors == {
+        "type": "object",
+        "properties": {
+            "statement_id": {"type": "string", "enum": ["s1", "s2", "s3"]},
+            "quote": quote,
+        },
+        "required": ["statement_id", "quote"],
+        "additionalProperties": False,
+    }
+    assert f"maxItems: {len(packet['statements'])}" in claim["answer_anchors"]["description"]
     assert "maxLength: 360" in claim["basis"]["description"]
     for statement in value.response.statements:
         leaf = expanded["properties"]["statements"]["properties"][statement.id]
         assert set(leaf["required"]) == {"factual", "citation_support", "parts"}
         assert leaf["additionalProperties"] is False
         citation = leaf["properties"]["parts"]["items"]["properties"]["citation_audit"]
-        own = citation["properties"]["source_anchors"]["items"]["anyOf"]
-        assert [item["properties"]["reference"]["enum"][0] for item in own] == [
-            entry["reference"] for entry in entries if statement.id in entry["cited_by"]
-        ]
+        references = [entry["reference"] for entry in entries if statement.id in entry["cited_by"]]
+        own = citation["properties"]["source_anchors"]
+        assert own["items"] == {
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "enum": references},
+                "quote": quote,
+            },
+            "required": ["reference", "quote"],
+            "additionalProperties": False,
+        }
+        assert f"maxItems: {len(references)}" in own["description"]
 
 
 @pytest.mark.parametrize(
@@ -98,10 +124,12 @@ def test_handles_are_sorted_bijective_and_schema_binds_each_own_citation(value: 
         "null_basis",
         "string_refs",
         "duplicate_refs",
+        "out_of_order_source_refs",
         "foreign_refs",
         "canonical_id_instead_of_handle",
         "foreign_answer_id",
         "duplicate_answer_id",
+        "out_of_order_answer_ids",
         "met_without_answer",
         "wrong_own_reference",
         "supported_without_reference",
@@ -146,6 +174,10 @@ def test_malformed_audit_fields_are_rejected_without_grade_repair(
         factual["source_anchors"] = "e1"
     elif mutation == "duplicate_refs":
         factual["source_anchors"] = [source_anchor(packet["evidence"][0])] * 2
+    elif mutation == "out_of_order_source_refs":
+        factual["source_anchors"] = [
+            source_anchor(item) for item in reversed(packet["evidence"][:2])
+        ]
     elif mutation == "foreign_refs":
         factual["source_anchors"] = [{"reference": "e99999", "quote": "Unbound"}]
     elif mutation == "canonical_id_instead_of_handle":
@@ -156,6 +188,10 @@ def test_malformed_audit_fields_are_rejected_without_grade_repair(
         claim["parts"][0]["answer_anchors"] = [{"statement_id": "s6", "quote": "Unbound"}]
     elif mutation == "duplicate_answer_id":
         claim["parts"][0]["answer_anchors"] = [answer_anchor(packet["statements"][0])] * 2
+    elif mutation == "out_of_order_answer_ids":
+        claim["parts"][0]["answer_anchors"] = [
+            answer_anchor(item) for item in reversed(packet["statements"][:2])
+        ]
     elif mutation == "met_without_answer":
         claim["parts"][0]["answer_anchors"] = []
     elif mutation == "wrong_own_reference":
@@ -189,6 +225,45 @@ def test_malformed_audit_fields_are_rejected_without_grade_repair(
         wire["false_pass"] = 1
     elif mutation == "duplicate_policy":
         wire["policy_violations"] = ["S01", "S01"]
+    else:
+        raise AssertionError(mutation)
+    original = json.dumps(wire)
+    with pytest.raises(ValueError):
+        _decode_judgment(original, packet)
+    assert json.dumps(wire) == original
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_claim",
+        "foreign_claim",
+        "wrong_claim_text",
+        "missing_statement",
+        "foreign_statement",
+        "wrong_statement_text",
+    ],
+)
+def test_claim_and_statement_associations_are_rejected_without_repair(
+    value: JudgeInput, mutation: str
+) -> None:
+    packet = build_judge_packet(value)
+    wire = wire_payload(result(value), value)
+    claim_ids = list(wire["required_claims"])
+    if mutation == "missing_claim":
+        del wire["required_claims"][claim_ids[0]]
+    elif mutation == "foreign_claim":
+        wire["required_claims"]["c99"] = wire["required_claims"].pop(claim_ids[0])
+    elif mutation == "wrong_claim_text":
+        wire["required_claims"][claim_ids[0]]["parts"][0]["text"] = wire["required_claims"][
+            claim_ids[1]
+        ]["parts"][0]["text"]
+    elif mutation == "missing_statement":
+        del wire["statements"]["s1"]
+    elif mutation == "foreign_statement":
+        wire["statements"]["s99"] = wire["statements"].pop("s1")
+    elif mutation == "wrong_statement_text":
+        wire["statements"]["s1"]["parts"][0]["text"] = wire["statements"]["s2"]["parts"][0]["text"]
     else:
         raise AssertionError(mutation)
     original = json.dumps(wire)

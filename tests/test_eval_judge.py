@@ -1403,10 +1403,12 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
     from rent_navigator.eval import judge as module
 
     identity = judge_config_hash()
+    assert identity == judge_config_hash()
+    assert identity != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
     if changed_part == "wire_policy":
         monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": "different"})
     elif changed_part == "citation_selection":
-        assert module._WIRE_POLICY["version"] == 5
+        assert module._WIRE_POLICY["version"] == 6
         assert "citation_audit" in module._WIRE_POLICY
         monkeypatch.setattr(
             module,
@@ -1445,9 +1447,12 @@ def test_exact_schema_representation_policy_is_separate_from_semantic_versions()
         "classes": ["audit_object", "statement_definition"],
     }
     assert module._WIRE_POLICY["schema_representation"] == SCHEMA_REPRESENTATION
-    assert module._WIRE_POLICY["version"] == 5
+    assert module._WIRE_POLICY["version"] == 6
     assert module._PACKET_POLICY["version"] == 3
-    assert judge_config_hash() != "0746c08afcab0cba0018051f2ea1fe259d3e9cc92e6801b5b9d07d2af1198634"
+    identity = judge_config_hash()
+    assert identity == judge_config_hash()
+    assert identity != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
+    assert identity != "0746c08afcab0cba0018051f2ea1fe259d3e9cc92e6801b5b9d07d2af1198634"
 
 
 def with_citation_presence(value: JudgeInput, presence: tuple[bool, ...]) -> JudgeInput:

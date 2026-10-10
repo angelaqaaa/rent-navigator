@@ -325,12 +325,23 @@ def test_retained_v2_manifest_and_sizes_bind_original_preparation(corpus: Corpus
             assert sizes["fixtures"][identifier][field] == fresh[field]
 
 
-def test_current_schema_representation_metadata(corpus: Corpus) -> None:
+def test_retained_wire5_schema_representation_metadata(corpus: Corpus) -> None:
     directory = Path("tests/fixtures/judge_schema_representation_v1")
     manifest_raw = (directory / "manifest.json").read_bytes()
     sizes_raw = (directory / "sizes.json").read_bytes()
+    assert len(manifest_raw) == 2349
+    assert sha256(manifest_raw).hexdigest() == (
+        "0f760d921209075aa3f669b38165d184e314c0ae63ee1a3c9d5e5db5dbf9a65a"
+    )
+    assert len(sizes_raw) == 8727
+    assert sha256(sizes_raw).hexdigest() == (
+        "5e7e816583d601755064c6f512ef53f2ad07db6f02c15226ea4b04c4281e07a4"
+    )
     legacy = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
-    config = judge_config_hash()
+    historical_config = "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
+    current_config = judge_config_hash()
+    assert current_config == judge_config_hash()
+    assert current_config != historical_config
     assert json.loads(manifest_raw) == {
         "schema_version": 1,
         "purpose": "offline_judge_schema_representation",
@@ -345,28 +356,38 @@ def test_current_schema_representation_metadata(corpus: Corpus) -> None:
             "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81"
         ),
         "legacy_sizes_sha256": ("4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b"),
-        "prepared_judge_config_hash": config,
+        "prepared_judge_config_hash": historical_config,
         "sizing_file_sha256": sha256(sizes_raw).hexdigest(),
     }
-    assert json.loads(sizes_raw) == {
+    sizes = json.loads(sizes_raw)
+    fixture_sizes = sizes.pop("fixtures")
+    assert sizes == {
         "schema_version": 1,
         "purpose": "offline_factored_structural_calibration_sizes",
         "representation": SCHEMA_REPRESENTATION,
         "packet_policy_version": 3,
         "wire_policy_version": 5,
-        "judge_config_hash": config,
+        "judge_config_hash": historical_config,
         "provider_calls": 0,
         "count_calls": 0,
         "token_measurement": None,
-        "fixtures": {
-            identifier: calibration_sizes(load_calibration(identifier, corpus=corpus))
-            for identifier in CALIBRATION_IDS
-        },
         "limitations": (
             "Exact Unicode and UTF-8 sizes only; retained packets and outputs unchanged. "
             "Structural controls do not establish semantics, token fit or provider acceptance."
         ),
     }
+    assert set(fixture_sizes) == set(CALIBRATION_IDS)
+    for identifier in CALIBRATION_IDS:
+        current = calibration_sizes(load_calibration(identifier, corpus=corpus))
+        for key in (
+            "packet_characters",
+            "packet_utf8_bytes",
+            "representative_output_characters",
+            "representative_output_utf8_bytes",
+            "structural_stress_output_characters",
+            "structural_stress_output_utf8_bytes",
+        ):
+            assert current[key] == fixture_sizes[identifier][key]
     for raw in (manifest_raw, sizes_raw):
         assert (
             raw

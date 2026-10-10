@@ -677,7 +677,10 @@ def test_unknown_actual_service_is_distinct_from_computed_latest_service_date(
 
 def test_current_identity_changes_packet_wire_and_facts_schema_without_changing_capacity() -> None:
     assert judge_module._PACKET_POLICY["version"] == 3
-    assert judge_module._WIRE_POLICY["version"] == 5
+    assert judge_module._WIRE_POLICY["version"] == 6
+    identity = judge_module.judge_config_hash()
+    assert identity == judge_module.judge_config_hash()
+    assert identity != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
     packet_fields = judge_module._PACKET_POLICY["fields"]
     assert isinstance(packet_fields, list) and "approved_facts" in packet_fields
     assert "approved_facts_schema" in judge_module._PACKET_POLICY

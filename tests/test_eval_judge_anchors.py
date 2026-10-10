@@ -16,7 +16,12 @@ from judge_wire_fixtures import POLICY_LIMITS
 from test_eval_judge import isolated_count_replay as isolated_count_replay
 
 from rent_navigator.corpus import Corpus, load_corpus
-from rent_navigator.eval.judge import _decode_judgment, build_judge_packet, judge_schema
+from rent_navigator.eval.judge import (
+    _anchors_schema,
+    _decode_judgment,
+    build_judge_packet,
+    judge_schema,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -38,6 +43,114 @@ def corpus() -> Corpus:
 
 def decode(packet: dict[str, Any], wire: dict[str, Any]) -> Any:
     return _decode_judgment(json.dumps(wire, ensure_ascii=False), packet)
+
+
+@pytest.mark.parametrize("identifier", ["statement_id", "reference"])
+@pytest.mark.parametrize("texts", [None, {}])
+def test_unbound_and_empty_anchor_schemas_keep_their_original_bounds(
+    identifier: str, texts: dict[str, str] | None
+) -> None:
+    schema = _anchors_schema(texts, identifier=identifier)
+    assert schema["type"] == "array"
+    assert schema["items"] == {
+        "type": "object",
+        "properties": {
+            identifier: {"type": "string"},
+            "quote": {"type": "string", "minLength": 1},
+        },
+        "required": [identifier, "quote"],
+        "additionalProperties": False,
+    }
+    if texts is None:
+        assert "maxItems" not in schema
+    else:
+        assert schema["maxItems"] == 0
+
+
+@pytest.mark.parametrize("family", ["answer", "source"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "other_text",
+        "empty",
+        "number",
+        "boolean",
+        "array",
+        "too_long",
+        "non_substring",
+        "missing_id",
+        "missing_quote",
+        "extra",
+    ],
+)
+def test_shared_quote_transport_keeps_selected_original_text_validation(
+    family: str, mutation: str
+) -> None:
+    packet, wire = calibration_witness("J02")
+    assert decode(packet, wire)
+    if family == "answer":
+        anchor = wire["required_claims"]["c3"]["parts"][0]["answer_anchors"][0]
+        identifier = "statement_id"
+        texts = {row["id"]: row["text"] for row in packet["statements"]}
+    else:
+        anchor = wire["statements"]["s2"]["parts"][0]["factual_audit"]["source_anchors"][0]
+        identifier = "reference"
+        texts = {row["reference"]: row["text"] for row in packet["evidence"]}
+    selected = texts[anchor[identifier]]
+    if mutation == "other_text":
+        other = next(
+            text
+            for key, text in texts.items()
+            if key != anchor[identifier] and text not in selected
+        )
+        anchor["quote"] = other
+        assert other in texts.values() and other not in selected
+    elif mutation == "empty":
+        anchor["quote"] = ""
+    elif mutation == "number":
+        anchor["quote"] = 1
+    elif mutation == "boolean":
+        anchor["quote"] = True
+    elif mutation == "array":
+        anchor["quote"] = [selected]
+    elif mutation == "too_long":
+        anchor["quote"] = selected + "x"
+        assert len(anchor["quote"]) > len(selected)
+    elif mutation == "non_substring":
+        anchor["quote"] = "synthetic non-substring quotation"
+        assert anchor["quote"] not in selected
+    elif mutation == "missing_id":
+        del anchor[identifier]
+    elif mutation == "missing_quote":
+        del anchor["quote"]
+    else:
+        anchor["extra"] = "synthetic"
+    raw = json.dumps(wire, ensure_ascii=False)
+    with pytest.raises(ValueError):
+        _decode_judgment(raw, packet)
+    assert json.dumps(wire, ensure_ascii=False) == raw
+
+
+@pytest.mark.parametrize("family", ["answer", "source"])
+@pytest.mark.parametrize("quote_kind", ["whole_text", "whitespace"])
+def test_selected_text_boundary_and_genuine_whitespace_quotes_remain_accepted(
+    family: str, quote_kind: str
+) -> None:
+    packet, wire = calibration_witness("J02")
+    expected = decode(packet, wire)
+    if family == "answer":
+        anchor = wire["required_claims"]["c3"]["parts"][0]["answer_anchors"][0]
+        selected = next(
+            row["text"] for row in packet["statements"] if row["id"] == anchor["statement_id"]
+        )
+    else:
+        anchor = wire["statements"]["s2"]["parts"][0]["factual_audit"]["source_anchors"][0]
+        selected = next(
+            row["text"] for row in packet["evidence"] if row["reference"] == anchor["reference"]
+        )
+    anchor["quote"] = selected if quote_kind == "whole_text" else " "
+    assert anchor["quote"] and anchor["quote"] in selected
+    assert decode(packet, wire) == expected
 
 
 @pytest.mark.parametrize(

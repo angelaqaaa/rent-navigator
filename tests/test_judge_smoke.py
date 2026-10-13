@@ -272,6 +272,8 @@ def test_cli_requires_actual_r04_validator_success(
     assert summary["complete"] is False
     assert summary["r04_smoke_passed"] is False
     assert summary["real_generation_attempts"] == 0
+    row = json.loads((out / "R04.json").read_text())
+    assert row["failed_criterion"] == "r04_smoke"
 
 
 @pytest.mark.parametrize("failure", ["budget", "http", "missing_usage", "invalid_output"])

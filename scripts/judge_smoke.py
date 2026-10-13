@@ -437,8 +437,11 @@ def failed_criterion(
 
         judgment = _decode_judgment(json.dumps(row["decoded_judgment"]), build_judge_packet(value))
         if expected is None:
-            validate_smoke_result(value, judgment)
             if row.get("r04_smoke_passed") is not True:
+                return "r04_smoke"
+            try:
+                validate_smoke_result(value, judgment)
+            except ValueError:
                 return "r04_smoke"
         else:
             expected_success = task_success(expected)

@@ -214,6 +214,20 @@ class ProviderFailure(Exception):
         return cls(envelope.code, diagnostic=envelope.diagnostic)
 
 
+class ResponseEnvelopeFailure(ProviderFailure):
+    """Typed signal from the existing envelope guard, retaining no response fields."""
+
+    def __init__(self) -> None:
+        super().__init__("provider_error")
+
+
+def validate_response_envelope(response: object) -> Message:
+    """Require the existing native message type and assistant role."""
+    if not isinstance(response, Message) or response.role != "assistant":
+        raise ResponseEnvelopeFailure()
+    return response
+
+
 _SCHEMA_COMPLEXITY_MESSAGES = (
     "Schema is too complex for compilation.",
     "The compiled grammar is too large, which would cause performance issues. "
@@ -564,6 +578,7 @@ class ProviderAdapter:
         judge_reasoning: Literal["adaptive"] | None = None,
     ) -> Message:
         """Count once and generate at most once, preserving usage before validation."""
+        failure: ProviderFailure
         try:
             if model not in MODEL_POLICIES or self._budget.stopped:
                 raise ProviderFailure("provider_error")
@@ -671,11 +686,7 @@ class ProviderAdapter:
                                     if reforecast:
                                         raise ProviderFailure("provider_error")
                                     deadline.check()
-                                    if (
-                                        not isinstance(response, Message)
-                                        or response.role != "assistant"
-                                    ):
-                                        raise ProviderFailure("provider_error")
+                                    response = validate_response_envelope(response)
                                     if response.stop_reason not in ("end_turn", "tool_use") or (
                                         usage is not None
                                         and usage.output_tokens is not None
@@ -692,6 +703,8 @@ class ProviderAdapter:
                         )
         except asyncio.CancelledError:
             raise
+        except ResponseEnvelopeFailure as error:
+            failure = error
         except Exception as error:
             failure = ProviderFailure.from_exception(error)
         # Raising outside the handler avoids retaining the raw exception in __context__.

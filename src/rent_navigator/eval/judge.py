@@ -60,10 +60,12 @@ from rent_navigator.provider import (
     MessagesPort,
     ProviderAdapter,
     ProviderFailure,
+    ResponseEnvelopeFailure,
     SpendBudget,
     _error_code,
     _raise_failure,
     failure_envelope,
+    validate_response_envelope,
 )
 from rent_navigator.security_cases import SecurityCaseId
 from rent_navigator.trace import (
@@ -771,9 +773,13 @@ def _decode_judgment(text: str, packet: dict[str, Any]) -> JudgeResult:
 
 def parse_packet_judgment(response: Message, packet: dict[str, Any]) -> JudgeResult:
     """Common full response decode path for the judge and terminal probe."""
-    response, projection = project_judge_response(response)
     if getattr(response, "model", None) != JUDGE_MODEL:
         raise JudgeDecodeFailure("model_mismatch")
+    try:
+        response = validate_response_envelope(response)
+    except ResponseEnvelopeFailure:
+        raise JudgeDecodeFailure("model_invalid", code="provider_error") from None
+    response, projection = project_judge_response(response)
     if getattr(response, "stop_reason", None) != "end_turn":
         raise JudgeDecodeFailure("stop_reason")
     if (
@@ -881,6 +887,9 @@ class RealJudge:
                     code = _error_code(error)
                     if isinstance(error, JudgeDecodeFailure):
                         decode_reason = error.decode_rejection_reason
+                        diagnostic = cast(FailureDiagnosticV2, error.diagnostic)
+                    elif isinstance(error, ResponseEnvelopeFailure):
+                        decode_reason = "model_invalid"
                         diagnostic = cast(FailureDiagnosticV2, error.diagnostic)
                     elif isinstance(error, ProviderFailure) and recorder is not None:
                         observed = recorder.observed_response

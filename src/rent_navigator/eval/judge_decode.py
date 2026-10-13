@@ -29,9 +29,14 @@ class LocalDecodeError(ValueError):
 
 
 class JudgeDecodeFailure(ProviderFailure):
-    def __init__(self, reason: JudgeDecodeReason) -> None:
+    def __init__(
+        self,
+        reason: JudgeDecodeReason,
+        *,
+        code: Literal["provider_error", "invalid_generated_output"] | None = None,
+    ) -> None:
         self.decode_rejection_reason = _REASON.validate_python(reason, strict=True)
-        code: ErrorCode = (
+        failure_code: ErrorCode = code or (
             "provider_error" if reason == "model_mismatch" else "invalid_generated_output"
         )
-        super().__init__(code)
+        super().__init__(failure_code)

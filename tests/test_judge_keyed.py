@@ -280,3 +280,78 @@ def test_probe_runs_shared_decode_once_without_payload_output(
     assert observation["usage"]["input_tokens"] == 1000
     assert observation["usage"]["output_tokens"] == 100
     assert "synthetic-" not in output
+
+
+@pytest.mark.parametrize("role", ["assistant", "user"])
+def test_probe_and_real_judge_share_response_envelope_validation(
+    decode_value: JudgeInput,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    role: str,
+) -> None:
+    import anthropic
+
+    probe = load_probe()
+    response = message(decode_value).model_copy(update={"role": role})
+    payload = json.dumps(probe.build_payload("R04")).encode()
+    calls: list[dict[str, Any]] = []
+
+    class MemoryPayload(Path):
+        def read_bytes(self) -> bytes:
+            return payload
+
+    class RecordingClient:
+        def __init__(self, **kwargs: Any) -> None:
+            self.messages = self
+
+        def __enter__(self) -> "RecordingClient":
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            pass
+
+        def create(self, **kwargs: Any) -> Message:
+            calls.append(kwargs)
+            return response
+
+    monkeypatch.setattr(anthropic, "Anthropic", RecordingClient)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-envelope-key-secret")
+    probe_exit = probe.send_payload(MemoryPayload("synthetic-memory-only"), "R04")
+    output = capsys.readouterr().out
+    observation = json.loads(output)
+    test = harness(decode_value)
+    test.port.response = response
+    code, reason = None, None
+    if role == "user":
+        with pytest.raises(JudgeFailure) as caught:
+            test.run()
+        failure = caught.value
+        accounting = failure.accounting
+        code, reason = failure.code, failure.decode_rejection_reason
+        assert failure.diagnostic.schema_version == 2
+        assert failure.diagnostic.category == "local_guard"
+    else:
+        evaluated = test.run()
+        accounting = evaluated
+        assert evaluated.judgment == result(decode_value)
+        test.verify(evaluated, evaluated.judgment)
+    assert len(calls) == len(test.port.creates) == len(test.port.counts) == 1
+    assert accounting.cost.actual_cost_usd == Decimal("0.003")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.usage_complete
+    assert accounting.cost.input_tokens == 1000 and accounting.cost.output_tokens == 100
+    assert observation["usage"]["input_tokens"] == 1000
+    assert observation["usage"]["output_tokens"] == 100
+    assert set(observation) == {
+        "http_status",
+        "stop_reason",
+        "usage",
+        "decode_result",
+        "request_id",
+    }
+    assert "synthetic-envelope-key-secret" not in output
+    assert (probe_exit, observation["decode_result"], code, reason) == (
+        (1, "model_invalid", "provider_error", "model_invalid")
+        if role == "user"
+        else (0, "decoded", None, None)
+    )

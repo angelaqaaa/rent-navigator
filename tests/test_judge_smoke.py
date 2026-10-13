@@ -10,7 +10,7 @@ from typing import Any
 import anthropic
 import httpx2
 import pytest
-from anthropic.types import Message, MessageTokensCount
+from anthropic.types import Message, MessageTokensCount, TextBlock
 
 SOURCE = "a" * 40
 
@@ -69,6 +69,204 @@ def test_offline_cli_completes_all_fourteen_votes_without_a_client(
     assert row["failure_diagnostic"] is None
 
 
+def test_cli_accepts_complete_nonperfect_proposed_label_agreement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    original = smoke.OfflineMessages
+    counts: list[dict[str, Any]] = []
+    generations: list[dict[str, Any]] = []
+
+    class RecordingMessages:
+        def __init__(self, value: Any, expected: Any) -> None:
+            self.good = original(value, expected)
+            self.expected = expected
+
+        async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+            counts.append(kwargs)
+            response: MessageTokensCount = await self.good.count_tokens(**kwargs)
+            return response
+
+        async def create(self, **kwargs: Any) -> Message:
+            generations.append(kwargs)
+            response: Message = await self.good.create(**kwargs)
+            if self.expected is not None and len(generations) <= 5:
+                block = response.content[0]
+                assert isinstance(block, TextBlock)
+                output = json.loads(block.text)
+                output["false_pass"] = not output["false_pass"]
+                response = response.model_copy(
+                    update={"content": [TextBlock(type="text", text=json.dumps(output))]}
+                )
+            return response
+
+    monkeypatch.setattr(smoke, "OfflineMessages", RecordingMessages)
+    out = tmp_path / "synthetic-nonperfect"
+    assert smoke.main(["--offline", "--source-commit", SOURCE, "--evidence-dir", str(out)]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert len(counts) == len(generations) == 14
+    assert summary["complete"] is True
+    assert summary["r04_smoke_passed"] is True
+    assert summary["calibration_matched"] == 8
+    assert summary["calibration_denominator"] == 13
+    assert summary["execution_mode"] == "synthetic"
+    assert summary["real_generation_attempts"] == 0
+    assert summary["expectations"] == "proposed_not_independently_reviewed"
+    rows = [json.loads((out / f"J{number:02}.json").read_text()) for number in range(1, 14)]
+    assert [row["agreement"]["exact"] for row in rows] == [False] * 5 + [True] * 8
+
+
+@pytest.mark.parametrize(
+    "output_tokens,elapsed_seconds,exit_code",
+    [(6000, 90.0, 0), (6001, 0.0, 1), (100, 90.001, 1), (100, 120.001, 1)],
+)
+def test_cli_enforces_recorded_output_and_elapsed_limits(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    output_tokens: int,
+    elapsed_seconds: float,
+    exit_code: int,
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    original_messages, original_run = smoke.OfflineMessages, smoke.run_smoke
+    now = 0.0
+    calls: list[str] = []
+
+    class RecordingMessages:
+        def __init__(self, value: Any, expected: Any) -> None:
+            self.good = original_messages(value, expected)
+
+        async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+            calls.append("count")
+            response: MessageTokensCount = await self.good.count_tokens(**kwargs)
+            return response
+
+        async def create(self, **kwargs: Any) -> Message:
+            nonlocal now
+            calls.append("create")
+            response: Message = await self.good.create(**kwargs)
+            if len(calls) == 2:
+                now += elapsed_seconds
+            return response.model_copy(
+                update={"usage": response.usage.model_copy(update={"output_tokens": output_tokens})}
+            )
+
+    async def recorded_run(**kwargs: Any) -> dict[str, Any]:
+        summary: dict[str, Any] = await original_run(**kwargs, clock=lambda: now)
+        return summary
+
+    monkeypatch.setattr(smoke, "OfflineMessages", RecordingMessages)
+    monkeypatch.setattr(smoke, "run_smoke", recorded_run)
+    out = tmp_path / "synthetic-limits"
+    assert (
+        smoke.main(["--offline", "--source-commit", SOURCE, "--evidence-dir", str(out)])
+        == exit_code
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["complete"] is True
+    assert summary["calibration_matched"] == 13
+    assert summary["r04_smoke_passed"] is True
+    assert summary["real_generation_attempts"] == 0
+    assert calls == ["count", "create"] * 14
+    for path in out.glob("J*.json"):
+        row = json.loads(path.read_text())
+        assert row["usage"]["output_tokens"] == output_tokens
+        assert row["elapsed_seconds"] == pytest.approx(
+            elapsed_seconds if path.stem == "J01" else 0.0
+        )
+
+
+@pytest.mark.parametrize(
+    "location,changes",
+    [
+        ("missing_vote", {}),
+        ("malformed_json", {}),
+        ("J01", {"decoded_judgment": None}),
+        ("J01", {"decoded_judgment": {}}),
+        ("J01", {"stop_reason": "max_tokens"}),
+        ("J01", {"requested_model_id": "synthetic-wrong-model"}),
+        ("J01", {"returned_model_id": "synthetic-wrong-model"}),
+        ("J01", {"usage_complete": False}),
+        ("J01", {"usage": {"input_tokens": None, "output_tokens": 100}}),
+        ("J01", {"source_commit": "b" * 40}),
+        ("J01", {"judge_config_hash": "b" * 64}),
+        ("R04", {"r04_smoke_passed": False}),
+        ("summary", {"source_commit": "b" * 40}),
+        ("summary", {"judge_config_hash": "b" * 64}),
+        ("summary", {"complete": False}),
+        ("summary", {"stop_reason": "provider_error"}),
+        ("summary", {"calibration_matched": 12}),
+    ],
+)
+def test_cli_rejects_missing_or_failed_recorded_vote_criteria(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    location: str,
+    changes: dict[str, Any],
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    original = smoke.run_smoke
+
+    async def recorded_run(**kwargs: Any) -> dict[str, Any]:
+        summary: dict[str, Any] = await original(**kwargs)
+        out = kwargs["evidence_dir"]
+        if location == "summary":
+            summary.update(changes)
+        elif location == "missing_vote":
+            (out / "J13.json").unlink()
+        elif location == "malformed_json":
+            (out / "J01.json").write_text("{")
+        else:
+            path = out / (location + ".json")
+            row = json.loads(path.read_text())
+            row.update(changes)
+            path.write_text(json.dumps(row))
+        return summary
+
+    monkeypatch.setattr(smoke, "run_smoke", recorded_run)
+    out = tmp_path / "synthetic-failed-criterion"
+    assert smoke.main(["--offline", "--source-commit", SOURCE, "--evidence-dir", str(out)]) == 1
+    assert json.loads(capsys.readouterr().out)["real_generation_attempts"] == 0
+
+
+@pytest.mark.parametrize("criterion", ["false_pass", "s3_contradiction"])
+def test_cli_requires_actual_r04_validator_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    criterion: str,
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    original = smoke.OfflineMessages.create
+
+    async def create(port: Any, **kwargs: Any) -> Message:
+        response: Message = await original(port, **kwargs)
+        if port.expected is None:
+            block = response.content[0]
+            assert isinstance(block, TextBlock)
+            output = json.loads(block.text)
+            if criterion == "false_pass":
+                output["false_pass"] = False
+            else:
+                next(row for row in output["statements"] if row["id"] == "s3")["factual"] = (
+                    "supported"
+                )
+            response = response.model_copy(
+                update={"content": [TextBlock(type="text", text=json.dumps(output))]}
+            )
+        return response
+
+    monkeypatch.setattr(smoke.OfflineMessages, "create", create)
+    out = tmp_path / "synthetic-r04-failure"
+    assert smoke.main(["--offline", "--source-commit", SOURCE, "--evidence-dir", str(out)]) == 1
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["complete"] is True
+    assert summary["r04_smoke_passed"] is False
+    assert summary["real_generation_attempts"] == 0
+
+
 @pytest.mark.parametrize("failure", ["budget", "http", "missing_usage", "invalid_output"])
 def test_failure_records_preserve_accounting_and_privacy(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
@@ -121,6 +319,7 @@ def test_failure_records_preserve_accounting_and_privacy(
     )
     row = json.loads((out / "J01.json").read_text())
     assert summary["complete"] is False and summary["real_generation_attempts"] == 0
+    assert smoke._passes_gate(summary, out, SOURCE) is False
     assert row["decoded_judgment"] is None
     for path in out.iterdir():
         text = path.read_text()

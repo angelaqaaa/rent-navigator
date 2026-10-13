@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
 import subprocess
@@ -28,6 +29,7 @@ from rent_navigator.eval.judge import (
     judge_config_hash,
     validate_smoke_result,
 )
+from rent_navigator.eval.models import JudgeResult
 from rent_navigator.eval.runner import JudgeAccounting, JudgeFailure, JudgeInput
 from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES
 from rent_navigator.models import SourceCommit
@@ -352,6 +354,85 @@ async def run_smoke(
     return summary
 
 
+def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str) -> bool:
+    """Check recorded vote criteria; proposed-label agreement remains a measurement."""
+    config = judge_config_hash()
+    if (
+        source_commit != head_sha()
+        or summary.get("source_commit") != source_commit
+        or summary.get("judge_config_hash") != config
+        or summary.get("complete") is not True
+        or summary.get("planned_votes") != 14
+        or summary.get("recorded_votes") != 14
+        or summary.get("generation_attempts") != 14
+        or summary.get("stop_reason") is not None
+        or summary.get("r04_smoke_passed") is not True
+        or summary.get("calibration_denominator") != 13
+    ):
+        return False
+    matched = 0
+    for identifier, value, _ in fixed_votes():
+        try:
+            row = json.loads((evidence_dir / (identifier + ".json")).read_text())
+        except (OSError, ValueError):
+            return False
+        if type(row) is not dict:
+            return False
+        if (
+            row.get("packet_id") != identifier
+            or row.get("source_commit") != source_commit
+            or row.get("judge_config_hash") != config
+            or type(row.get("decoded_judgment")) is not dict
+            or row.get("decode_error") is not None
+            or row.get("failure_code") is not None
+            or row.get("failure_diagnostic") is not None
+            or row.get("stop_reason") != "end_turn"
+            or row.get("requested_model_id") != JUDGE_MODEL
+            or row.get("returned_model_id") != JUDGE_MODEL
+            or row.get("usage_complete") is not True
+        ):
+            return False
+        try:
+            judgment = JudgeResult.model_validate(row["decoded_judgment"], strict=True)
+            judgment.validate_coverage(
+                (claim.id for claim in value.required_claims),
+                (statement.id for statement in value.response.statements),
+            )
+        except ValueError:
+            return False
+        usage = row.get("usage")
+        if (
+            type(usage) is not dict
+            or type(usage.get("input_tokens")) is not int
+            or usage["input_tokens"] < 0
+            or type(usage.get("output_tokens")) is not int
+            or not 0 <= usage["output_tokens"] <= 6000
+        ):
+            return False
+        elapsed = row.get("elapsed_seconds")
+        if type(elapsed) not in (int, float):
+            return False
+        elapsed = cast(int | float, elapsed)
+        if not math.isfinite(elapsed) or not 0 <= elapsed <= 90:
+            return False
+        if identifier == "R04":
+            if row.get("r04_smoke_passed") is not True:
+                return False
+            try:
+                validate_smoke_result(value, judgment)
+            except ValueError:
+                return False
+        else:
+            comparison = row.get("agreement")
+            if type(comparison) is not dict or type(comparison.get("exact")) is not bool:
+                return False
+            matched += comparison["exact"]
+    return (
+        type(summary.get("calibration_matched")) is int
+        and summary["calibration_matched"] == matched
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -374,13 +455,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Judge smoke admission failed.")
         return 2
     print(json.dumps(summary))
-    return (
-        0
-        if summary["complete"]
-        and summary["calibration_matched"] == 13
-        and summary["r04_smoke_passed"]
-        else 1
-    )
+    return 0 if _passes_gate(summary, args.evidence_dir, args.source_commit) else 1
 
 
 if __name__ == "__main__":

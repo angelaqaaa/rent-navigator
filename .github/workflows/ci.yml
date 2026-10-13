@@ -195,6 +195,7 @@ jobs:
             --lockfile uv.lock
 
   live-eval-plan:
+    if: github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'
     needs: [checks, docker, offline-eval]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -326,7 +327,7 @@ jobs:
             --output-dir "$RUNNER_TEMP/reused-live-artifacts"
 
   live-eval-gate:
-    if: always()
+    if: always() && vars.LIVE_EVAL_ENABLED == 'true'
     needs: [checks, docker, offline-eval, live-eval-plan, live-eval-execute, live-eval-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

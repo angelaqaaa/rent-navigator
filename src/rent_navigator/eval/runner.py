@@ -57,6 +57,7 @@ from rent_navigator.provider import (
     SpendBudget,
 )
 from rent_navigator.security_cases import SecurityCaseId
+from rent_navigator.service_checks import require_fresh_corpus
 from rent_navigator.trace import (
     JUDGE_MODEL,
     PRICING_HASH,
@@ -450,6 +451,7 @@ async def run_attempt(
         trace = TraceRecorder(ctx, sink, monotonic=clock)
         code: Any = "provider_error"
         try:
+            require_fresh_corpus(corpus.snapshot_date)
             actual_extract = await extract_letter(
                 ExtractRequest(attempt_id=attempt_id, letter=case.letter),
                 provider=provider,
@@ -486,6 +488,11 @@ async def run_attempt(
         analysis_started = True
         started = clock()
         try:
+            try:
+                require_fresh_corpus(corpus.snapshot_date)
+            except ProviderFailure as error:
+                TraceRecorder(ctx, sink, monotonic=clock).finish(error.code)
+                raise
             response = await answer(
                 request,
                 provider=provider,

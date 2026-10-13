@@ -137,6 +137,7 @@ class RealCollectionManifest(_CollectionManifestBase):
 
 
 REAL_ARTIFACT_FILES = (*ARTIFACT_FILES, "judge-metadata.jsonl", "judge-raw-provider.jsonl")
+CONSECUTIVE_PROVIDER_FAILURE_LIMIT = 5
 
 
 class BatchLedger(Protocol):
@@ -352,6 +353,7 @@ async def _collect(
     save()
     cases = {case.id: case for case in dataset.cases}
     allowlist = SyntheticAllowlist.from_fixtures(dataset.cases)
+    consecutive_provider_failures = 0
     try:
         batch_ledger.reserve_batch(forecast_usd)
         with ExitStack() as streams:
@@ -421,6 +423,12 @@ async def _collect(
                         )
                         return manifest
                     save()
+                    serving_failure = isinstance(
+                        outcome.row.response, ErrorResponse
+                    ) and outcome.row.response.error.code in {"provider_error", "deadline_exceeded"}
+                    consecutive_provider_failures = (
+                        consecutive_provider_failures + 1 if serving_failure else 0
+                    )
                     if real_messages is not None and (
                         any(
                             reason in outcome.reasons
@@ -434,7 +442,13 @@ async def _collect(
                         )
                         or isinstance(outcome.row.response, ErrorResponse)
                         and outcome.row.response.error.code
-                        not in {"invalid_generated_output", "tool_protocol_error"}
+                        not in {
+                            "invalid_generated_output",
+                            "tool_protocol_error",
+                            "provider_error",
+                            "deadline_exceeded",
+                        }
+                        or consecutive_provider_failures >= CONSECUTIVE_PROVIDER_FAILURE_LIMIT
                     ):
                         manifest.reasons.append("collection_untrustworthy")
                         return manifest

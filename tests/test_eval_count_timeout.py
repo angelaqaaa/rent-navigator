@@ -3,7 +3,6 @@
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from functools import partial
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -20,7 +19,7 @@ from rent_navigator.eval import collection
 from rent_navigator.eval.data import GoldDataset, load_gold
 from rent_navigator.eval.evidence import verify_raw_links
 from rent_navigator.eval.recording import RawProviderRecord
-from rent_navigator.eval.runner import run_attempt
+from rent_navigator.eval.runner import AttemptOutcome, run_attempt
 from rent_navigator.models import ErrorResponse
 from rent_navigator.provider import SpendLedger
 from rent_navigator.trace import ACTOR_MODEL, TraceRecord, provider_cost_totals
@@ -127,29 +126,45 @@ def timed_collection(
 ) -> tuple[CollectionCountPort, UUID, list[TraceRecord]]:
     corpus, dataset = inputs
     clock = Clock()
-    # Inject the existing clock argument at composition; ProviderAdapter/Deadline are unchanged.
-    monkeypatch.setattr(collection, "run_attempt", partial(run_attempt, clock=clock))
+
+    # Each synthetic attempt starts before its own simulated native-count timeout.
+    async def attempt(*args: Any, **kwargs: Any) -> AttemptOutcome:
+        clock.now = 10.0
+        return await run_attempt(*args, **kwargs, clock=clock)
+
+    monkeypatch.setattr(collection, "run_attempt", attempt)
     port = CollectionCountPort(clock, shape, expired)
     budget = SpendLedger(Decimal("20"))
     manifest = run(directory, dataset, corpus, port, budget=budget)
-    assert port.count_calls == 1 and port.actor_calls == port.judge_calls == 0
+    assert port.count_calls == 5 and port.actor_calls == port.judge_calls == 0
     assert budget.committed_usd == Decimal(0)
     assert (
         not manifest.collection_complete
         and not manifest.evaluation_complete
         and not manifest.reportable
     )
-    assert len(manifest.started_attempts) == 1
+    assert len(manifest.started_attempts) == 5
     assert not manifest.judge_accounting and not manifest.judge_evaluations
     assert rows(directory, "results.jsonl") == []
-    result = rows(directory, "warmups.jsonl")[0]
+    warmups = rows(directory, "warmups.jsonl")
+    assert len(warmups) == 5
     code = "deadline_exceeded" if expired else "provider_error"
-    assert result["response"]["error"]["code"] == code and result["classification"] == "error"
+    assert all(
+        result["response"]["error"]["code"] == code and result["classification"] == "error"
+        for result in warmups
+    )
     records = [
         TraceRecord.model_validate_json(line)
         for line in (directory / "metadata.jsonl").read_text().splitlines()
     ]
-    assert_zero_count_accounting(records, code)
+    attempt_ids = {record.attempt_id for record in records}
+    assert len(attempt_ids) == 5
+    for attempt_id in attempt_ids:
+        assert_zero_count_accounting(
+            [record for record in records if record.attempt_id == attempt_id], code
+        )
+    total = provider_cost_totals(records)
+    assert total.usage_complete and total.actual_cost_usd == total.reserved_cost_usd == Decimal(0)
     return port, manifest.run_id, records
 
 
@@ -167,7 +182,9 @@ def test_real_partial_collection_count_timeout_replays_without_generation(
         RawProviderRecord.model_validate_json(line)
         for line in (directory / "raw-provider.jsonl").read_text().splitlines()
     ]
-    assert_raw_count(raw, shape)
+    assert len(raw) == 10
+    for attempt_id in {record.attempt_id for record in records}:
+        assert_raw_count([record for record in raw if record.attempt_id == attempt_id], shape)
     corpus, dataset = inputs
     assert not verify_partial(directory, corpus, dataset).collection_complete
     verify_raw_links(raw, records, run_id)
@@ -188,7 +205,7 @@ def test_invalid_count_replay_rejects_success_unrelated_errors_fields_and_later_
     _, run_id, _ = timed_collection(directory, inputs, monkeypatch)
     metadata = rows(directory, "metadata.jsonl")
     raw = rows(directory, "raw-provider.jsonl")
-    call = next(record for record in metadata if record["record_kind"] == "provider_call")
+    call = next(record for record in reversed(metadata) if record["record_kind"] == "provider_call")
     if mutation == "extra_field":
         raw[-1]["value"]["extra"] = 1
     elif mutation == "generation":

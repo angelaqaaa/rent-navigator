@@ -21,11 +21,15 @@ def test_health_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.json() == {"status": "ok", "source_commit": SYNTHETIC_SOURCE_COMMIT}
 
 
-def test_health_is_the_only_route() -> None:
+def test_unknown_routes_and_wrong_methods_keep_their_bare_errors() -> None:
     with TestClient(create_app(source_commit=SYNTHETIC_SOURCE_COMMIT)) as client:
-        for path in ("/", "/api/ask", "/api/extract", "/docs", "/openapi.json"):
+        for path in ("/", "/missing", "/docs", "/redoc", "/openapi.json"):
             assert client.get(path).status_code == 404
-        assert client.post("/healthz").status_code == 405
+        for path in ("/api/ask", "/api/extract"):
+            response = client.get(path)
+            assert response.status_code == 405 and "error" not in response.json()
+        response = client.post("/healthz")
+        assert response.status_code == 405 and "error" not in response.json()
 
 
 @pytest.mark.parametrize("revision", [None, "", "unknown", "abc123", "A" * 40, "g" * 40])

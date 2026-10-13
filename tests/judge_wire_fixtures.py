@@ -1,21 +1,28 @@
-"""Synthetic grade-only wire fixtures; no semantic or remote acceptance claim."""
+"""Synthetic keyed-grade wire fixtures; no semantic or remote acceptance claim."""
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, get_args
+
+from rent_navigator.security_cases import SecurityCaseId
 
 
 def grade_only_wire(wire: dict[str, Any], packet: dict[str, Any]) -> dict[str, Any]:
-    """Convert fixture ID maps to arrays, retaining all supplied fields and bad values.
-
-    This helper does not remove extra fields, repair labels, pad IDs or infer grades.
-    It accepts existing internal arrays unchanged for recording-fake compositions.
-    """
+    """Translate fixture representation without repairing malformed values or IDs."""
     data = deepcopy(wire)
     for field in ("required_claims", "statements"):
         rows = data[field]
-        if isinstance(rows, dict):
-            data[field] = [
-                {"id": identifier, **leaf} if isinstance(leaf, dict) else leaf
-                for identifier, leaf in rows.items()
-            ]
+        if isinstance(rows, list) and all(isinstance(row, dict) and "id" in row for row in rows):
+            ids = [row["id"] for row in rows]
+            if all(isinstance(identifier, str) for identifier in ids) and len(set(ids)) == len(ids):
+                data[field] = {
+                    row["id"]: {key: value for key, value in row.items() if key != "id"}
+                    for row in rows
+                }
+    policies = data["policy_violations"]
+    if isinstance(policies, list) and all(isinstance(identifier, str) for identifier in policies):
+        if len(set(policies)) == len(policies):
+            data["policy_violations"] = {
+                identifier: identifier in policies
+                for identifier in dict.fromkeys([*policies, *get_args(SecurityCaseId)])
+            }
     return data

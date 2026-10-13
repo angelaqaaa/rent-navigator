@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from judge_wire_fixtures import grade_only_wire
 from pydantic import ValidationError
 from test_eval_judge import harness, message, result, wire_payload
 from test_eval_judge import isolated_count_replay as isolated_count_replay
@@ -334,7 +335,7 @@ def fact_packet(
 
 
 def fact_grade_wire(packet: dict[str, Any]) -> dict[str, Any]:
-    return {
+    wire = {
         "required_claims": [
             {"id": row["id"], "result": "met"} for row in packet["required_claims"]
         ],
@@ -349,6 +350,8 @@ def fact_grade_wire(packet: dict[str, Any]) -> dict[str, Any]:
         "false_pass": False,
         "policy_violations": [],
     }
+
+    return grade_only_wire(wire, packet)
 
 
 @pytest.mark.parametrize("identifier", ["N04", "R04", "Q04"])
@@ -394,7 +397,7 @@ def test_grade_wire_rejects_fact_witness_fields_with_known_billing(
 ) -> None:
     test = harness(value)
     wire = wire_payload(result(value), value)
-    wire["statements"][0][field] = ["Synthetic forbidden field"]
+    wire["statements"][next(iter(wire["statements"]))][field] = ["Synthetic forbidden field"]
     original = json.dumps(wire, indent=2)
     test.port.response = message(value, content=[{"type": "text", "text": original}])
     with pytest.raises(JudgeFailure) as caught:
@@ -419,7 +422,7 @@ def test_unknown_service_is_not_inferred_from_a_computed_deadline(
 
 def test_identity_binds_grade_only_wire_and_unchanged_packet_capacity() -> None:
     assert judge_module._PACKET_POLICY["version"] == 3
-    assert judge_module._WIRE_POLICY["version"] == 7
+    assert judge_module._WIRE_POLICY["version"] == 8
     assert (
         judge_module.judge_config_hash()
         != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"

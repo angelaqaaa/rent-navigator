@@ -122,27 +122,29 @@ def send_payload(path: Path, packet_id: str = "J01") -> int:
             )
         )
         return 1
-    from rent_navigator.eval.judge_projection import project_judge_response, thinking_metrics
+    from rent_navigator.eval.judge import parse_packet_judgment
+    from rent_navigator.eval.judge_decode import JudgeDecodeFailure
+    from rent_navigator.eval.judge_projection import project_judge_response
 
-    response, projection = project_judge_response(response)
-    text = (
-        response.content[0].text if response.content and response.content[0].type == "text" else ""
-    )
+    response, _ = project_judge_response(response)
+    decoded = "decoded"
+    try:
+        parse_packet_judgment(response, fixed_packet(packet_id))
+    except JudgeDecodeFailure as error:
+        decoded = error.decode_rejection_reason
     print(
         json.dumps(
             {
                 "http_status": 200,
                 "stop_reason": response.stop_reason,
                 "usage": response.usage.model_dump(mode="json"),
-                "projection": projection.model_dump(mode="json"),
-                "thinking_metrics": thinking_metrics(response),
-                "content": text[:200],
+                "decode_result": decoded,
                 "request_id": getattr(response, "_request_id", None),
             },
             ensure_ascii=False,
         )
     )
-    return 0
+    return 0 if decoded == "decoded" else 1
 
 
 def main(argv: list[str] | None = None) -> int:

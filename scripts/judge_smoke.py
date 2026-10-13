@@ -41,6 +41,7 @@ from rent_navigator.provider import (
     _raise_failure,
     create_client,
 )
+from rent_navigator.security_cases import SecurityCaseId
 from rent_navigator.trace import PRICING_HASH, TraceContext, provider_cost_totals
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,13 +61,17 @@ def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:
     votes: list[tuple[str, JudgeInput, dict[str, Any] | None]] = []
     for identifier in CALIBRATION_IDS:
         fixture = load_calibration(identifier, corpus=corpus)
-        votes.append(
-            (
-                identifier,
-                calibration_input(fixture["provider_packet"], corpus),
-                grade_only_output(fixture),
-            )
-        )
+        value = calibration_input(fixture["provider_packet"], corpus)
+        wire = grade_only_output(fixture)
+        expected = {
+            "required_claims": [
+                {"id": key, **leaf} for key, leaf in wire["required_claims"].items()
+            ],
+            "statements": [{"id": key, **leaf} for key, leaf in wire["statements"].items()],
+            "false_pass": wire["false_pass"],
+            "policy_violations": [key for key, flag in wire["policy_violations"].items() if flag],
+        }
+        votes.append((identifier, value, expected))
     case = next(case for case in load_gold(ROOT / "eval", corpus).cases if case.id == "R04")
     votes.append(("R04", build_smoke_input(case, corpus), None))
     return votes
@@ -194,6 +199,20 @@ class OfflineMessages:
             "false_pass": True,
             "policy_violations": [],
         }
+        output = {
+            **output,
+            "required_claims": {
+                row["id"]: {"result": row["result"]} for row in output["required_claims"]
+            },
+            "statements": {
+                row["id"]: {"factual": row["factual"], "citation_support": row["citation_support"]}
+                for row in output["statements"]
+            },
+            "policy_violations": {
+                identifier: identifier in output["policy_violations"]
+                for identifier in get_args(SecurityCaseId)
+            },
+        }
         return Message.model_construct(
             id="msg_synthetic_judge_smoke",
             type="message",
@@ -259,6 +278,7 @@ async def run_smoke(
             decoded = None
             code = None
             smoke_passed = None
+            decode_reason = None
             try:
                 evaluated = await RealJudge(
                     port,
@@ -278,8 +298,9 @@ async def run_smoke(
                         smoke_passed = False
             except JudgeFailure as error:
                 accounting, code = error.accounting, error.code
+                decode_reason = error.decode_rejection_reason
                 if port.diagnostic is None:
-                    port.diagnostic = ProviderFailure(code).diagnostic.model_dump(mode="json")
+                    port.diagnostic = error.diagnostic.model_dump(mode="json")
             finally:
                 elapsed = clock() - start
                 metadata.close()
@@ -307,6 +328,7 @@ async def run_smoke(
                 "actual_cost_usd": accounting.cost.model_dump(mode="json")["actual_cost_usd"],
                 "reserved_cost_usd": accounting.cost.model_dump(mode="json")["reserved_cost_usd"],
                 "failure_diagnostic": port.diagnostic,
+                "decode_rejection_reason": decode_reason,
                 "provider_request_id": port.request_id,
                 "provider_error_type": port.error_type,
                 "thinking_metrics": port.thinking_metrics,
@@ -410,7 +432,11 @@ def failed_criterion(
         return "identity"
     if row.get("failure_code") is not None or row.get("failure_diagnostic") is not None:
         return "call_failure"
-    if row.get("decode_error") is not None or type(row.get("decoded_judgment")) is not dict:
+    if (
+        row.get("decode_error") is not None
+        or row.get("decode_rejection_reason") is not None
+        or type(row.get("decoded_judgment")) is not dict
+    ):
         return "decode"
     if row.get("requested_model_id") != JUDGE_MODEL or row.get("returned_model_id") != JUDGE_MODEL:
         return "model"
@@ -433,9 +459,19 @@ def failed_criterion(
     if not math.isfinite(elapsed) or not 0 <= elapsed <= 90:
         return "elapsed_bound"
     try:
-        from rent_navigator.eval.judge import _decode_judgment, build_judge_packet
-
-        judgment = _decode_judgment(json.dumps(row["decoded_judgment"]), build_judge_packet(value))
+        judgment = JudgeResult.model_validate(row["decoded_judgment"], strict=True)
+        judgment.validate_coverage(
+            (claim.id for claim in value.required_claims),
+            (statement.id for statement in value.response.statements),
+        )
+        citations: dict[str, bool] = {
+            statement.id: bool(statement.citation_ids) for statement in value.response.statements
+        }
+        if any(
+            citations[statement.id] == (statement.citation_support == "not_applicable")
+            for statement in judgment.statements
+        ):
+            raise ValueError("citation_applicability")
         if expected is None:
             if row.get("r04_smoke_passed") is not True:
                 return "r04_smoke"

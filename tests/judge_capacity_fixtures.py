@@ -8,6 +8,7 @@ from uuid import UUID
 
 from judge_calibration import grade_only_output, load_calibration
 from judge_schema_resolution import schema_metrics
+from judge_wire_fixtures import grade_only_wire
 
 from rent_navigator.corpus import SOURCE_URLS, Corpus
 from rent_navigator.eval.judge import build_judge_packet, judge_schema
@@ -90,7 +91,7 @@ def safety_candidate(
         "false_pass": False,
         "policy_violations": [],
     }
-    return value, packet, wire
+    return value, packet, grade_only_wire(wire, packet)
 
 
 def long_statement_candidate() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -100,9 +101,9 @@ def long_statement_candidate() -> tuple[dict[str, Any], dict[str, Any]]:
     repeated = (original + " ") * 3
     assert len(repeated) <= 600
     text = repeated + " " * (600 - len(repeated))
-    leaf = wire["statements"][0]
+    leaf = wire["statements"][next(iter(wire["statements"]))]
     packet["statements"] = [{"id": f"s{i}", "text": text, "citation_ids": []} for i in range(1, 7)]
-    wire["statements"] = [{**leaf, "id": f"s{i}"} for i in range(1, 7)]
+    wire["statements"] = {f"s{i}": deepcopy(leaf) for i in range(1, 7)}
     for entry in packet["evidence"]:
         entry["cited_by"] = []
     return packet, wire

@@ -34,14 +34,22 @@ def assert_actual_grade_transport(packet: dict[str, Any]) -> None:
     assert metrics["unions"] == metrics["optional"] == 0
     expanded = resolve_judge_schema(schema)
     for field, expected in (
-        ("required_claims", {"id", "result"}),
-        ("statements", {"id", "factual", "citation_support"}),
+        ("required_claims", {"result"}),
+        ("statements", {"factual", "citation_support"}),
     ):
-        leaf = expanded["properties"][field]["items"]
-        assert leaf["type"] == "object" and leaf["additionalProperties"] is False
-        assert set(leaf["properties"]) == set(leaf["required"]) == expected
-        assert leaf["properties"]["id"]["enum"] == [row["id"] for row in packet[field]]
-    assert schema["properties"]["statements"]["items"] == {"$ref": "#/$defs/statement"}
+        group = expanded["properties"][field]
+        assert group["type"] == "object" and group["additionalProperties"] is False
+        assert (
+            list(group["properties"]) == group["required"] == [row["id"] for row in packet[field]]
+        )
+        for leaf in group["properties"].values():
+            assert leaf["type"] == "object" and leaf["additionalProperties"] is False
+            assert set(leaf["properties"]) == set(leaf["required"]) == expected
+    for statement in packet["statements"]:
+        kind = "cited_statement" if statement["citation_ids"] else "uncited_statement"
+        assert schema["properties"]["statements"]["properties"][statement["id"]] == {
+            "$ref": "#/$defs/" + kind
+        }
     for row in (*packet["required_claims"], *packet["statements"], *packet["evidence"]):
         assert row["text"] not in json.dumps(schema)
 

@@ -256,16 +256,16 @@ def grade_only_output(fixture: dict[str, Any]) -> dict[str, Any]:
 def grade_only_stress_output(fixture: dict[str, Any]) -> dict[str, Any]:
     """Largest label strings and policy inventory; structural, not semantic, output."""
     wire = grade_only_output(fixture)
-    for row in wire["required_claims"]:
+    for row in wire["required_claims"].values():
         row["result"] = "contradicted"
     citations = {
         row["id"]: bool(row["citation_ids"]) for row in fixture["provider_packet"]["statements"]
     }
-    for row in wire["statements"]:
+    for identifier, row in wire["statements"].items():
         row["factual"] = "contradicted"
-        row["citation_support"] = "unsupported" if citations[row["id"]] else "not_applicable"
+        row["citation_support"] = "unsupported" if citations[identifier] else "not_applicable"
     wire["false_pass"] = False
-    wire["policy_violations"] = [f"S{n:02}" for n in range(1, 9)]
+    wire["policy_violations"] = {f"S{n:02}": False for n in range(1, 9)}
     return wire
 
 

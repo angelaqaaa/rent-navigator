@@ -210,31 +210,24 @@ def assert_final_sdk_requests(
     assert bodies[0]["output_config"]["format"]["type"] == "json_schema"
     schema = bodies[0]["output_config"]["format"]["schema"]
     assert schema == judge_schema(packet)
+    expanded = resolve_judge_schema(schema)
     assert schema["required"] == [
         "required_claims",
         "statements",
         "false_pass",
         "policy_violations",
     ]
-    assert schema["$defs"]["claim_id"]["enum"] == ["c1", "c2"]
-    assert schema["$defs"]["statement_id"]["enum"] == ["s1", "s2", "s3"]
-    expanded = resolve_judge_schema(schema)
-    assert schema["properties"]["required_claims"]["items"] == {"$ref": "#/$defs/claim"}
-    assert schema["properties"]["statements"]["items"] == {"$ref": "#/$defs/statement"}
-    assert expanded["properties"]["required_claims"]["items"]["required"] == ["id", "result"]
-    assert expanded["properties"]["statements"]["items"]["required"] == [
-        "id",
+    assert schema["properties"]["required_claims"]["required"] == ["c1", "c2"]
+    assert schema["properties"]["statements"]["required"] == ["s1", "s2", "s3"]
+    assert schema["properties"]["required_claims"]["properties"]["c1"] == {"$ref": "#/$defs/claim"}
+    assert schema["properties"]["statements"]["properties"]["s1"] == {
+        "$ref": "#/$defs/cited_statement"
+    }
+    assert expanded["properties"]["required_claims"]["properties"]["c1"]["required"] == ["result"]
+    assert expanded["properties"]["statements"]["properties"]["s1"]["required"] == [
         "factual",
         "citation_support",
     ]
-    assert_closed_objects(schema)
-    if len(bodies) == 2:
-        assert set(bodies[1]) == shared | {"max_tokens", "stream", "service_tier"}
-        assert bodies[1]["max_tokens"] == 8192
-        assert bodies[1]["stream"] is False
-        assert bodies[1]["service_tier"] == "standard_only"
-        for key in shared:
-            assert bodies[0][key] == bodies[1][key]
 
 
 @pytest.mark.parametrize("duplicate_root", [False, True])

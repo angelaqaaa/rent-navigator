@@ -55,10 +55,13 @@ def test_six_full_length_statements_have_one_shared_grade_shape() -> None:
     packet, wire = long_statement_candidate()
     assert len(packet["statements"]) == 6
     assert all(len(row["text"]) == 600 for row in packet["statements"])
-    assert all(row["citation_support"] == "not_applicable" for row in wire["statements"])
+    assert all(row["citation_support"] == "not_applicable" for row in wire["statements"].values())
     assert len(_decode_judgment(serialized(wire), packet).statements) == 6
     schema = judge_schema(packet)
-    assert schema["properties"]["statements"]["items"] == {"$ref": "#/$defs/statement"}
+    assert all(
+        ref == {"$ref": "#/$defs/uncited_statement"}
+        for ref in schema["properties"]["statements"]["properties"].values()
+    )
     lint_grade_schema(schema)
 
 
@@ -97,7 +100,7 @@ def test_helpers_never_modify_frozen_fixture_bytes_or_returned_grades() -> None:
     for identifier in CALIBRATION_IDS:
         packet, wire = calibration_candidate(identifier)
         invalid = deepcopy(wire)
-        invalid["required_claims"][0]["result"] = "repaired"
+        invalid["required_claims"][next(iter(invalid["required_claims"]))]["result"] = "repaired"
         with pytest.raises(ValueError):
             _decode_judgment(serialized(invalid), packet)
     assert before == {path: Path(path).read_bytes() for path in before}

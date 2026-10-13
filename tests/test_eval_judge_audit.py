@@ -157,7 +157,7 @@ def test_locked_sdk_grade_text_and_shared_output_limit_with_exact_replay(
         packet,
     )
     if bad_field:
-        wire["statements"][0]["basis"] = "Forbidden legacy field"
+        wire["statements"][next(iter(wire["statements"]))]["basis"] = "Forbidden legacy field"
     original = " \n" + json.dumps(wire, indent=2) + "\n "
     requests: list[dict[str, Any]] = []
 

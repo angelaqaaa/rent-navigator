@@ -75,27 +75,27 @@ def patterned_value(corpus: Corpus, pattern: str) -> JudgeInput:
 
 def assert_applicability(schema: dict[str, Any], packet: dict[str, Any]) -> None:
     expanded = resolve_judge_schema(schema)
-    assert schema["$defs"]["statement_id"]["enum"] == [row["id"] for row in packet["statements"]]
-    definition = expanded["properties"]["statements"]["items"]
-    assert definition["additionalProperties"] is False
-    assert (
-        set(definition["properties"])
-        == set(definition["required"])
-        == {"id", "factual", "citation_support"}
-    )
-    assert (
-        definition["properties"]["factual"]["enum"]
-        == JudgeStatementResult.model_json_schema()["properties"]["factual"]["enum"]
-    )
-    assert definition["properties"]["citation_support"]["enum"] == [
-        "supported",
-        "unsupported",
-        "not_applicable",
-    ]
+    group = expanded["properties"]["statements"]
+    assert group["required"] == [row["id"] for row in packet["statements"]]
+    for statement in packet["statements"]:
+        definition = group["properties"][statement["id"]]
+        assert definition["additionalProperties"] is False
+        assert (
+            set(definition["properties"])
+            == set(definition["required"])
+            == {"factual", "citation_support"}
+        )
+        assert (
+            definition["properties"]["factual"]["enum"]
+            == (JudgeStatementResult.model_json_schema()["properties"]["factual"]["enum"])
+        )
+        assert definition["properties"]["citation_support"]["enum"] == (
+            ["supported", "unsupported"] if statement["citation_ids"] else ["not_applicable"]
+        )
     assert schema["additionalProperties"] is False
     for field in ("required_claims", "statements"):
-        assert schema["properties"][field]["type"] == "array"
-        assert schema["properties"][field]["minItems"] == 1
+        assert schema["properties"][field]["type"] == "object"
+        assert schema["properties"][field]["required"] == [row["id"] for row in packet[field]]
 
 
 @pytest.mark.parametrize("pattern", ["cited", "uncited", "mixed"])
@@ -109,7 +109,8 @@ def test_locked_sdk_transform_preserves_exact_applicability_schema(
     assert_applicability(schema, packet)
     assert transform_schema(deepcopy(schema)) == schema
     assert packet == before and JudgeStatementResult.model_json_schema() == internal
-    statement = stored_node(schema, schema["$defs"]["statement"])
+    kind = "cited_statement" if packet["statements"][0]["citation_ids"] else "uncited_statement"
+    statement = stored_node(schema, schema["$defs"][kind])
     stored_node(schema, statement["properties"]["citation_support"])["enum"].append(
         "different_label"
     )
@@ -195,7 +196,9 @@ def test_rehashed_real_collection_judge_artifacts_reject_unbound_applicability(
         packet = json.loads(prepared["messages"][0]["content"])
         target = packet["statements"][0]
         if mutation == "wrong_ref":
-            schema["properties"]["statements"]["items"] = {"$ref": "#/$defs/claim"}
+            schema["properties"]["statements"]["properties"][target["id"]] = {
+                "$ref": "#/$defs/claim"
+            }
         else:
             target["citation_ids"] = [] if target["citation_ids"] else [packet["evidence"][0]["id"]]
             for evidence in packet["evidence"]:

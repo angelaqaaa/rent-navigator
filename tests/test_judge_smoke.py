@@ -257,9 +257,7 @@ def test_cli_requires_actual_r04_validator_success(
             if criterion == "false_pass":
                 output["false_pass"] = False
             else:
-                next(row for row in output["statements"] if row["id"] == "s3")["factual"] = (
-                    "supported"
-                )
+                output["statements"]["s3"]["factual"] = "supported"
             response = response.model_copy(
                 update={"content": [TextBlock(type="text", text=json.dumps(output))]}
             )
@@ -404,12 +402,12 @@ def test_fail_to_pass_stops_at_first_vote_and_preserves_unstarted_status(
         block = response.content[0]
         assert isinstance(block, TextBlock)
         grades = json.loads(block.text)
-        for claim in grades["required_claims"]:
+        for claim in grades["required_claims"].values():
             claim["result"] = "met"
-        for statement in grades["statements"]:
+        for statement in grades["statements"].values():
             statement["factual"] = "supported"
         grades["false_pass"] = False
-        grades["policy_violations"] = []
+        grades["policy_violations"] = {f"S{i:02}": False for i in range(1, 9)}
         return response.model_copy(
             update={"content": [TextBlock(type="text", text=json.dumps(grades))]}
         )

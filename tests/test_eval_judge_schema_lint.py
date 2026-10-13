@@ -24,7 +24,7 @@ def test_every_fixed_shape_meets_initial_grade_schema_limits(packet_id: str) -> 
     metrics = lint_grade_schema(judge_schema(packet))
     assert metrics["unions"] == metrics["optional"] == 0
     assert metrics["depth"] <= 5
-    assert metrics["objects"] == 3
+    assert metrics["objects"] == 7
 
 
 def test_rejected_positive_control_exceeds_all_three_budgets() -> None:
@@ -80,7 +80,7 @@ def test_lint_rejects_forbidden_shapes_and_references(mutation: str) -> None:
     elif mutation == "open":
         schema["$defs"]["claim"].pop("additionalProperties")
     else:
-        schema["properties"]["statements"]["items"]["$ref"] = (
+        schema["properties"]["statements"]["properties"]["s1"]["$ref"] = (
             "https://example.invalid/schema" if mutation == "foreign_ref" else "#/$defs/absent"
         )
     with pytest.raises(ValueError):

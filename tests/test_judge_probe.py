@@ -199,7 +199,30 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
                 type="message",
                 role=get_args(Message.model_fields["role"].annotation)[0],
                 model=JUDGE_MODEL,
-                content=[TextBlock(type="text", text="x" * 240)],
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=json.dumps(
+                            {
+                                "required_claims": {
+                                    row["id"]: {"result": "met"}
+                                    for row in probe.fixed_packet(packet_id)["required_claims"]
+                                },
+                                "statements": {
+                                    row["id"]: {
+                                        "factual": "supported",
+                                        "citation_support": "supported"
+                                        if row["citation_ids"]
+                                        else "not_applicable",
+                                    }
+                                    for row in probe.fixed_packet(packet_id)["statements"]
+                                },
+                                "false_pass": False,
+                                "policy_violations": {f"S{i:02}": False for i in range(1, 9)},
+                            }
+                        ),
+                    )
+                ],
                 stop_reason="end_turn",
                 stop_sequence=None,
                 usage=SDKUsage(input_tokens=100, output_tokens=10),
@@ -243,16 +266,14 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
             "http_status",
             "stop_reason",
             "usage",
-            "content",
+            "decode_result",
             "request_id",
-            "projection",
-            "thinking_metrics",
         }
         assert output["http_status"] == 200
         assert output["stop_reason"] == "end_turn"
         assert output["usage"]["input_tokens"] == 100
         assert output["usage"]["output_tokens"] == 10
-        assert output["content"] == "x" * 200
+        assert output["decode_result"] == "decoded"
         assert output["request_id"] == (
             "req_synthetic_success" if outcome == "success_with_id" else None
         )

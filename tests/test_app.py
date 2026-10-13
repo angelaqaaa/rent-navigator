@@ -23,13 +23,14 @@ def test_health_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_unknown_routes_and_wrong_methods_keep_their_bare_errors() -> None:
     with TestClient(create_app(source_commit=SYNTHETIC_SOURCE_COMMIT)) as client:
-        for path in ("/", "/missing", "/docs", "/redoc", "/openapi.json"):
+        for path in ("/missing", "/docs", "/redoc", "/openapi.json"):
             assert client.get(path).status_code == 404
         for path in ("/api/ask", "/api/extract"):
             response = client.get(path)
             assert response.status_code == 405 and "error" not in response.json()
         response = client.post("/healthz")
         assert response.status_code == 405 and "error" not in response.json()
+        assert client.post("/").status_code == 405
 
 
 @pytest.mark.parametrize("revision", [None, "", "unknown", "abc123", "A" * 40, "g" * 40])

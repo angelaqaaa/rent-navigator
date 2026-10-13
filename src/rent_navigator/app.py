@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import TypeAdapter, ValidationError
 
 from rent_navigator.admission import BODY_LIMIT_BYTES, Admission, DailyBudget, utc_now
@@ -39,6 +39,7 @@ from rent_navigator.models import (
     StrictModel,
     disclaimer_for,
 )
+from rent_navigator.page import page_html
 from rent_navigator.provider import (
     Deadline,
     MessagesPort,
@@ -137,6 +138,21 @@ def create_app(
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> HealthResponse:
         return HealthResponse(status="ok", source_commit=checked_revision)
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> HTMLResponse:
+        return HTMLResponse(
+            page_html(source.snapshot_date, checked_revision),
+            headers={
+                "Cache-Control": "no-store",
+                "Referrer-Policy": "no-referrer",
+                "Content-Security-Policy": (
+                    "default-src 'none'; script-src 'unsafe-inline'; "
+                    "style-src 'unsafe-inline'; connect-src 'self'; "
+                    "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+                ),
+            },
+        )
 
     def context(
         attempt_id: UUID | None,

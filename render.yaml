@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: rent-navigator
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    numInstances: 1
+    autoDeploy: false
+    healthCheckPath: /healthz
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PORT
+        value: "8000"
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: DEMO_DAILY_USD
+        value: "0"

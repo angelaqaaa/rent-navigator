@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, bounded analysis orchestration, pattern redaction, eight offline security fixtures and the evaluation harness. The service exposes `GET /healthz`, `POST /api/extract` and `POST /api/ask`. Local image entry points support the fixed collection and a separate three-attempt dry run. There is no static page, deployed demo, activated baseline or release collection. Free tests establish integration behavior, not genuine quality, latency or cost measurements.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, bounded analysis orchestration, pattern redaction, eight offline security fixtures and the evaluation harness. The service exposes a text-only page at `GET /`, `GET /healthz`, `POST /api/extract` and `POST /api/ask`. Local image entry points support the fixed collection and a separate three-attempt dry run. A Render blueprint is included; there is no deployed demo, activated baseline or release collection. Free tests establish integration behavior, not genuine quality, latency or cost measurements.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -67,7 +67,15 @@ In another terminal:
 curl --fail http://127.0.0.1:8000/healthz
 ```
 
-The response contains `status: "ok"` and the full commit SHA. Startup fails if `SOURCE_COMMIT` is missing or malformed. API documentation routes are disabled; the static page is the next integration step. Provider credentials are read only when an admitted, valid API request needs the client.
+The response contains `status: "ok"` and the full commit SHA. Startup fails if `SOURCE_COMMIT` is missing or malformed. API documentation routes are disabled. Open `/` for the letter and general-question flows. Provider credentials are read only when an admitted, valid API request needs the client.
+
+## Page and deployment configuration
+
+The page uses inline script and text-only DOM rendering without external assets, analytics or browser storage. Extracted amounts/date are suggestions for correction. Ordinary-scope checklist, rental-period start and reviewed-facts confirmations are explicit actions, never inferred from extraction. Blank fields remain unknown; no previous increase and an unknown previous increase remain distinct. Extraction and confirmed analysis share one attempt ID; general questions use a fresh attempt. Clearing or changing the letter resets its draft confirmations. Errors, including exhausted daily budget and stale rules, appear in plain words. The disclaimer stays fixed, and the footer shows the actual snapshot date and running source SHA. HTTPS or localhost is needed for browser UUID creation. The page and health remain available when POST checks are paused for a stale corpus.
+
+`render.yaml` defines one Docker web service with `/healthz`, one instance and automatic deploys off. The owner supplies `ANTHROPIC_API_KEY` and the exact `PUBLIC_ORIGIN` through the dashboard; neither value is committed. Initial `DEMO_DAILY_USD` is `0`, and `PORT` is `8000`, matching the single-worker Docker command. Admission at `0.30` belongs to the later approved public smoke, not blueprint creation. This configuration has not been deployed or validated through an account operation.
+
+Render documents `autoDeploy: false` as the deprecated equivalent of `autoDeployTrigger: off`. Its default environment variables are available during builds unless otherwise noted, and Docker service variables become build arguments. `ARG RENDER_GIT_COMMIT` supplies the default for `ARG SOURCE_COMMIT`; the existing full-SHA assertion, runtime environment and revision label remain. Local/CI builds may provide the actual Git SHA through the existing build argument. Do not place `SOURCE_COMMIT` in the blueprint or an environment file: the build must bind the actual deployed source. See the official [blueprint reference](https://render.com/docs/blueprint-spec), [default variables](https://render.com/docs/environment-variables) and [Docker behavior](https://render.com/docs/docker).
 
 ## HTTP admission and responses
 

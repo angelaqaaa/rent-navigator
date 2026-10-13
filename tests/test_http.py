@@ -129,10 +129,6 @@ def test_stale_posts_do_not_block_an_independent_static_get(corpus: Corpus) -> N
         wall_clock=lambda: fresh_clock(corpus) + timedelta(days=90),
     )
 
-    @app.get("/")
-    def synthetic_page() -> str:
-        return "Synthetic static GET fixture."
-
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
         assert client.get("/healthz").status_code == 200

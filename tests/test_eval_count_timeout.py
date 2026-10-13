@@ -105,6 +105,31 @@ def test_serving_count_timeout_preserves_native_failure_and_free_accounting(
     verify_raw_links(raw, list(outcome.records), outcome.row.run_id)
 
 
+def test_valid_unexpired_native_count_enters_generation(
+    inputs: tuple[Corpus, GoldDataset], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    corpus, _ = inputs
+    test = _harness(corpus)
+
+    async def count(**kwargs: Any) -> MessageTokensCount:
+        test.fake.counts.append(kwargs)
+        return count_response("integer")
+
+    monkeypatch.setattr(test.fake, "count_tokens", count)
+    outcome = test.run()
+    assert outcome.row.classification == "success"
+    assert len(test.fake.counts) == len(test.fake.creates) == 1
+    assert test.budget.committed_usd == Decimal("0.0015")
+    details = [record for record in outcome.records if record.record_kind == "provider_call"]
+    assert [record.provider_operation for record in details] == ["count_tokens", "generation"]
+    assert details[0].actual_cost_usd == details[0].reserved_cost_usd == Decimal(0)
+    total = provider_cost_totals(outcome.records)
+    assert total.usage_complete and total.actual_cost_usd == Decimal("0.0015")
+    raw = [RawProviderRecord.model_validate_json(line) for line in test.raw.getvalue().splitlines()]
+    assert_raw_count([record for record in raw if record.operation == "count_tokens"], "integer")
+    verify_raw_links(raw, list(outcome.records), outcome.row.run_id)
+
+
 class CollectionCountPort(SyntheticRealCompositionPort):
     def __init__(self, clock: Clock, shape: str, expired: bool) -> None:
         super().__init__()

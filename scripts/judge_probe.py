@@ -126,6 +126,7 @@ def send_payload(path: Path, packet_id: str = "J01") -> int:
                 "stop_reason": response.stop_reason,
                 "usage": response.usage.model_dump(mode="json"),
                 "content": text[:200],
+                "request_id": getattr(response, "_request_id", None),
             },
             ensure_ascii=False,
         )

@@ -146,15 +146,16 @@ def test_send_rejects_modified_payload_before_client_creation(
         probe.send_payload(path)
 
 
-@pytest.mark.parametrize("fails", [True, False])
+@pytest.mark.parametrize("outcome", ["error", "success_with_id", "success_without_id"])
 @pytest.mark.parametrize("packet_id", ["J01", "J13", "R04"])
 def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    fails: bool,
+    outcome: str,
     packet_id: str,
 ) -> None:
+    fails = outcome == "error"
     probe = load_probe()
     path = tmp_path / "request.json"
     probe.dump_payload(path, packet_id)
@@ -193,7 +194,7 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
             calls.append(kwargs)
             if fails:
                 raise error
-            return Message.model_construct(
+            response = Message.model_construct(
                 id="msg_synthetic",
                 type="message",
                 role=get_args(Message.model_fields["role"].annotation)[0],
@@ -203,6 +204,9 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
                 stop_sequence=None,
                 usage=SDKUsage(input_tokens=100, output_tokens=10),
             )
+            if outcome == "success_with_id":
+                response._request_id = "req_synthetic_success"
+            return response
 
     monkeypatch.setattr(anthropic, "Anthropic", RecordingClient)
     previous_logging = logging.root.manager.disable
@@ -235,9 +239,12 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
             "request_id": "req_synthetic",
         }
     else:
-        assert set(output) == {"http_status", "stop_reason", "usage", "content"}
+        assert set(output) == {"http_status", "stop_reason", "usage", "content", "request_id"}
         assert output["http_status"] == 200
         assert output["stop_reason"] == "end_turn"
         assert output["usage"]["input_tokens"] == 100
         assert output["usage"]["output_tokens"] == 10
         assert output["content"] == "x" * 200
+        assert output["request_id"] == (
+            "req_synthetic_success" if outcome == "success_with_id" else None
+        )

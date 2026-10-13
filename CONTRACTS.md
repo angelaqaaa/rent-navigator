@@ -2,6 +2,8 @@
 
 Binding annex to [PROJECT-SPEC.md](PROJECT-SPEC.md), revised September 30, 2026 for approved scenario facts and exact-anchor private judge wire version 5. This annex expands serialization and acceptance criteria; it does not add product scope. In a conflict, stop and obtain advisor resolution. Implementation requires the current work-package authorization.
 
+The owner's [October 12, 2026 release-scope amendment](#11-owner-release-scope-amendment-2026-10-12) governs this cycle where it explicitly supersedes earlier requirements. Earlier contracts and accounting checkpoints remain preserved as history; the revised release does not establish full-spec acceptance.
+
 ## 1. Sources, retrieval and provider configuration
 
 The six canonical source URLs and verified guideline/form names are in the brief. Snapshot all six original responses, faithful extracted text and a manifest containing `source_id, canonical_url, title, fetched_at_utc, consolidation_period, raw_sha256, text_sha256`. A non-legislative consolidation period is null. Include HTTP retrieval date separately from the law's operative period. RTA checked September 19: consolidation July 1, 2026 to e-Laws currency date; WP2 must verify again. Do not claim that this design date is the later snapshot date.
@@ -224,6 +226,8 @@ rejection_reason is exactly schema_complexity, unclassified or null. For http_er
 
 Raw failure envelopes and budget failure diagnostics must retain the same exact version/reason; mismatches fail validation. Missing serving usage remains unknown and holds the full reservation; rejection reason never proves free cost. Historical artifacts, helpers and consumed grants remain immutable, without invented reasons. The future source/helper/protocol identity must bind this versioned union and classifier policy before any newly authorized run. Offline SDK transport tests use synthetic credentials and in-memory responses; they prove request preparation and local handling, not remote grammar acceptance. This amendment authorizes no provider request, automatic retry or financial write.
 
+**October 12, 2026 smoke diagnostic exception (R14):** `scripts/judge_smoke.py` may retain the provider request ID and the provider error-type string per vote beside the validated version-2 failure diagnostic. This exception applies only to that smoke's vote evidence, not public HTTP errors, `TraceRecord`, general application logging, historical records or the closed `{code, diagnostic}` envelope. Never retain the error message, body, headers, key, packet or raw exception. The diagnostic's schema, classifier policy and category/status/reason coupling remain unchanged. Missing optional diagnostic identifiers must not manufacture a value or imply a known cause, billed usage or zero cost. This permits the bounded smoke implementation, not a provider call.
+
 Every `RawProviderRecord` request, response and failure has a required closed `context_provenance` object with exactly three required non-null lists: `retrieved_evidence_ids`, `foundation_evidence_ids`, `initial_context_evidence_ids`. They remain constant within an analysis trace and empty for extraction. Recorder control independently derives them from the bound actual retrieval observation, mode/arm and validated corpus, never from a gold/result sidecar. They remain outside model messages. Foundation/query/both membership is derived from R/F; do not add a second mutable allowlist or treat foundation members as executed tools.
 
 Accepted-evidence verification independently rebuilds/reuses the offline index for the bound corpus and fixed retrieval policy, using the original question or fixed notice/rent query from §1. S05's sidecar never participates. For observed analysis, require exact ordered R equality to independently recomputed seeds before deriving F/C; candidate raw, result and endpoint agreement alone is insufficient. A structural parser can operate without retrieval, but official collection/live/safety acceptance must invoke independent validation and cannot substitute a caller's row IDs. Any existing fixture override must have a previously fixed policy; candidate records cannot introduce one. Validate count/create payload equality, canonical text, context order, citation enum, every raw-event provenance and endpoint/row cross-links. Recomputing policy conformity is not proof of historical execution and must not turn an unobserved failure into claimed retrieval.
@@ -436,3 +440,71 @@ Current confirmed funding, October 1, 2026: the owner confirmed a completed addi
 Ledger34 preserves the complete original31-event prefix byte-for-byte and adds only funding and planning events32–34. Known incurred remains **$0.729081**, the consumed historical calibration's unknown-cost hold remains **$0.082**, and active reservation remains **$0**. At A=$0.027/J=$0.13192, existing576A/291J future obligations are **$53.94072**: release/warm-ups298A/160J=$29.15320, three gates231A/117J=$21.67164, seven generic allowances21A/7J=$1.49044 and all open22 diagnostics26A/7J=$1.62544. A distinctly NEW13J calibration adds **$1.71496**, making future576A/304J=**$55.65568**. Development exposure is **$56.466761**, leaving **$5.533239** inside62; demo9/reserve4 remain protected. No consumed slot or unstarted historical item is restored. A later separate reservation transfers the same1.71496 from future to active, leaving future53.94072, rather than counting it twice.
 
 The independently reviewed historical-hold policy permits only one new private thirteen-vote calibration with externally validated root admission evidence for the exact old run and its0.082 hold. Default nonzero-hold rejection and production held==0 remain. Current ledger34 has no new reservation event35, root admission snapshot or exact grant, so it cannot authorize execution. Enforcement awaits independent implementation acceptance. New missing usage keeps the full fresh0.13192 reservation and permanently stops the fresh run; the old hold is not seeded into its SpendLedger. Production permits still require completion and settlement of all22 diagnostics and separate exact-run authority; a private admission handle cannot authorize production.
+
+### Historical unresolved holds, 2026-10-12 amendment (R4)
+
+The owner ruled that these five internal unresolved holds are written off outside any permit for this revised cycle. Dates are the UTC dates when the holds were recorded. These reservations have unresolved usage and are not known actual charges. Preserve historical records unchanged; actual charges remain unknown and must never be stated as zero.
+
+| UTC date | Unresolved hold | Purpose |
+|---|---:|---|
+| 2026-09-27 | US$0.08200 | Historical judge calibration; failed third generation after two completed votes. |
+| 2026-10-03 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-08 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-09 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-10 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| Total | **US$0.60968** | Actual charges unknown. |
+
+Known historical incurred spending remains US$0.729081, separate from these holds. Historical owner-confirmed cumulative provider funding is US$75. The owner now confirms a current prepaid balance of several hundred US dollars; neither historical amount is the current balance. The write-off does not settle billed usage, rewrite receipts, release a historical reservation inside a permit or confer paid authority. Historical ledger events 43, 44 and 45 remain unchanged. New missing usage still has actual_cost=null, usage_complete=false and its full reservation.
+
+## 11. Owner release-scope amendment, 2026-10-12
+
+The owner ruled that this cycle follows PROJECT-SPEC.md §12. This dated amendment supersedes conflicting release prerequisites in §§7-10 only as stated below. It does not claim the original definition of shipped was met. Public input/output/tool contracts, legal scope, N=16 gold, grade domains, rubric, prices, token/deadline/call protections, disclaimer, admission limits and measured denominators remain unchanged.
+
+### CI and deferred prerequisites (R1, R3, R9)
+
+main requires `checks`, `docker` and `offline-eval`, with strict required checks and administrator enforcement. `live-eval-gate` is off the required-check list this cycle. The live-eval environment reviewer rule is not restored. The approved job guards are:
+
+```yaml
+live-eval-plan:
+  if: github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'
+live-eval-gate:
+  if: always() && vars.LIVE_EVAL_ENABLED == 'true'
+```
+
+These are configuration requirements; this Markdown amendment does not implement them. Do not use the permit path or paid CI jobs for this cycle, or change the environment, secrets or repository variables. Required offline checks continue, but baseline activation and the retrieval floor stay pending. Do not claim retrieval or answer-quality regression blocking. The full live gate, unchanged 28/32 and 7/7 thresholds and seven live attacks are not exercised or reported as passing.
+
+Deferred, not deleted: live evaluation as a required check, the permit/environment/ledger protocol, the 22 fixed diagnostics, per-run independent review, baseline activation and the anchor wire. Private calibration, admission and ledger work stops; preserve existing evidence. This sequence creates no new private artifacts, protocol reviews, candidate helpers, admission preparations or ledger events beyond facts of actual paid commands, caps and costs.
+
+### Grade-only smoke and focused review (R3, R8, R13, R14)
+
+Grade-only judging is this cycle's default: exactly the four root fields `required_claims`, `statements`, `false_pass`, `policy_violations`, with existing trusted IDs, grade domains and scoring semantics. Do not require or emit per-part audit anchors, bases or quotes. Earlier anchor-specific partition, quotation, pointer, observation and basis contracts remain historical rather than active grade-only requirements. Retain anchor wire version 6 in history; changed schema/configuration requires a fresh identity and fresh validation. Keep packet facts, evidence, blinding and independent factual/own-citation applicability unchanged. This amendment does not implement the decoder.
+
+The grade-only implementation requires an emitted-schema lint test for every packet shape in `tests/fixtures/judge_calibration_v2`, running in the normal suite with the key unset. Reject `minLength`, `maxLength`, `minimum`, `maximum`, `multipleOf`, `uniqueItems`, `maxItems`, `pattern`, `oneOf`, `not`, `if`, `then`, `else`; reject `minItems` above 1, `allOf` containing `$ref`, objects without `additionalProperties: false`, and `$ref` values that do not resolve locally. This amendment records that requirement, not a completed test or proof of remote compilation.
+
+NEW13 remains required: run every fixed packet J01-J13 and the R04 false-pass smoke without weakening cases or expected sensitivities. The owner either reviews all thirteen expected judgments or README explicitly labels m/13 agreement as against proposed fixture expectations that were not independently reviewed. No retrospective expectation changes, repaired judgments, extra vote or favorable-run selection. Smoke evidence binds the same `judge_config_hash` as the release; a changed hash invalidates reuse.
+
+One focused review covers decoding/scoring in `eval/judge.py`, budget/usage accounting in `provider.py`, `eval/live_budget.py`, `eval/collection.py`, and serving paths `provider.py`, `context.py`, `agent.py`, `trace.py`, `models.py`, `model_policy.py`. Every finding affecting `eval/judge.py` or another input of `judge_config_hash`, and every blocking accounting finding, lands before the first paid judge call. All other findings land before PR #9 merges. No other part of PR #9 needs rereading. Paths here are relative to `src/rent_navigator/`. Review is a prerequisite, not completion claimed by this amendment. The per-vote diagnostic exception above is limited to `scripts/judge_smoke.py`.
+
+Both historical retained failed attempts classified `category=http_error`, `http_status=400`, `rejection_reason=unclassified`. Both used wire5. Preserve those diagnostic facts without reclassification or invented reasons. No historical error body/message is recoverable or to be sought. The current prepaid balance is separately owner-confirmed above; historical funding confirmation is not a current balance query.
+
+### Local caps, collection and retry (R2, R4, R5, R10, R11)
+
+| Local paid run | Flat cap | Forecast / scope |
+|---|---:|---|
+| Judge smoke | US$2.00 | All thirteen NEW13 packets plus R04 false-pass smoke. |
+| Dry run | US$1.00 | Shared-service integration validation. |
+| Collection, each attempt | US$32.00 | Release/warm-up forecast US$29.15320. |
+
+Each exact paid command requires the owner's explicit go with its cap on the same line. No implementation or review invokes a paid command on this authority. Credentials are limited to the paid-command subshell; every test runs with `env -u ANTHROPIC_API_KEY`. No automatic purchase, replenishment, paid CI execution or account action is authorized. Usage/reservation accounting stays exact; missing usage is unknown, not zero. The five-hold write-off above is outside permits, not retroactive settlement.
+
+The collect command is WP10 integration with the same essential shared service checks as HTTP serving. Preserve three warm-ups per arm, five repetitions of sixteen cases, the seed-42/alternating-arm schedule, 80 measured attempts per arm and judging of every scored attempt under the existing scoring rules. A serving-side `provider_error` or `deadline_exceeded` is a failed attempt in its denominator and collection continues. End with `collection_untrustworthy` only after five consecutive such serving-side failures. Warm-ups count toward that counter and retain their existing records, without changing any scored denominator. Judge-side reasons and every other ErrorResponse code keep their existing behavior. This must land in the WP10/11 PR before tagging S; this amendment does not implement it. Preserve budget/call guards and missing-usage reservations.
+
+One explicitly marked whole-batch retry is allowed only for an infrastructure cause after correction, with a separately approved second US$32.00 cap. Preserve both runs. A third attempt is outside the budget. A model-output stop is published as incomplete with no headline. Do not repeat unchanged paid behavior to select a lucky pass.
+
+### Revised release identity and disclosures (R6, R7, R9, R12)
+
+WP10 and WP11 use one PR. Tag clean source S `v1.0-source` and deploy S to Render with auto-deploy off. Keep generation gated at US$0/day during deploy verification; admit US$0.30/day on the day the public letter smoke passes. The owner controls account login, dashboard environment/payment setup and provider-console balance. No account or visibility change follows automatically.
+
+Release requires the revised quality gates: accepted judge smoke, reviewed PRs, complete verified collection and the owner's 32-output audit plus flagged outputs under §9. README records actual exercised checks, collection identity/measurements and limitations. The revised bullet 2 wording is exactly: "exact-match tool evals and security fixtures run in CI as required checks and block regressions; LLM-as-judge scoring runs at release (calibration agreement m of 13; human audit agreement k of 32)". The original PROJECT-SPEC.md §1 target claims remain verbatim. No actual m/13 or k/32 exists yet. README states that the full live gate and seven live attacks were not exercised, baseline activation and the retrieval floor are pending, and m/13 uses proposed expectations unless independently reviewed. Do not imply full-spec acceptance or unexercised regression protection.
+
+The Decision Log remains the decision record; no duplicate decision document is added. Career evidence-card and inventory integration follow shipping outside this repository. Dates never replace quality gates. Preserve history and failed/incomplete runs. Use new conventional lowercase commits without attribution, co-author lines or trailers; never force-push, amend, rebase or squash. Before each push and merge, the owner approves the exact full commit messages, PR title/body and merge subject/body that will land remotely.

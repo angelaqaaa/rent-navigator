@@ -162,8 +162,11 @@ def resolve_judge_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return root
 
 
-# Initial offline limits, not a provider-accepted final freeze. Depth has no headroom
-# beyond the structural limit; members have 6 and bytes have 162 over the measured max.
+# Frozen wire7 lint ceilings on 2026-10-13 after the owner-authorized J03 grammar probe.
+# The original constant name remains for unchanged historical worksheet compatibility.
+# These project limits do not infer provider bounds or acceptance of other packets.
+# Measured maxima are depth 5, 26 enum members and 1288 bytes; headroom is 0, 6 and 162.
+# The full fourteen-vote smoke remains pending.
 INITIAL_GRADE_LIMITS = {"depth": 5, "enum_members": 32, "bytes": 1450}
 
 
@@ -199,7 +202,7 @@ def schema_metrics(schema: dict[str, Any]) -> dict[str, int]:
 
 
 def lint_grade_schema(schema: dict[str, Any]) -> dict[str, int]:
-    """Check provider keywords, references, closed shapes and initial structural limits."""
+    """Check provider keywords, references, closed shapes and frozen structural limits."""
     supported = {
         "$defs",
         "$ref",

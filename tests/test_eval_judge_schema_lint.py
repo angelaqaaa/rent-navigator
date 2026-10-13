@@ -1,4 +1,4 @@
-"""Offline structural budgets with the actually rejected wire6 schema as a control."""
+"""Frozen wire7 structural budgets with the rejected wire6 schema as a control."""
 
 import json
 from copy import deepcopy

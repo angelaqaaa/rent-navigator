@@ -231,12 +231,22 @@ function renderAnswer(data) {
     : "Information and checked conditions", result);
   textNode("p", data.answer, result);
   if (data.tool_result) {
+    const checks = Array.isArray(data.tool_result.checks) ? data.tool_result.checks : [];
+    const missingFacts = checks.some(check =>
+      check.status === "unknown" && check.reason === "missing_fact");
+    const roundingUncertain = checks.some(check => check.reason === "rounding_uncertain");
     const labels = {passes_checked_rules: "The checked conditions are met.",
       fails_checked_rules: "At least one checked condition is not met.",
-      cannot_determine: "More facts are needed to determine the checked conditions.",
+      cannot_determine: missingFacts
+        ? "More facts are needed to determine some checked conditions."
+        : "The checked conditions cannot be fully determined.",
       unsupported: "This scenario is outside the supported scope."};
     textNode("p", labels[data.tool_result.status] ||
       "Review the checked conditions above.", result);
+    if (roundingUncertain) textNode("p",
+      "The exact guideline cap includes a fraction of a cent. Under this project's policy, " +
+      "a proposed rent at the next whole cent remains uncertain. " +
+      "This is not a statutory rounding rule and does not establish a lawful increase.", result);
   }
   if (Array.isArray(data.citations) && data.citations.length) {
     textNode("h3", "Official sources", result);

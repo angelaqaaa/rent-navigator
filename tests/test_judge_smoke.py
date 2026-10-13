@@ -67,6 +67,9 @@ def test_offline_cli_completes_all_fourteen_votes_without_a_client(
     assert row["elapsed_seconds"] >= 0
     assert row["stop_reason"] == "end_turn"
     assert row["failure_diagnostic"] is None
+    assert summary["fail_to_pass_flips"] == 0
+    assert summary["field_agreement"] == {"matched": 132, "denominator": 132}
+    assert summary["unstarted_votes"] == []
 
 
 def test_cli_accepts_complete_nonperfect_proposed_label_agreement(
@@ -95,6 +98,9 @@ def test_cli_accepts_complete_nonperfect_proposed_label_agreement(
                 assert isinstance(block, TextBlock)
                 output = json.loads(block.text)
                 output["false_pass"] = not output["false_pass"]
+                # A measurement mismatch must not turn a proposed failure into a pass.
+                if not output["false_pass"]:
+                    output["statements"][0]["factual"] = "contradicted"
                 response = response.model_copy(
                     update={"content": [TextBlock(type="text", text=json.dumps(output))]}
                 )
@@ -164,11 +170,12 @@ def test_cli_enforces_recorded_output_and_elapsed_limits(
         == exit_code
     )
     summary = json.loads(capsys.readouterr().out)
-    assert summary["complete"] is True
-    assert summary["calibration_matched"] == 13
-    assert summary["r04_smoke_passed"] is True
+    assert summary["complete"] is (exit_code == 0)
+    assert summary["calibration_matched"] == (13 if exit_code == 0 else 1)
+    assert summary["r04_smoke_passed"] is (True if exit_code == 0 else None)
     assert summary["real_generation_attempts"] == 0
-    assert calls == ["count", "create"] * 14
+    assert calls == ["count", "create"] * (14 if exit_code == 0 else 1)
+    assert len(summary["unstarted_votes"]) == (0 if exit_code == 0 else 13)
     for path in out.glob("J*.json"):
         row = json.loads(path.read_text())
         assert row["usage"]["output_tokens"] == output_tokens
@@ -262,7 +269,7 @@ def test_cli_requires_actual_r04_validator_success(
     out = tmp_path / "synthetic-r04-failure"
     assert smoke.main(["--offline", "--source-commit", SOURCE, "--evidence-dir", str(out)]) == 1
     summary = json.loads(capsys.readouterr().out)
-    assert summary["complete"] is True
+    assert summary["complete"] is False
     assert summary["r04_smoke_passed"] is False
     assert summary["real_generation_attempts"] == 0
 
@@ -327,11 +334,14 @@ def test_failure_records_preserve_accounting_and_privacy(
         assert '"headers"' not in text and '"error_message"' not in text
         assert '"body"' not in text and '"packet"' not in text
     if failure == "budget":
+        assert row["thinking_metrics"] is None
         assert calls == ["count"]
         assert row["failure_code"] == "budget_exhausted"
         assert row["actual_cost_usd"] == row["reserved_cost_usd"] == "0"
         assert summary["recorded_votes"] == 1
     elif failure in {"http", "missing_usage"}:
+        if failure == "http":
+            assert row["thinking_metrics"] is None
         assert calls == ["count", "create"]
         assert row["actual_cost_usd"] is None and row["usage_complete"] is False
         assert row["reserved_cost_usd"] == "0.13192"
@@ -346,11 +356,11 @@ def test_failure_records_preserve_accounting_and_privacy(
                 "rejection_reason": "unclassified",
             }
     else:
-        assert len(calls) == 28
+        assert len(calls) == 2
         assert row["decode_error"] == "invalid_generated_output"
         assert row["actual_cost_usd"] == "0.003" and row["usage_complete"] is True
         assert row["failure_diagnostic"]["category"] == "local_guard"
-        assert summary["recorded_votes"] == 14
+        assert summary["recorded_votes"] == 1
 
 
 @pytest.mark.parametrize("source,billing", [("b" * 40, True), (SOURCE, False)])
@@ -377,6 +387,86 @@ def test_evidence_directory_is_exclusive(monkeypatch: pytest.MonkeyPatch, tmp_pa
     with pytest.raises(FileExistsError):
         asyncio.run(smoke.run_smoke(source_commit=SOURCE, evidence_dir=out))
     assert marker.read_text() == "synthetic-preserved"
+
+
+def test_fail_to_pass_stops_at_first_vote_and_preserves_unstarted_status(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    original = smoke.OfflineMessages.create
+    calls: list[str] = []
+
+    async def create(port: Any, **kwargs: Any) -> Message:
+        calls.append("generation")
+        response: Message = await original(port, **kwargs)
+        block = response.content[0]
+        assert isinstance(block, TextBlock)
+        grades = json.loads(block.text)
+        for claim in grades["required_claims"]:
+            claim["result"] = "met"
+        for statement in grades["statements"]:
+            statement["factual"] = "supported"
+        grades["false_pass"] = False
+        grades["policy_violations"] = []
+        return response.model_copy(
+            update={"content": [TextBlock(type="text", text=json.dumps(grades))]}
+        )
+
+    monkeypatch.setattr(smoke.OfflineMessages, "create", create)
+    out = tmp_path / "synthetic-dangerous-flip"
+    summary = asyncio.run(smoke.run_smoke(source_commit=SOURCE, evidence_dir=out))
+    row = json.loads((out / "J01.json").read_text())
+    assert row["expected_task_success"] is False and row["observed_task_success"] is True
+    assert row["fail_to_pass"] is True and row["failed_criterion"] == "fail_to_pass"
+    assert summary["fail_to_pass_flips"] == 1 and not summary["complete"]
+    assert summary["completed_votes"] == ["J01"]
+    assert summary["unstarted_votes"] == [*(f"J{n:02}" for n in range(2, 14)), "R04"]
+    assert calls == ["generation"] and not (out / "J02.json").exists()
+    assert smoke._passes_gate(summary, out, SOURCE) is False
+    assert row["actual_cost_usd"] == "0.003"
+
+
+def test_smoke_retains_counts_only_for_observed_reasoning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from anthropic.types import ThinkingBlock
+    from anthropic.types.output_tokens_details import OutputTokensDetails
+
+    smoke = load_smoke(monkeypatch)
+    original = smoke.OfflineMessages.create
+    sentinel = "synthetic-reasoning-payload-never-retained"
+
+    async def create(port: Any, **kwargs: Any) -> Message:
+        response: Message = await original(port, **kwargs)
+        return response.model_copy(
+            update={
+                "content": [
+                    ThinkingBlock(type="thinking", thinking=sentinel, signature=sentinel),
+                    *response.content,
+                ],
+                "usage": response.usage.model_copy(
+                    update={
+                        "output_tokens_details": OutputTokensDetails(thinking_tokens=40),
+                    }
+                ),
+            }
+        )
+
+    monkeypatch.setattr(smoke.OfflineMessages, "create", create)
+    out = tmp_path / "synthetic-thinking-metrics"
+    summary = asyncio.run(smoke.run_smoke(source_commit=SOURCE, evidence_dir=out))
+    assert smoke._passes_gate(summary, out, SOURCE)
+    row = json.loads((out / "J01.json").read_text())
+    assert row["thinking_metrics"] == {
+        "thinking_blocks": 1,
+        "redacted_thinking_blocks": 0,
+        "thinking_present": True,
+        "output_tokens": 100,
+        "thinking_tokens": 40,
+        "thinking_output_share": 0.4,
+    }
+    assert summary["cost"]["actual_cost_usd"] == "0.042"
+    assert all(sentinel not in path.read_text() for path in out.iterdir())
 
 
 @pytest.mark.parametrize("argv", [[], ["--live", "--offline"], ["--offline"]])

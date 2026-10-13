@@ -239,7 +239,15 @@ def test_send_uses_one_recording_call_and_only_permitted_terminal_fields(
             "request_id": "req_synthetic",
         }
     else:
-        assert set(output) == {"http_status", "stop_reason", "usage", "content", "request_id"}
+        assert set(output) == {
+            "http_status",
+            "stop_reason",
+            "usage",
+            "content",
+            "request_id",
+            "projection",
+            "thinking_metrics",
+        }
         assert output["http_status"] == 200
         assert output["stop_reason"] == "end_turn"
         assert output["usage"]["input_tokens"] == 100

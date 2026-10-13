@@ -200,11 +200,12 @@ def assert_final_sdk_requests(
     assert set(bodies[0]) == shared
     assert bodies[0]["model"] == "claude-sonnet-5" == JUDGE_MODEL
     assert bodies[0]["system"] == JUDGE_SYSTEM
-    assert bodies[0]["thinking"] == {"type": "disabled"}
+    assert bodies[0]["thinking"] == {"type": "adaptive", "display": "omitted"}
     assert bodies[0]["messages"] == [
         {"role": "user", "content": json.dumps(packet, sort_keys=True, separators=(",", ":"))}
     ]
-    assert set(bodies[0]["output_config"]) == {"format"}
+    assert set(bodies[0]["output_config"]) == {"effort", "format"}
+    assert bodies[0]["output_config"]["effort"] == "high"
     assert set(bodies[0]["output_config"]["format"]) == {"type", "schema"}
     assert bodies[0]["output_config"]["format"]["type"] == "json_schema"
     schema = bodies[0]["output_config"]["format"]["schema"]

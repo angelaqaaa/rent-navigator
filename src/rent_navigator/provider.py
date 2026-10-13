@@ -561,6 +561,7 @@ class ProviderAdapter:
         tools: Sequence[ToolParam] | None = None,
         tool_choice: ToolChoiceParam | None = None,
         output_schema: dict[str, Any] | None = None,
+        judge_reasoning: Literal["adaptive"] | None = None,
     ) -> Message:
         """Count once and generate at most once, preserving usage before validation."""
         try:
@@ -583,6 +584,20 @@ class ProviderAdapter:
                 payload["output_config"] = {
                     "format": {"type": "json_schema", "schema": deepcopy(output_schema)}
                 }
+            if judge_reasoning is not None:
+                if (
+                    judge_reasoning != "adaptive"
+                    or model != JUDGE_MODEL
+                    or output_schema is None
+                    or tools is not None
+                    or tool_choice is not None
+                ):
+                    raise ProviderFailure("provider_error")
+                from rent_navigator.judge_profile import judge_request_settings
+
+                settings = judge_request_settings()
+                payload["thinking"] = settings["thinking"]
+                payload["output_config"].update(settings["output_config"])
             _reject_paid_features(payload)
             with trace.stage("preflight"):
                 async with deadline.limit():

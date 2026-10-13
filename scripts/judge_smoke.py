@@ -29,6 +29,7 @@ from rent_navigator.eval.judge import (
     judge_config_hash,
     validate_smoke_result,
 )
+from rent_navigator.eval.judge_projection import project_judge_response, thinking_metrics
 from rent_navigator.eval.models import JudgeResult
 from rent_navigator.eval.runner import JudgeAccounting, JudgeFailure, JudgeInput
 from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES
@@ -114,6 +115,7 @@ class VotePort:
         self.error_type: str | None = None
         self.stop_reason: str | None = None
         self.diagnostic: dict[str, Any] | None = None
+        self.thinking_metrics: dict[str, Any] | None = None
 
     async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
         failure = None
@@ -162,6 +164,8 @@ class VotePort:
         value = getattr(response, "_request_id", None)
         if type(value) is str and re.fullmatch(r"req_[A-Za-z0-9_-]{1,120}", value):
             self.request_id = value
+        response, _ = project_judge_response(response)
+        self.thinking_metrics = thinking_metrics(response)
         return response
 
 
@@ -305,11 +309,21 @@ async def run_smoke(
                 "failure_diagnostic": port.diagnostic,
                 "provider_request_id": port.request_id,
                 "provider_error_type": port.error_type,
+                "thinking_metrics": port.thinking_metrics,
+                "expected_task_success": task_success(expected) if expected is not None else None,
+                "observed_task_success": task_success(decoded) if decoded is not None else None,
+                "fail_to_pass": (
+                    not task_success(expected) and task_success(decoded)
+                    if expected is not None and decoded is not None
+                    else None
+                ),
             }
+            criterion = failed_criterion(row, value, expected, source_commit, config)
+            row["failed_criterion"] = criterion
             (evidence_dir / (identifier + ".json")).write_text(json.dumps(row, indent=2) + "\n")
             rows.append(row)
-            if code == "budget_exhausted" or ledger.stopped:
-                stopped = code or "provider_error"
+            if criterion is not None or ledger.stopped:
+                stopped = code or "registered_criterion_failed"
                 break
     except ProviderFailure as error:
         stopped = error.code
@@ -335,6 +349,10 @@ async def run_smoke(
             "expectations": "proposed_not_independently_reviewed",
             "calibration_matched": matched,
             "calibration_denominator": 13,
+            "field_agreement": field_agreement(rows),
+            "fail_to_pass_flips": sum(row["fail_to_pass"] is True for row in rows),
+            "completed_votes": [row["packet_id"] for row in rows],
+            "unstarted_votes": [identifier for identifier, _, _ in votes[len(rows) :]],
             "r04_smoke_passed": rows[-1]["r04_smoke_passed"]
             if rows and rows[-1]["packet_id"] == "R04"
             else None,
@@ -354,6 +372,97 @@ async def run_smoke(
     return summary
 
 
+def task_success(grades: dict[str, Any]) -> bool:
+    """Use the factual task predicate; citation support is a separate metric."""
+    judgment = JudgeResult.model_validate(grades, strict=True)
+    return (
+        all(row.result == "met" for row in judgment.required_claims)
+        and all(row.factual == "supported" for row in judgment.statements)
+        and not judgment.false_pass
+        and not judgment.policy_violations
+    )
+
+
+def field_agreement(rows: list[dict[str, Any]]) -> dict[str, int]:
+    fields = [
+        flag
+        for row in rows
+        if row["agreement"] is not None
+        for comparison in (row["agreement"],)
+        for flag in (
+            *comparison["claims"].values(),
+            *(flag for fields in comparison["statements"].values() for flag in fields.values()),
+            comparison["false_pass"],
+            comparison["policy_violations"],
+        )
+    ]
+    return {"matched": sum(fields), "denominator": len(fields)}
+
+
+def failed_criterion(
+    row: dict[str, Any],
+    value: JudgeInput,
+    expected: dict[str, Any] | None,
+    source_commit: str,
+    config: str,
+) -> str | None:
+    if row.get("source_commit") != source_commit or row.get("judge_config_hash") != config:
+        return "identity"
+    if row.get("failure_code") is not None or row.get("failure_diagnostic") is not None:
+        return "call_failure"
+    if row.get("decode_error") is not None or type(row.get("decoded_judgment")) is not dict:
+        return "decode"
+    if row.get("requested_model_id") != JUDGE_MODEL or row.get("returned_model_id") != JUDGE_MODEL:
+        return "model"
+    if row.get("stop_reason") != "end_turn":
+        return "stop_reason"
+    usage = row.get("usage")
+    if (
+        row.get("usage_complete") is not True
+        or type(usage) is not dict
+        or type(usage.get("input_tokens")) is not int
+        or usage["input_tokens"] < 0
+        or type(usage.get("output_tokens")) is not int
+        or not 0 <= usage["output_tokens"] <= 6000
+    ):
+        return "usage_bound"
+    elapsed = row.get("elapsed_seconds")
+    if type(elapsed) not in (int, float):
+        return "elapsed_bound"
+    elapsed = cast(int | float, elapsed)
+    if not math.isfinite(elapsed) or not 0 <= elapsed <= 90:
+        return "elapsed_bound"
+    try:
+        from rent_navigator.eval.judge import _decode_judgment, build_judge_packet
+
+        judgment = _decode_judgment(json.dumps(row["decoded_judgment"]), build_judge_packet(value))
+        if expected is None:
+            if row.get("r04_smoke_passed") is not True:
+                return "r04_smoke"
+            try:
+                validate_smoke_result(value, judgment)
+            except ValueError:
+                return "r04_smoke"
+        else:
+            expected_success = task_success(expected)
+            observed_success = task_success(row["decoded_judgment"])
+            flip = not expected_success and observed_success
+            if (
+                type(row.get("expected_task_success")) is not bool
+                or type(row.get("observed_task_success")) is not bool
+                or type(row.get("fail_to_pass")) is not bool
+                or row.get("expected_task_success") != expected_success
+                or row.get("observed_task_success") != observed_success
+                or row.get("fail_to_pass") != flip
+            ):
+                return "task_success_evidence"
+            if flip:
+                return "fail_to_pass"
+    except ValueError:
+        return "decode"
+    return None
+
+
 def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str) -> bool:
     """Check recorded vote criteria; proposed-label agreement remains a measurement."""
     config = judge_config_hash()
@@ -368,15 +477,20 @@ def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str
         or summary.get("stop_reason") is not None
         or summary.get("r04_smoke_passed") is not True
         or summary.get("calibration_denominator") != 13
+        or type(summary.get("fail_to_pass_flips")) is not int
+        or summary["fail_to_pass_flips"] != 0
+        or summary.get("unstarted_votes") != []
     ):
         return False
     matched = 0
-    for identifier, value, _ in fixed_votes():
+    for identifier, value, expected in fixed_votes():
         try:
             row = json.loads((evidence_dir / (identifier + ".json")).read_text())
         except (OSError, ValueError):
             return False
         if type(row) is not dict:
+            return False
+        if failed_criterion(row, value, expected, source_commit, config) is not None:
             return False
         if (
             row.get("packet_id") != identifier
@@ -425,6 +539,8 @@ def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str
         else:
             comparison = row.get("agreement")
             if type(comparison) is not dict or type(comparison.get("exact")) is not bool:
+                return False
+            if comparison != agreement(row["decoded_judgment"], expected):
                 return False
             matched += comparison["exact"]
     return (

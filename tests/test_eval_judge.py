@@ -291,7 +291,9 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
         for key, item in create.items()
         if key not in {"max_tokens", "stream", "service_tier", "timeout"}
     } == {key: item for key, item in count.items() if key != "timeout"}
-    assert create["max_tokens"] == 8192 and create["thinking"] == {"type": "disabled"}
+    assert create["max_tokens"] == 8192
+    assert create["thinking"] == {"type": "adaptive", "display": "omitted"}
+    assert create["output_config"]["effort"] == "high"
     assert not ({"temperature", "top_p", "top_k", "extra_body", "tools"} & set(create))
     assert create["timeout"] == pytest.approx(179.9)
     assert [item.provider_operation for item in evaluated.records] == [

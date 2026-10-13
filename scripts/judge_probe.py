@@ -39,6 +39,7 @@ def fixed_packet(packet_id: str) -> dict[str, Any]:
 def build_payload(packet_id: str = "J01") -> dict[str, Any]:
     """Mirror RealJudge and ProviderAdapter without counting or constructing a client."""
     from rent_navigator.eval.judge import JUDGE_SYSTEM, judge_schema
+    from rent_navigator.judge_profile import judge_request_settings
     from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES
 
     packet = fixed_packet(packet_id)
@@ -48,8 +49,11 @@ def build_payload(packet_id: str = "J01") -> dict[str, Any]:
         "messages": [
             {"role": "user", "content": json.dumps(packet, sort_keys=True, separators=(",", ":"))}
         ],
-        "thinking": {"type": "disabled"},
-        "output_config": {"format": {"type": "json_schema", "schema": judge_schema(packet)}},
+        "thinking": judge_request_settings()["thinking"],
+        "output_config": {
+            **judge_request_settings()["output_config"],
+            "format": {"type": "json_schema", "schema": judge_schema(packet)},
+        },
         "max_tokens": MODEL_POLICIES[JUDGE_MODEL].max_output_tokens,
         "stream": False,
         "service_tier": "standard_only",
@@ -118,13 +122,20 @@ def send_payload(path: Path, packet_id: str = "J01") -> int:
             )
         )
         return 1
-    text = "".join(block.text for block in response.content if block.type == "text")
+    from rent_navigator.eval.judge_projection import project_judge_response, thinking_metrics
+
+    response, projection = project_judge_response(response)
+    text = (
+        response.content[0].text if response.content and response.content[0].type == "text" else ""
+    )
     print(
         json.dumps(
             {
                 "http_status": 200,
                 "stop_reason": response.stop_reason,
                 "usage": response.usage.model_dump(mode="json"),
+                "projection": projection.model_dump(mode="json"),
+                "thinking_metrics": thinking_metrics(response),
                 "content": text[:200],
                 "request_id": getattr(response, "_request_id", None),
             },

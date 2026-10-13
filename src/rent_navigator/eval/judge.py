@@ -15,6 +15,13 @@ from anthropic.types import Message, MessageTokensCount
 from pydantic import Field, TypeAdapter, ValidationError, model_validator
 
 from rent_navigator.corpus import SOURCE_URLS, Chunk, Corpus
+from rent_navigator.eval.judge_projection import (
+    PROJECTION_POLICY,
+    JudgeProjection,
+    project_judge_response,
+    replay_judge_response,
+    validate_projection_raw,
+)
 from rent_navigator.eval.models import (
     Claim,
     GoldCase,
@@ -32,6 +39,7 @@ from rent_navigator.eval.runner import (
     validate_approved_facts,
     validate_judge_accounting,
 )
+from rent_navigator.judge_profile import judge_request_settings
 from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES, policy_manifest
 from rent_navigator.models import (
     AskResponse,
@@ -392,7 +400,11 @@ def judge_config_hash() -> str:
         "wire_policy": _WIRE_POLICY,
         "packet_policy": _PACKET_POLICY,
         "model": JUDGE_MODEL,
-        "thinking": {"type": "disabled"},
+        "request_profile": judge_request_settings(),
+        "response_projection": {
+            **PROJECTION_POLICY,
+            "marker_schema": JudgeProjection.model_json_schema(),
+        },
         "max_tokens": MODEL_POLICIES[JUDGE_MODEL].max_output_tokens,
         "stream": False,
         "service_tier": "standard_only",
@@ -514,9 +526,10 @@ class JudgeRecorder:
                     "content": json.dumps(self._packet, sort_keys=True, separators=(",", ":")),
                 }
             ],
-            "thinking": {"type": "disabled"},
+            "thinking": judge_request_settings()["thinking"],
             "output_config": {
-                "format": {"type": "json_schema", "schema": judge_schema(self._packet)}
+                **judge_request_settings()["output_config"],
+                "format": {"type": "json_schema", "schema": judge_schema(self._packet)},
             },
         }
         if operation == "generation":
@@ -583,7 +596,12 @@ class JudgeRecorder:
         if failure is not None:
             _raise_failure(failure)
         try:
+            projection = None
+            if isinstance(result, Message):
+                result, projection = project_judge_response(result)
             raw = capture_provider_response(result, message_fields=_RESPONSE_FIELDS)
+            if projection is not None:
+                raw["judge_projection"] = projection.model_dump(mode="json")
         except ProviderFailure as error:
             self._write(operation, "failure", failure_envelope(error).model_dump(mode="json"))
             failure = ProviderFailure.from_exception(error)
@@ -709,10 +727,12 @@ def _decode_judgment(text: str, packet: dict[str, Any]) -> JudgeResult:
 
 
 def parse_judgment(response: Message, value: JudgeInput) -> JudgeResult:
-    if response.model != JUDGE_MODEL:
+    response, projection = project_judge_response(response)
+    if getattr(response, "model", None) != JUDGE_MODEL:
         raise ProviderFailure("provider_error")
     if (
-        response.stop_reason != "end_turn"
+        getattr(response, "stop_reason", None) != "end_turn"
+        or projection.layout == "invalid"
         or len(response.content) != 1
         or response.content[0].type != "text"
     ):
@@ -794,6 +814,7 @@ class RealJudge:
                         trace=trace,
                         deadline=deadline,
                         output_schema=judge_schema(packet),
+                        judge_reasoning="adaptive",
                     )
                     with trace.stage("validation"):
                         judgment = parse_judgment(response, value)
@@ -918,8 +939,9 @@ def verify_judge_records(
             ):
                 raise ValueError("Judge generation exceeded preflight limit")
         else:
-            if set(last.value) - _RESPONSE_FIELDS:
+            if set(last.value) - (_RESPONSE_FIELDS | {"judge_projection"}):
                 raise ValueError("Unexpected judge response fields")
+            validate_projection_raw(last.value)
             try:
                 observed_model = TypeAdapter(ReturnedModel).validate_python(
                     last.value.get("model"), strict=True
@@ -968,7 +990,7 @@ def verify_judge_records(
                 ):
                     raise ValueError("Judge result exceeded its shared output budget")
                 try:
-                    response = Message.model_validate(last.value)
+                    response = replay_judge_response(last.value)
                     parsed = parse_judgment(response, value)
                 except ProviderFailure:
                     raise ValueError("Judge raw response is not a valid judgment") from None

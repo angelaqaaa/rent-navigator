@@ -152,7 +152,7 @@ def test_real_judge_recorder_count_create_use_the_bound_packet_full_schema(
     assert (
         count["output_config"]
         == create["output_config"]
-        == {"format": {"type": "json_schema", "schema": expected_schema}}
+        == {"effort": "high", "format": {"type": "json_schema", "schema": expected_schema}}
     )
     raw = test.records()
     assert raw[0].value == count and raw[2].value == create

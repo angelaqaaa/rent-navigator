@@ -270,6 +270,8 @@ def grade_only_stress_output(fixture: dict[str, Any]) -> dict[str, Any]:
 
 
 def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
+    from rent_navigator.judge_profile import judge_request_settings
+
     packet = fixture["provider_packet"]
     schema = judge_schema(packet)
     payload: dict[str, Any] = {
@@ -281,8 +283,11 @@ def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
                 "content": json.dumps(packet, sort_keys=True, separators=(",", ":")),
             }
         ],
-        "thinking": {"type": "disabled"},
-        "output_config": {"format": {"type": "json_schema", "schema": schema}},
+        "thinking": judge_request_settings()["thinking"],
+        "output_config": {
+            **judge_request_settings()["output_config"],
+            "format": {"type": "json_schema", "schema": schema},
+        },
     }
     stress_packet = deepcopy(packet)
     for statement in stress_packet["statements"]:

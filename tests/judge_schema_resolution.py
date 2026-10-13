@@ -1,5 +1,6 @@
 """Independent expanded-tree oracle for the supported local schema representation."""
 
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -159,3 +160,91 @@ def resolve_judge_schema(schema: dict[str, Any]) -> dict[str, Any]:
     assert isinstance(root, dict)
     root.pop("$defs", None)
     return root
+
+
+# Initial offline limits, not a provider-accepted final freeze. Depth has no headroom
+# beyond the structural limit; members have 6 and bytes have 162 over the measured max.
+INITIAL_GRADE_LIMITS = {"depth": 5, "enum_members": 32, "bytes": 1450}
+
+
+def schema_metrics(schema: dict[str, Any]) -> dict[str, int]:
+    """Count stored definitions once; raw dict/list depth starts at root depth 1."""
+    counts = {"unions": 0, "optional": 0, "enum_members": 0, "objects": 0, "refs": 0}
+
+    def visit(node: _Schema) -> None:
+        if isinstance(node, bool):
+            return
+        counts["unions"] += int("anyOf" in node) + int("oneOf" in node)
+        counts["unions"] += int(isinstance(node.get("type"), list))
+        counts["optional"] += len(set(node.get("properties", {})) - set(node.get("required", [])))
+        counts["enum_members"] += len(node.get("enum", []))
+        counts["objects"] += int(node.get("type") == "object")
+        counts["refs"] += int("$ref" in node)
+        for _, child in _children(node):
+            visit(child)
+
+    def depth(value: object) -> int:
+        if isinstance(value, dict):
+            return 1 + max((depth(child) for child in value.values()), default=0)
+        if isinstance(value, list):
+            return 1 + max((depth(child) for child in value), default=0)
+        return 0
+
+    visit(schema)
+    return {
+        **counts,
+        "depth": depth(schema),
+        "bytes": len(json.dumps(schema, ensure_ascii=False, separators=(",", ":")).encode()),
+    }
+
+
+def lint_grade_schema(schema: dict[str, Any]) -> dict[str, int]:
+    """Check provider keywords, references, closed shapes and initial structural limits."""
+    supported = {
+        "$defs",
+        "$ref",
+        "type",
+        "enum",
+        "const",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+        "minItems",
+        "title",
+        "description",
+        "allOf",
+    }
+
+    def visit(node: _Schema, path: _Path = ()) -> None:
+        if isinstance(node, bool):
+            return
+        if set(node) - supported:
+            raise ValueError("Unsupported provider schema keyword")
+        if "minItems" in node and (
+            type(node["minItems"]) is not int or not 0 <= node["minItems"] <= 1
+        ):
+            raise ValueError("Unsupported minimum item count")
+        if node.get("type") == "object" and node.get("additionalProperties") is not False:
+            raise ValueError("Provider objects must be closed")
+        if len(node.get("enum", [])) > 4 and path not in {
+            ("$defs", "claim_id"),
+            ("$defs", "statement_id"),
+            ("$defs", "policy_id"),
+        }:
+            raise ValueError("Only identifier enums may exceed four members")
+        if "allOf" in node and any("$ref" in child for child in node["allOf"]):
+            raise ValueError("allOf cannot contain a reference")
+        for suffix, child in _children(node):
+            visit(child, path + suffix)
+
+    # Validate every reference, including unused definitions and cycles.
+    resolve_judge_schema(schema)
+    metrics = schema_metrics(schema)
+    failed = [key for key, ceiling in INITIAL_GRADE_LIMITS.items() if metrics[key] > ceiling]
+    if failed:
+        raise ValueError("Schema budget exceeded: " + ", ".join(failed))
+    if metrics["unions"] or metrics["optional"]:
+        raise ValueError("Grade schemas require zero unions and optional properties")
+    visit(schema)
+    return metrics

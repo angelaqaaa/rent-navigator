@@ -214,6 +214,13 @@ class ProviderFailure(Exception):
         return cls(envelope.code, diagnostic=envelope.diagnostic)
 
 
+_SCHEMA_COMPLEXITY_MESSAGES = (
+    "Schema is too complex for compilation.",
+    "The compiled grammar is too large, which would cause performance issues. "
+    "Simplify your tool schemas or reduce the number of strict tools.",
+)
+
+
 def _http_400_rejection_reason(
     error: APIStatusError,
 ) -> Literal["schema_complexity", "unclassified"]:
@@ -236,7 +243,7 @@ def _http_400_rejection_reason(
             type(error_type) is str
             and type(message) is str
             and error_type == "invalid_request_error"
-            and message == "Schema is too complex for compilation."
+            and message in _SCHEMA_COMPLEXITY_MESSAGES
         ):
             return "schema_complexity"
     except BaseException:

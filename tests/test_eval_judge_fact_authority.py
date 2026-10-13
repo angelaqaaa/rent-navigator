@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from judge_schema_resolution import resolve_judge_schema
 from pydantic import ValidationError
 from test_eval_judge import harness, message, result, wire_payload
 from test_eval_judge import isolated_count_replay as isolated_count_replay
@@ -23,7 +22,7 @@ from rent_navigator.eval.judge import (
     build_smoke_input,
     judge_schema,
 )
-from rent_navigator.eval.models import GoldCase, JudgeResult
+from rent_navigator.eval.models import GoldCase
 from rent_navigator.eval.runner import (
     APPROVED_FACTS_ADAPTER,
     ApprovedNoticeFacts,
@@ -334,381 +333,96 @@ def fact_packet(
     return packet
 
 
-def fact_audit(observation: str, pointers: list[str]) -> dict[str, Any]:
+def fact_grade_wire(packet: dict[str, Any]) -> dict[str, Any]:
     return {
-        "observation": observation,
-        "source_anchors": [],
-        "tool_fields": [],
-        "fact_fields": pointers,
-        "basis": "The independently supplied scenario premise is the conditional fact witness.",
-    }
-
-
-def fact_wire(packet: dict[str, Any], pointers: list[str]) -> dict[str, Any]:
-    text = packet["statements"][0]["text"]
-    cited = bool(packet["statements"][0]["citation_ids"])
-    citation = (
-        fact_audit("insufficient", [])
-        if cited
-        else {
-            "observation": "not_applicable",
-            "source_anchors": [],
-            "tool_fields": [],
-            "fact_fields": [],
-            "basis": "No citation supplied.",
-        }
-    )
-    return {
-        "required_claims": {
-            "c1": {
-                "kind": "ordinary_coverage",
-                "result": "met",
-                "parts": [
-                    {
-                        "text": text,
-                        "observation": "explicit",
-                        "answer_anchors": [{"statement_id": "s1", "quote": text}],
-                        "basis": "The statement explicitly states the full coverage target.",
-                    }
-                ],
-            }
-        },
-        "statements": {
-            "s1": {
+        "required_claims": [
+            {"id": row["id"], "result": "met"} for row in packet["required_claims"]
+        ],
+        "statements": [
+            {
+                "id": row["id"],
                 "factual": "supported",
-                "citation_support": "unsupported" if cited else "not_applicable",
-                "parts": [
-                    {
-                        "text": text,
-                        "factual_audit": fact_audit("explicit", pointers),
-                        "citation_audit": citation,
-                    }
-                ],
+                "citation_support": "supported" if row["citation_ids"] else "not_applicable",
             }
-        },
+            for row in packet["statements"]
+        ],
         "false_pass": False,
         "policy_violations": [],
     }
 
 
-def decode(packet: dict[str, Any], wire: dict[str, Any]) -> JudgeResult:
-    return _decode_judgment(json.dumps(wire, ensure_ascii=False), packet)
-
-
-@pytest.mark.parametrize(
-    "identifier,pointer",
-    [("N04", pointer) for pointer in NOTICE_POINTERS]
-    + [("R04", pointer) for pointer in RENT_POINTERS],
-)
-def test_every_real_scalar_or_null_fact_leaf_can_witness_its_conditional_premise(
-    value: JudgeInput, cases: dict[str, GoldCase], identifier: str, pointer: str
+@pytest.mark.parametrize("identifier", ["N04", "R04", "Q04"])
+def test_full_approved_facts_are_preserved_but_not_echoed_in_grade_wire(
+    value: JudgeInput, cases: dict[str, GoldCase], identifier: str
 ) -> None:
-    wire_facts = envelope(cases[identifier])["facts"]
-    scalar: Any = wire_facts
-    for key in pointer.removeprefix("/approved_facts/facts/").split("/"):
-        scalar = scalar[key]
-    text = f"The approved scenario's {pointer.rsplit('/', 1)[1]} is {json.dumps(scalar)}."
-    packet = fact_packet(value, cases[identifier], text)
-    assert decode(packet, fact_wire(packet, [pointer])).statements[0].factual == "supported"
-
-
-@pytest.mark.parametrize("identifier,pointers", [("N04", NOTICE_POINTERS), ("R04", RENT_POINTERS)])
-def test_schema_enum_and_bound_follow_all_actual_fact_leaves(
-    value: JudgeInput, cases: dict[str, GoldCase], identifier: str, pointers: list[str]
-) -> None:
-    packet = fact_packet(value, cases[identifier], "The approved scenario supplies these premises.")
-    schema = judge_schema(packet)
-    expanded = resolve_judge_schema(schema)
-    part = expanded["properties"]["statements"]["properties"]["s1"]["properties"]["parts"]["items"]
-    for name in ("factual_audit", "citation_audit"):
-        audit_schema = part["properties"][name]
-        assert "fact_fields" in audit_schema["required"]
-        array = audit_schema["properties"]["fact_fields"]
-        if name == "factual_audit":
-            assert array["items"]["enum"] == pointers
-        else:
-            assert "enum" not in array["items"]
-    assert _scalar_pointers(packet["approved_facts"]["facts"], "/approved_facts/facts") == tuple(
-        pointers
+    packet = build_judge_packet(
+        replace(value, approved_facts=approved_facts_from_case(cases[identifier]))
     )
-
-
-@pytest.mark.parametrize("identifier,pointers", [("N04", NOTICE_POINTERS), ("R04", RENT_POINTERS)])
-def test_all_real_fact_leaves_can_be_retained_together_without_an_arbitrary_cap(
-    value: JudgeInput, cases: dict[str, GoldCase], identifier: str, pointers: list[str]
-) -> None:
-    text = (
-        "The approved scenario premises are "
-        + json.dumps(envelope(cases[identifier])["facts"])
-        + "."
+    before = deepcopy(packet)
+    wire = fact_grade_wire(packet)
+    result = _decode_judgment(json.dumps(wire), packet)
+    assert all(row.factual == "supported" for row in result.statements)
+    assert packet == before
+    assert packet["approved_facts"] == (
+        None if identifier == "Q04" else envelope(cases[identifier])
     )
-    packet = fact_packet(value, cases[identifier], text)
-    assert decode(packet, fact_wire(packet, pointers)).statements[0].factual == "supported"
+    assert "approved_facts" not in wire
+    assert "fact_fields" not in json.dumps(judge_schema(packet))
 
 
-@pytest.mark.parametrize("container", ["facts", "scope", "last_increase"])
-def test_fact_model_rejects_nested_extra_fields(cases: dict[str, GoldCase], container: str) -> None:
-    wire = envelope(cases["R04"])
-    target = wire["facts"] if container == "facts" else wire["facts"][container]
-    target["extra"] = "synthetic"
-    with pytest.raises(ValidationError):
-        APPROVED_FACTS_ADAPTER.validate_json(json.dumps(wire))
-
-
-BAD_POINTERS: list[object] = [
-    ["/approved_facts"],
-    ["/approved_facts/kind"],
-    ["/approved_facts/facts"],
-    ["/approved_facts/facts/scope"],
-    ["/approved_facts/facts/last_increase"],
-    ["/approved_facts/facts/proposed_cents/missing"],
-    ["/approved_facts/facts/missing"],
-    ["/approved_facts/facts/*"],
-    ["/approved_facts/facts/scope/~1ordinary"],
-    ["/approved_facts/facts/scope/~0ordinary"],
-    ["/approved_facts/facts/proposed_cents", "/approved_facts/facts/proposed_cents"],
-    ["/approved_facts/facts/proposed_cents", "/approved_facts/facts/current_cents"],
-    [True],
-    [None],
-    [100000],
-    "/approved_facts/facts/proposed_cents",
-    None,
-]
-
-
-@pytest.mark.parametrize("pointers", BAD_POINTERS)
-def test_invalid_fact_pointers_are_rejected_without_repair(
-    value: JudgeInput, cases: dict[str, GoldCase], pointers: object
+@pytest.mark.parametrize("identifier", ["N04", "R04"])
+def test_all_actual_fact_leaves_remain_conditioned_inputs(
+    value: JudgeInput, cases: dict[str, GoldCase], identifier: str
 ) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario supplies CAD 1024.00 as proposed rent.")
-    wire = fact_wire(packet, ["/approved_facts/facts/proposed_cents"])
-    wire["statements"]["s1"]["parts"][0]["factual_audit"]["fact_fields"] = pointers
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_scalar_enumeration_escapes_rfc6901_keys_without_relaxing_fact_schema() -> None:
-    assert _scalar_pointers({"a~b": None, "a/b": ["x"]}, "/approved_facts/facts") == (
-        "/approved_facts/facts/a~1b/0",
-        "/approved_facts/facts/a~0b",
-    )
-
-
-@pytest.mark.parametrize("observation", ["explicit", "necessary_implication", "conflicting"])
-def test_noninsufficient_factual_audit_rejects_three_empty_witness_arrays(
-    value: JudgeInput, cases: dict[str, GoldCase], observation: str
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario proposes CAD 1024.00.")
-    wire = fact_wire(packet, [])
-    leaf = wire["statements"]["s1"]
-    leaf["factual"] = "contradicted" if observation == "conflicting" else "supported"
-    leaf["parts"][0]["factual_audit"]["observation"] = observation
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_insufficient_factual_audit_can_retain_empty_or_inadequate_evidence(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario may have an unknown qualification.")
-    wire = fact_wire(packet, [])
-    wire["statements"]["s1"]["factual"] = "unsupported"
-    audit = wire["statements"]["s1"]["parts"][0]["factual_audit"]
-    audit["observation"] = "insufficient"
-    assert decode(packet, wire).statements[0].factual == "unsupported"
-    audit["fact_fields"] = ["/approved_facts/facts/scope/ordinary"]
-    assert decode(packet, wire).statements[0].factual == "unsupported"
-
-
-@pytest.mark.parametrize("observation", ["explicit", "necessary_implication", "conflicting"])
-@pytest.mark.parametrize("witness", ["fact_only", "tool_only"])
-def test_cited_audit_still_requires_its_own_source_anchor(
-    value: JudgeInput, cases: dict[str, GoldCase], observation: str, witness: str
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario proposes CAD 1024.00.", cited=True)
-    wire = fact_wire(packet, ["/approved_facts/facts/proposed_cents"])
-    leaf = wire["statements"]["s1"]
-    leaf["citation_support"] = "unsupported" if observation == "conflicting" else "supported"
-    audit = leaf["parts"][0]["citation_audit"]
-    audit["observation"] = observation
-    audit["fact_fields"] = (
-        ["/approved_facts/facts/proposed_cents"] if witness == "fact_only" else []
-    )
-    audit["tool_fields"] = (
-        ["/expected_tool_result/cap_cents_exact"] if witness == "tool_only" else []
-    )
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_fact_pointer_never_broadens_own_citation_membership(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(
-        value, cases["R04"], "The supplied scenario proposes CAD 1024.00.", cited=True
-    )
-    wire = fact_wire(packet, ["/approved_facts/facts/proposed_cents"])
-    leaf = wire["statements"]["s1"]
-    leaf["citation_support"] = "supported"
-    audit = leaf["parts"][0]["citation_audit"]
-    audit["observation"] = "explicit"
-    audit["fact_fields"] = ["/approved_facts/facts/proposed_cents"]
-    foreign = packet["evidence"][1]
-    audit["source_anchors"] = [{"reference": foreign["reference"], "quote": foreign["text"]}]
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-@pytest.mark.parametrize("audit_name", ["factual_audit", "citation_audit"])
-def test_current_wire_requires_fact_fields_in_every_audit(
-    value: JudgeInput, cases: dict[str, GoldCase], audit_name: str
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario proposes CAD 1024.00.")
-    wire = fact_wire(packet, ["/approved_facts/facts/proposed_cents"])
-    wire["statements"]["s1"]["parts"][0][audit_name].pop("fact_fields")
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_uncited_citation_audit_cannot_carry_even_a_valid_fact_pointer(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario proposes CAD 1024.00.")
-    wire = fact_wire(packet, ["/approved_facts/facts/proposed_cents"])
-    wire["statements"]["s1"]["parts"][0]["citation_audit"]["fact_fields"] = [
-        "/approved_facts/facts/proposed_cents"
-    ]
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_null_envelope_has_no_fact_pointers_or_inferred_zero(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(
-        value, cases["R04"], "The provided packet does not establish a scenario amount."
-    )
-    packet["approved_facts"] = None
-    wire = fact_wire(packet, [])
-    wire["statements"]["s1"]["factual"] = "unsupported"
-    audit = wire["statements"]["s1"]["parts"][0]["factual_audit"]
-    audit["observation"] = "insufficient"
-    assert decode(packet, wire).statements[0].factual == "unsupported"
-    audit["fact_fields"] = ["/approved_facts/facts/proposed_cents"]
-    with pytest.raises(ValueError):
-        decode(packet, wire)
-
-
-def test_duplicate_decoded_fact_fields_key_is_rejected(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(value, cases["R04"], "The scenario proposes CAD 1024.00.")
-    raw = json.dumps(fact_wire(packet, ["/approved_facts/facts/proposed_cents"]))
-    raw = raw.replace('"fact_fields":', '"\\u0066act_fields": [], "fact_fields":', 1)
-    with pytest.raises(ValueError):
-        _decode_judgment(raw, packet)
-
-
-@pytest.mark.parametrize(
-    "identifier,wrong_part,correct_part,fact_pointer,tool_pointer",
-    [
-        (
-            "R04",
-            "The supplied scenario proposes CAD 1050.00, ",
-            "and its correct calculated cap is CAD 1021.00.",
-            "/approved_facts/facts/proposed_cents",
-            "/expected_tool_result/cap_cents_exact",
-        ),
-        (
-            "N04",
-            "The supplied effective date is 2027-02-01, ",
-            "and the correct latest hand-service date is 2026-12-01.",
-            "/approved_facts/facts/effective_on",
-            "/expected_tool_result/latest_deemed_service_on",
-        ),
-    ],
-)
-def test_handwritten_wrong_input_does_not_become_true_from_a_correct_calculated_value(
-    value: JudgeInput,
-    cases: dict[str, GoldCase],
-    identifier: str,
-    wrong_part: str,
-    correct_part: str,
-    fact_pointer: str,
-    tool_pointer: str,
-) -> None:
-    # Grades are handwritten synthetic expectations, never a model accuracy measurement.
-    packet = fact_packet(value, cases[identifier], wrong_part + correct_part)
-    wire = fact_wire(packet, [fact_pointer])
-    wrong = wire["statements"]["s1"]["parts"][0]
-    wrong["text"] = wrong_part
-    wrong["factual_audit"] = fact_audit("conflicting", [fact_pointer])
-    correct = deepcopy(wrong)
-    correct["text"] = correct_part
-    correct["factual_audit"] = fact_audit("explicit", [])
-    correct["factual_audit"]["tool_fields"] = [tool_pointer]
-    correct["factual_audit"]["basis"] = (
-        "This separate clause matches the supplied correct tool result."
-    )
-    wire["statements"]["s1"]["parts"] = [wrong, correct]
-    wire["statements"]["s1"]["factual"] = "contradicted"
-    judged = decode(packet, wire)
-    assert judged.statements[0].factual == "contradicted"
-    assert packet["approved_facts"] == envelope(cases[identifier])
-    assert packet["expected_tool_result"] == packet["observed_tool_result"]
-
-
-def test_unknown_actual_service_is_distinct_from_computed_latest_service_date(
-    value: JudgeInput, cases: dict[str, GoldCase]
-) -> None:
-    packet = fact_packet(
-        value, cases["N04"], "The approved scenario does not supply an actual service date."
-    )
-    assert packet["approved_facts"]["facts"]["served_on"] is None
-    assert packet["approved_facts"]["facts"]["service_method"] == "hand"
-    assert packet["expected_tool_result"]["latest_deemed_service_on"] == "2026-12-01"
-    assert packet["expected_tool_result"]["deemed_served_on"] is None
-    assert packet["expected_tool_result"]["notice_days"] is None
+    packet = fact_packet(value, cases[identifier], "Synthetic conditional scenario premise")
+    expected = NOTICE_POINTERS if identifier == "N04" else RENT_POINTERS
     assert (
-        decode(packet, fact_wire(packet, ["/approved_facts/facts/served_on"])).statements[0].factual
-        == "supported"
+        list(_scalar_pointers(packet["approved_facts"]["facts"], "/approved_facts/facts"))
+        == expected
     )
+    assert _decode_judgment(json.dumps(fact_grade_wire(packet)), packet)
+    approved = approved_facts_from_case(cases[identifier])
+    assert approved is not None
+    assert packet["approved_facts"]["facts"] == approved.facts.model_dump(mode="json")
 
 
-def test_current_identity_changes_packet_wire_and_facts_schema_without_changing_capacity() -> None:
-    assert judge_module._PACKET_POLICY["version"] == 3
-    assert judge_module._WIRE_POLICY["version"] == 6
-    identity = judge_module.judge_config_hash()
-    assert identity == judge_module.judge_config_hash()
-    assert identity != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
-    packet_fields = judge_module._PACKET_POLICY["fields"]
-    assert isinstance(packet_fields, list) and "approved_facts" in packet_fields
-    assert "approved_facts_schema" in judge_module._PACKET_POLICY
-    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 8192
-
-
-@pytest.mark.parametrize("mutation", ["missing", "forged"])
-def test_invalid_fact_witness_keeps_known_generation_cost_and_original_raw_vote(
-    value: JudgeInput, mutation: str
+@pytest.mark.parametrize(
+    "field", ["basis", "fact_fields", "parts", "observation", "source_anchors", "tool_fields"]
+)
+def test_grade_wire_rejects_fact_witness_fields_with_known_billing(
+    value: JudgeInput, field: str
 ) -> None:
     test = harness(value)
     wire = wire_payload(result(value), value)
-    audit = wire["statements"]["s1"]["parts"][0]["factual_audit"]
-    if mutation == "missing":
-        audit.pop("fact_fields")
-    else:
-        audit["fact_fields"] = ["/approved_facts/facts/synthetic-forged-field"]
-    raw_vote = "\n " + json.dumps(wire, indent=2) + " \n"
-    test.port.response = message(value, content=[{"type": "text", "text": raw_vote}])
+    wire["statements"][0][field] = ["Synthetic forbidden field"]
+    original = json.dumps(wire, indent=2)
+    test.port.response = message(value, content=[{"type": "text", "text": original}])
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.code == "invalid_generated_output"
-    assert not hasattr(caught.value, "judgment")
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.003")
     assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
-    assert accounting.cost.usage_complete
-    assert len([record for record in accounting.records if record.record_kind == "endpoint"]) == 1
-    assert test.records()[-1].value["content"][0]["text"] == raw_vote
-    assert "synthetic-forged-field" not in test.metadata.getvalue()
+    assert test.records()[-1].value["content"][0]["text"] == original
+    assert "Synthetic forbidden field" not in test.metadata.getvalue()
     test.verify(accounting)
+
+
+def test_unknown_service_is_not_inferred_from_a_computed_deadline(
+    value: JudgeInput, cases: dict[str, GoldCase]
+) -> None:
+    packet = fact_packet(value, cases["N04"], "Synthetic conditional scenario premise")
+    assert packet["approved_facts"]["facts"]["served_on"] is None
+    assert packet["observed_tool_result"]["latest_deemed_service_on"] is not None
+    assert _decode_judgment(json.dumps(fact_grade_wire(packet)), packet)
+
+
+def test_identity_binds_grade_only_wire_and_unchanged_packet_capacity() -> None:
+    assert judge_module._PACKET_POLICY["version"] == 3
+    assert judge_module._WIRE_POLICY["version"] == 7
+    assert (
+        judge_module.judge_config_hash()
+        != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
+    )
+    assert "approved_facts_schema" in judge_module._PACKET_POLICY
+    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 8192

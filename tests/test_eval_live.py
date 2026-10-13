@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from anthropic.types import Usage as SDKUsage
-from judge_wire_fixtures import add_audit_bases
+from judge_wire_fixtures import grade_only_wire
 from test_eval_security import synthetic_security_xml
 
 from rent_navigator.agent import _final_schema
@@ -108,7 +108,7 @@ class ScriptedGatePort:
                     "type": "text",
                     "text": "{"
                     if self.malformed_judge
-                    else json.dumps(add_audit_bases(result, packet)),
+                    else json.dumps(grade_only_wire(result, packet)),
                 }
             ]
         elif kwargs["system"] == EXTRACTION_SYSTEM:

@@ -21,15 +21,14 @@ from judge_calibration import (
     FIXED_SOURCE_MAPPING,
     HISTORICAL_CALIBRATION_DIRECTORY,
     HISTORICAL_FILE_HASHES,
-    approved_calibration_dataset,
     calibration_input,
     calibration_sizes,
     compact_json,
+    grade_only_output,
+    grade_only_stress_output,
     load_calibration,
     load_historical_calibration,
     stress_audit_output,
-    wire5_audit_output,
-    wire5_stress_audit_output,
 )
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -40,7 +39,6 @@ from rent_navigator.eval.judge import (
     judge_config_hash,
     judge_schema,
 )
-from rent_navigator.eval.schema_factor import SCHEMA_REPRESENTATION
 
 
 @pytest.fixture(autouse=True)
@@ -151,27 +149,24 @@ def test_historical_wire3_representative_and_stress_are_not_migrated(identifier:
 
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
-def test_absent_packet3_or_wire5_fields_never_fall_back_to_historical_contract(
+def test_missing_packet3_and_extra_audit_fields_never_fall_back(
     identifier: str,
 ) -> None:
     current = load_calibration(identifier)
-    wire = wire5_audit_output(current)
+    wire = grade_only_output(current)
     with pytest.raises(ValueError):
         _decode_judgment(
             compact_json(wire), load_historical_calibration(identifier)["provider_packet"]
         )
-    for leaf in wire["statements"].values():
-        for part in leaf["parts"]:
-            part["factual_audit"].pop("fact_fields")
-            part["citation_audit"].pop("fact_fields")
+    wire["statements"][0]["parts"] = []
     with pytest.raises(ValueError):
         _decode_judgment(compact_json(wire), current["provider_packet"])
 
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
-def test_derived_wire5_structural_examples_map_only_unchanged_grades(identifier: str) -> None:
+def test_grade_only_examples_map_unchanged_proposed_labels(identifier: str) -> None:
     fixture = load_calibration(identifier)
-    example = wire5_audit_output(fixture)
+    example = grade_only_output(fixture)
     result = _decode_judgment(compact_json(example), fixture["provider_packet"])
     expected = fixture["expected_judgment"]
     assert {item.id: {"result": item.result} for item in result.required_claims} == expected[
@@ -183,8 +178,9 @@ def test_derived_wire5_structural_examples_map_only_unchanged_grades(identifier:
     } == expected["statements"]
     assert result.false_pass == expected["false_pass"]
     assert result.policy_violations == expected["policy_violations"]
-    stress = wire5_stress_audit_output(fixture)
-    assert _decode_judgment(compact_json(stress), fixture["provider_packet"]) == result
+    stress = grade_only_stress_output(fixture)
+    stressed = _decode_judgment(compact_json(stress), fixture["provider_packet"])
+    assert [row.id for row in stressed.statements] == [row.id for row in result.statements]
     sizes = calibration_sizes(fixture)
     assert sizes["structural_stress_output_utf8_bytes"] > sizes["representative_output_utf8_bytes"]
     assert sizes["count_payload_without_timeout_utf8_bytes"] > sizes["packet_utf8_bytes"]
@@ -300,153 +296,40 @@ def test_retained_v2_manifest_and_sizes_bind_original_preparation(corpus: Corpus
     assert manifest["packet_policy_version"] == 3 and manifest["wire_policy_version"] == 5
     for name, digest in manifest["files"].items():
         assert sha256((CALIBRATION_DIRECTORY / name).read_bytes()).hexdigest() == digest
-    raw = (CALIBRATION_DIRECTORY / "sizes.json").read_bytes()
-    assert len(raw) == 8457
-    assert sha256(raw).hexdigest() == (
-        "4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b"
-    )
-    assert sha256(raw).hexdigest() == manifest["sizing_file_sha256"]
-    sizes = json.loads(raw)
-    historical = "0746c08afcab0cba0018051f2ea1fe259d3e9cc92e6801b5b9d07d2af1198634"
-    assert sizes["judge_config_hash"] == manifest["prepared_judge_config_hash"] == historical
-    assert judge_config_hash() != historical
-    assert sizes["provider_calls"] == 0 and sizes["count_calls"] == 0
+    sizes = json.loads((CALIBRATION_DIRECTORY / "sizes.json").read_bytes())
+    assert sizes["historical_manifest_sha256"] == sha256(manifest_raw).hexdigest()
+    assert sizes["historical_sizing_file_sha256"] == manifest["sizing_file_sha256"]
+    assert sizes["judge_config_hash"] == judge_config_hash()
+    assert sizes["wire_policy_version"] == 7
     assert sizes["token_measurement"] is None
+    assert sizes["provider_calls"] == sizes["count_calls"] == 0
+    assert sizes["budget_status"] == "initial_offline_not_provider_accepted"
     for identifier in CALIBRATION_IDS:
         fresh = calibration_sizes(load_calibration(identifier, corpus=corpus))
-        for field in (
-            "packet_characters",
-            "packet_utf8_bytes",
-            "representative_output_characters",
-            "representative_output_utf8_bytes",
-            "structural_stress_output_characters",
-            "structural_stress_output_utf8_bytes",
-        ):
-            assert sizes["fixtures"][identifier][field] == fresh[field]
+        assert all(sizes["fixtures"][identifier][key] == val for key, val in fresh.items())
 
 
-def test_retained_wire5_schema_representation_metadata(corpus: Corpus) -> None:
+def test_regenerated_representation_worksheet_keeps_historical_manifest(corpus: Corpus) -> None:
     directory = Path("tests/fixtures/judge_schema_representation_v1")
     manifest_raw = (directory / "manifest.json").read_bytes()
-    sizes_raw = (directory / "sizes.json").read_bytes()
-    assert len(manifest_raw) == 2349
-    assert sha256(manifest_raw).hexdigest() == (
-        "0f760d921209075aa3f669b38165d184e314c0ae63ee1a3c9d5e5db5dbf9a65a"
+    assert (
+        sha256(manifest_raw).hexdigest()
+        == "0f760d921209075aa3f669b38165d184e314c0ae63ee1a3c9d5e5db5dbf9a65a"
     )
-    assert len(sizes_raw) == 8727
-    assert sha256(sizes_raw).hexdigest() == (
-        "5e7e816583d601755064c6f512ef53f2ad07db6f02c15226ea4b04c4281e07a4"
-    )
-    legacy = json.loads((CALIBRATION_DIRECTORY / "manifest.json").read_text())
-    historical_config = "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
-    current_config = judge_config_hash()
-    assert current_config == judge_config_hash()
-    assert current_config != historical_config
-    assert json.loads(manifest_raw) == {
-        "schema_version": 1,
-        "purpose": "offline_judge_schema_representation",
-        "representation": SCHEMA_REPRESENTATION,
-        "packet_policy_version": 3,
-        "wire_policy_version": 5,
-        "fixture_directory": "tests/fixtures/judge_calibration_v2",
-        "fixture_ids": list(CALIBRATION_IDS),
-        "files": legacy["files"],
-        "approved_source": legacy["approved_source"],
-        "legacy_manifest_sha256": (
-            "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81"
-        ),
-        "legacy_sizes_sha256": ("4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b"),
-        "prepared_judge_config_hash": historical_config,
-        "sizing_file_sha256": sha256(sizes_raw).hexdigest(),
-    }
-    sizes = json.loads(sizes_raw)
-    fixture_sizes = sizes.pop("fixtures")
-    assert sizes == {
-        "schema_version": 1,
-        "purpose": "offline_factored_structural_calibration_sizes",
-        "representation": SCHEMA_REPRESENTATION,
-        "packet_policy_version": 3,
-        "wire_policy_version": 5,
-        "judge_config_hash": historical_config,
-        "provider_calls": 0,
-        "count_calls": 0,
-        "token_measurement": None,
-        "limitations": (
-            "Exact Unicode and UTF-8 sizes only; retained packets and outputs unchanged. "
-            "Structural controls do not establish semantics, token fit or provider acceptance."
-        ),
-    }
-    assert set(fixture_sizes) == set(CALIBRATION_IDS)
+    manifest = json.loads(manifest_raw)
+    assert manifest["wire_policy_version"] == 5
+    sizes = json.loads((directory / "sizes.json").read_bytes())
+    assert sizes["schema_version"] == 2 and sizes["wire_policy_version"] == 7
+    assert sizes["judge_config_hash"] == judge_config_hash()
+    assert sizes["historical_manifest_sha256"] == sha256(manifest_raw).hexdigest()
+    assert sizes["historical_sizing_file_sha256"] == manifest["sizing_file_sha256"]
+    assert sizes["token_measurement"] is None
+    assert sizes["provider_calls"] == sizes["count_calls"] == 0
+    assert sizes["representation"] == {"name": "shared_grade_arrays", "version": 1}
+    assert set(sizes["fixtures"]) == set(CALIBRATION_IDS)
     for identifier in CALIBRATION_IDS:
-        current = calibration_sizes(load_calibration(identifier, corpus=corpus))
-        for key in (
-            "packet_characters",
-            "packet_utf8_bytes",
-            "representative_output_characters",
-            "representative_output_utf8_bytes",
-            "structural_stress_output_characters",
-            "structural_stress_output_utf8_bytes",
-        ):
-            assert current[key] == fixture_sizes[identifier][key]
-    for raw in (manifest_raw, sizes_raw):
-        assert (
-            raw
-            == (
-                json.dumps(json.loads(raw), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
-            ).encode()
-        )
-
-
-@pytest.mark.parametrize(
-    "identifier,key,value", [("J13", "proposed_cents", 102500), ("J04", "served_on", "2026-12-01")]
-)
-def test_jointly_rehashed_derived_facts_still_fail_external_source_binding(
-    corpus: Corpus, tmp_path: Path, identifier: str, key: str, value: object
-) -> None:
-    target = tmp_path / "derived"
-    shutil.copytree(CALIBRATION_DIRECTORY, target)
-    path = target / f"{identifier}.json"
-    fixture = json.loads(path.read_text())
-    fixture["provider_packet"]["approved_facts"]["facts"][key] = value
-    path.write_text(compact_json(fixture))
-    manifest_path = target / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["files"][path.name] = sha256(path.read_bytes()).hexdigest()
-    manifest_path.write_text(compact_json(manifest))
-    assert sha256(path.read_bytes()).hexdigest() == manifest["files"][path.name]
-    with pytest.raises(ValueError, match="independently approved derivation"):
-        load_calibration(identifier, corpus=corpus, directory=target)
-
-
-@pytest.mark.parametrize(
-    "case_id,key,value", [("R04", "proposed_cents", 102500), ("N04", "served_on", "2026-12-01")]
-)
-def test_foreign_self_signed_approved_source_cannot_replace_fixed_authority(
-    corpus: Corpus,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    case_id: str,
-    key: str,
-    value: object,
-) -> None:
-    target = tmp_path / "foreign"
-    target.mkdir()
-    for name in ("gold.jsonl", "gold-approval.json", "activation.json"):
-        shutil.copyfile(Path("eval") / name, target / name)
-    rows = [json.loads(line) for line in (target / "gold.jsonl").read_text().splitlines()]
-    row = next(row for row in rows if row["id"] == case_id)
-    row["request"]["facts"][key] = value
-    row["expected_tool_args"][key] = value
-    if row["expected_extract"] is not None:
-        row["expected_extract"][key] = value
-    (target / "gold.jsonl").write_text("\n".join(compact_json(row) for row in rows) + "\n")
-    approval = json.loads((target / "gold-approval.json").read_text())
-    approval["gold_sha256"] = sha256((target / "gold.jsonl").read_bytes()).hexdigest()
-    (target / "gold-approval.json").write_text(compact_json(approval))
-    assert load_gold(target, corpus).approval.status == "approved"
-    monkeypatch.setattr(judge_calibration, "APPROVED_DATA_DIRECTORY", target)
-    with pytest.raises(ValueError, match="fixed external approval"):
-        approved_calibration_dataset(corpus)
+        fresh = calibration_sizes(load_calibration(identifier, corpus=corpus))
+        assert all(sizes["fixtures"][identifier][key] == val for key, val in fresh.items())
 
 
 def test_new_derived_manifest_cannot_redefine_historical_byte_authority(

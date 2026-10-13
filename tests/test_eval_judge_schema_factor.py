@@ -10,7 +10,7 @@ import pytest
 from anthropic import transform_schema
 from judge_calibration import CALIBRATION_IDS, load_calibration
 from judge_capacity_fixtures import long_statement_candidate
-from judge_schema_resolution import _children, resolve_judge_schema
+from judge_schema_resolution import _children, lint_grade_schema, resolve_judge_schema
 
 from rent_navigator.eval.judge import judge_schema
 from rent_navigator.eval.schema_factor import SCHEMA_REPRESENTATION, factor_judge_schema
@@ -27,85 +27,28 @@ def schema_nodes(schema: dict[str, Any] | bool) -> Iterator[dict[str, Any]]:
         yield from schema_nodes(child)
 
 
-def assert_anchor_transport(
-    array: dict[str, Any], identifiers: list[str], identifier: str
-) -> dict[str, Any] | None:
-    assert array["type"] == "array"
-    assert f"maxItems: {len(identifiers)}" in array["description"]
-    item: dict[str, Any] = array["items"]
-    assert "anyOf" not in item
-    assert item["type"] == "object" and item["additionalProperties"] is False
-    assert item["required"] == [identifier, "quote"]
-    assert set(item["properties"]) == {identifier, "quote"}
-    permitted = item["properties"][identifier]
-    assert permitted["type"] == "string"
-    quote: dict[str, Any] = item["properties"]["quote"]
-    assert quote["type"] == "string"
-    assert "minLength: 1" in quote["description"]
-    if not identifiers:
-        assert "enum" not in permitted
-        return None
-    assert permitted["enum"] == identifiers
-    assert "exact contiguous quotation" in quote["description"]
-    assert "maxLength:" not in quote["description"]
-    return quote
-
-
-def assert_actual_anchor_transport(packet: dict[str, Any]) -> None:
-    transport = judge_schema(packet)
-    assert transform_schema(transport) == transport
-    expanded = resolve_judge_schema(transport)
-    unsupported = {
-        "minLength",
-        "maxLength",
-        "pattern",
-        "maxItems",
-        "uniqueItems",
-        "minimum",
-        "maximum",
-        "multipleOf",
-    }
-    for node in schema_nodes(transport):
-        assert not unsupported.intersection(node)
-        assert "anyOf" not in node
-        if "minItems" in node:
-            assert node["minItems"] == 1
-    for node in schema_nodes(expanded):
-        assert "$ref" not in node
-    quotes: list[dict[str, Any]] = []
-    statements = packet["statements"]
-    evidence = packet["evidence"]
-    for claim in expanded["properties"]["required_claims"]["properties"].values():
-        properties = claim["properties"]
-        if "parts" in properties:
-            properties = properties["parts"]["items"]["properties"]
-        quote = assert_anchor_transport(
-            properties["answer_anchors"], [row["id"] for row in statements], "statement_id"
-        )
-        if quote is not None:
-            quotes.append(quote)
-    for statement in statements:
-        schema = expanded["properties"]["statements"]["properties"][statement["id"]]
-        part = schema["properties"]["parts"]["items"]["properties"]
-        for field, allowed in (
-            ("factual_audit", [row["reference"] for row in evidence]),
-            (
-                "citation_audit",
-                [row["reference"] for row in evidence if row["id"] in statement["citation_ids"]],
-            ),
-        ):
-            quote = assert_anchor_transport(
-                part[field]["properties"]["source_anchors"], allowed, "reference"
-            )
-            if quote is not None:
-                quotes.append(quote)
-    assert quotes
-    assert all(canonical(quote) == canonical(quotes[0]) for quote in quotes)
+def assert_actual_grade_transport(packet: dict[str, Any]) -> None:
+    schema = judge_schema(packet)
+    assert transform_schema(schema) == schema
+    metrics = lint_grade_schema(schema)
+    assert metrics["unions"] == metrics["optional"] == 0
+    expanded = resolve_judge_schema(schema)
+    for field, expected in (
+        ("required_claims", {"id", "result"}),
+        ("statements", {"id", "factual", "citation_support"}),
+    ):
+        leaf = expanded["properties"][field]["items"]
+        assert leaf["type"] == "object" and leaf["additionalProperties"] is False
+        assert set(leaf["properties"]) == set(leaf["required"]) == expected
+        assert leaf["properties"]["id"]["enum"] == [row["id"] for row in packet[field]]
+    assert schema["properties"]["statements"]["items"] == {"$ref": "#/$defs/statement"}
+    for row in (*packet["required_claims"], *packet["statements"], *packet["evidence"]):
+        assert row["text"] not in json.dumps(schema)
 
 
 @pytest.mark.parametrize("identifier", CALIBRATION_IDS)
 @pytest.mark.parametrize("stress", [False, True], ids=["representative", "stress-600"])
-def test_actual_calibration_transport_uses_closed_shared_anchors(
+def test_actual_calibration_transport_uses_closed_shared_grades(
     identifier: str, stress: bool
 ) -> None:
     packet = load_calibration(identifier)["provider_packet"]
@@ -113,14 +56,14 @@ def test_actual_calibration_transport_uses_closed_shared_anchors(
         packet = deepcopy(packet)
         for statement in packet["statements"]:
             statement["text"] = "x" * 600
-    assert_actual_anchor_transport(packet)
+    assert_actual_grade_transport(packet)
 
 
-def test_six_long_statements_transport_uses_closed_shared_anchors() -> None:
+def test_six_long_statements_transport_uses_closed_shared_grades() -> None:
     packet, _ = long_statement_candidate()
     assert len(packet["statements"]) == 6
     assert all(len(statement["text"]) == 600 for statement in packet["statements"])
-    assert_actual_anchor_transport(packet)
+    assert_actual_grade_transport(packet)
 
 
 def canonical(value: Any) -> bytes:

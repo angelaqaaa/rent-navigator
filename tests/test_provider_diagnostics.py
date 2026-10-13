@@ -591,8 +591,19 @@ def status_error_with_body(body: object, *, status: int = 400) -> BaseException:
 
 
 @pytest.mark.parametrize("nested", [False, True])
-def test_typed_400_exact_structured_sentence_classifies_schema_complexity(nested: bool) -> None:
-    error = status_error_with_body(grammar_body(nested=nested))
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Schema is too complex for compilation.",
+        "The compiled grammar is too large, which would cause performance issues. "
+        "Simplify your tool schemas or reduce the number of strict tools.",
+    ],
+)
+def test_typed_400_exact_structured_sentence_classifies_schema_complexity(
+    nested: bool, sentence: str
+) -> None:
+    detail = {"type": "invalid_request_error", "message": sentence}
+    error = status_error_with_body({"error": detail} if nested else detail)
     classified = classify_failure(error)
     assert classified.model_dump(mode="json") == diagnostic_v2_wire(
         rejection_reason="schema_complexity"
@@ -604,6 +615,28 @@ def test_typed_400_exact_structured_sentence_classifies_schema_complexity(nested
     assert "Schema is too complex" not in failure_envelope(outcome.failure).model_dump_json()
     assert outcome.failure.__context__ is None and outcome.failure.__cause__ is None
     assert_accounting(outcome, actual=None, reserved="0.027", complete=False)
+
+
+@pytest.mark.parametrize(
+    "message,error_type",
+    [
+        ("A different schema rejection sentence.", "invalid_request_error"),
+        (None, "invalid_request_error"),
+        (123, "invalid_request_error"),
+        (
+            "The compiled grammar is too large, which would cause performance issues. "
+            "Simplify your tool schemas or reduce the number of strict tools.",
+            "api_error",
+        ),
+    ],
+)
+def test_second_sentence_does_not_broaden_type_or_message_matching(
+    message: object, error_type: str
+) -> None:
+    failure = classify_failure(
+        status_error_with_body({"error": {"type": error_type, "message": message}})
+    )
+    assert failure.model_dump(mode="json") == diagnostic_v2_wire(rejection_reason="unclassified")
 
 
 class HostileDictionary(dict[str, Any]):

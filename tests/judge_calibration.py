@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from judge_wire_fixtures import add_audit_bases, answer_anchor, source_anchor
+from judge_wire_fixtures import grade_only_wire
 
 from rent_navigator.corpus import SOURCE_URLS, Corpus, load_corpus
 from rent_navigator.eval.data import GoldDataset, load_gold
-from rent_navigator.eval.judge import JUDGE_SYSTEM, judge_schema
+from rent_navigator.eval.judge import _WIRE_POLICY, JUDGE_SYSTEM, judge_config_hash, judge_schema
 from rent_navigator.eval.models import Claim
 from rent_navigator.eval.runner import (
     ApprovedFacts,
@@ -248,40 +248,25 @@ def stress_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
     return output
 
 
-def wire5_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
-    """Derive a new structural wire from unchanged expected grade inputs.
-
-    This does not migrate historical raw votes or establish semantic correctness.
-    """
-    return add_audit_bases(fixture["expected_judgment"], fixture["provider_packet"])
+def grade_only_output(fixture: dict[str, Any]) -> dict[str, Any]:
+    """Map unchanged proposed expected labels to the current wire without new grading."""
+    return grade_only_wire(fixture["expected_judgment"], fixture["provider_packet"])
 
 
-def wire5_stress_audit_output(fixture: dict[str, Any]) -> dict[str, Any]:
-    """Permitted full-span wire5 shape, not a minimal or semantic witness."""
-    packet = fixture["provider_packet"]
-    output = wire5_audit_output(fixture)
-    pointers = tool_leaf_paths(packet)
-    for leaf in output["required_claims"].values():
-        leaf["parts"][0]["answer_anchors"] = [answer_anchor(row) for row in packet["statements"]]
-        leaf["parts"][0]["basis"] = "x" * 360
-    for statement in packet["statements"]:
-        part = output["statements"][statement["id"]]["parts"][0]
-        part["factual_audit"].update(
-            source_anchors=[source_anchor(row) for row in packet["evidence"]],
-            tool_fields=pointers,
-            basis="x" * 320,
-        )
-        if statement["citation_ids"]:
-            part["citation_audit"].update(
-                source_anchors=[
-                    source_anchor(row)
-                    for row in packet["evidence"]
-                    if row["id"] in statement["citation_ids"]
-                ],
-                tool_fields=pointers,
-                basis="x" * 320,
-            )
-    return output
+def grade_only_stress_output(fixture: dict[str, Any]) -> dict[str, Any]:
+    """Largest label strings and policy inventory; structural, not semantic, output."""
+    wire = grade_only_output(fixture)
+    for row in wire["required_claims"]:
+        row["result"] = "contradicted"
+    citations = {
+        row["id"]: bool(row["citation_ids"]) for row in fixture["provider_packet"]["statements"]
+    }
+    for row in wire["statements"]:
+        row["factual"] = "contradicted"
+        row["citation_support"] = "unsupported" if citations[row["id"]] else "not_applicable"
+    wire["false_pass"] = False
+    wire["policy_violations"] = [f"S{n:02}" for n in range(1, 9)]
+    return wire
 
 
 def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
@@ -315,8 +300,8 @@ def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
         "schema": schema,
         "count_payload_without_timeout": payload,
         "structural_stress_count_payload_without_timeout": stress_payload,
-        "representative_output": wire5_audit_output(fixture),
-        "structural_stress_output": wire5_stress_audit_output(fixture),
+        "representative_output": grade_only_output(fixture),
+        "structural_stress_output": grade_only_stress_output(fixture),
     }
     return {
         f"{name}_{unit}": len(text.encode()) if unit == "utf8_bytes" else len(text)
@@ -324,3 +309,52 @@ def calibration_sizes(fixture: dict[str, Any]) -> dict[str, int]:
         for text in (compact_json(value),)
         for unit in ("characters", "utf8_bytes")
     }
+
+
+def regenerate_size_worksheets() -> None:
+    """Recompute both authorized worksheets while preserving original manifests/packets."""
+    from judge_schema_resolution import INITIAL_GRADE_LIMITS, schema_metrics
+
+    corpus = load_corpus()
+    fixtures = {
+        identifier: load_calibration(identifier, corpus=corpus) for identifier in CALIBRATION_IDS
+    }
+    for directory in (
+        CALIBRATION_DIRECTORY,
+        CALIBRATION_DIRECTORY.parent / "judge_schema_representation_v1",
+    ):
+        manifest_bytes = (directory / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes)
+        document = {
+            "schema_version": 2,
+            "purpose": "offline_grade_only_calibration_sizes",
+            "representation": _WIRE_POLICY["schema_representation"],
+            "packet_policy_version": 3,
+            "wire_policy_version": _WIRE_POLICY["version"],
+            "judge_config_hash": judge_config_hash(),
+            "historical_manifest_sha256": sha256(manifest_bytes).hexdigest(),
+            "historical_sizing_file_sha256": manifest["sizing_file_sha256"],
+            "provider_calls": 0,
+            "count_calls": 0,
+            "token_measurement": None,
+            "budget_status": "initial_offline_not_provider_accepted",
+            "initial_schema_limits": INITIAL_GRADE_LIMITS,
+            "depth_convention": (
+                "Raw JSON dict/list container depth; root=1; "
+                "definitions counted once; refs not expanded."
+            ),
+            "limitations": (
+                "Synthetic byte/structure measurements, not token counts, provider acceptance "
+                "or semantic accuracy. Original manifests remain historical."
+            ),
+            "fixtures": {
+                identifier: {
+                    **calibration_sizes(fixture),
+                    "schema_metrics": schema_metrics(judge_schema(fixture["provider_packet"])),
+                }
+                for identifier, fixture in fixtures.items()
+            },
+        }
+        (directory / "sizes.json").write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        )

@@ -19,7 +19,7 @@ import pytest
 from anthropic import AsyncAnthropic as RealAsyncAnthropic
 from anthropic import DefaultAsyncHttpxClient
 from judge_schema_resolution import resolve_judge_schema
-from judge_wire_fixtures import add_audit_bases
+from judge_wire_fixtures import grade_only_wire
 from sdk_test_boundary import (
     FILESYSTEM_APIS,
     SDKBoundary,
@@ -78,7 +78,7 @@ def synthetic_input() -> tuple[JudgeInput, dict[str, Any], TraceContext]:
 
 
 def synthetic_wire(value: JudgeInput, packet: dict[str, Any]) -> dict[str, Any]:
-    return add_audit_bases(
+    return grade_only_wire(
         {
             "required_claims": {claim.id: {"result": "met"} for claim in value.required_claims},
             "statements": {
@@ -215,39 +215,17 @@ def assert_final_sdk_requests(
         "false_pass",
         "policy_violations",
     ]
-    assert schema["properties"]["required_claims"]["required"] == ["c1", "c2"]
-    assert schema["properties"]["statements"]["required"] == ["s1", "s2", "s3"]
-    assert {
-        "JudgeClaim_c1",
-        "JudgeClaim_c2",
-        "JudgeStatement_s1",
-        "JudgeStatement_s2",
-        "JudgeStatement_s3",
-    } <= set(schema["$defs"])
+    assert schema["$defs"]["claim_id"]["enum"] == ["c1", "c2"]
+    assert schema["$defs"]["statement_id"]["enum"] == ["s1", "s2", "s3"]
     expanded = resolve_judge_schema(schema)
-    for identifier in ("c1", "c2"):
-        assert schema["properties"]["required_claims"]["properties"][identifier] == {
-            "$ref": "#/$defs/JudgeClaim_" + identifier
-        }
-        claim = expanded["properties"]["required_claims"]["properties"][identifier]
-        assert claim["required"] == ["kind", "result", "parts"]
-        assert claim["properties"]["parts"]["items"]["required"] == [
-            "text",
-            "observation",
-            "answer_anchors",
-            "basis",
-        ]
-    for identifier in ("s1", "s2", "s3"):
-        assert schema["properties"]["statements"]["properties"][identifier] == {
-            "$ref": "#/$defs/JudgeStatement_" + identifier
-        }
-        statement = expanded["properties"]["statements"]["properties"][identifier]
-        assert statement["required"] == ["factual", "citation_support", "parts"]
-        assert statement["properties"]["parts"]["items"]["required"] == [
-            "text",
-            "factual_audit",
-            "citation_audit",
-        ]
+    assert schema["properties"]["required_claims"]["items"] == {"$ref": "#/$defs/claim"}
+    assert schema["properties"]["statements"]["items"] == {"$ref": "#/$defs/statement"}
+    assert expanded["properties"]["required_claims"]["items"]["required"] == ["id", "result"]
+    assert expanded["properties"]["statements"]["items"]["required"] == [
+        "id",
+        "factual",
+        "citation_support",
+    ]
     assert_closed_objects(schema)
     if len(bodies) == 2:
         assert set(bodies[1]) == shared | {"max_tokens", "stream", "service_tier"}

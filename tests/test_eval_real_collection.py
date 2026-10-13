@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from eval_fixtures import TOY_HASH, TOY_SOURCE_SHA, canonical_hits, write_toy_data
-from judge_wire_fixtures import add_audit_bases
+from judge_wire_fixtures import grade_only_wire
 from test_eval_collection import RecordingBatchLedger, _environment
 
 from rent_navigator.corpus import Corpus, load_corpus
@@ -64,7 +64,7 @@ class SyntheticRealCompositionPort:
                 "false_pass": False,
                 "policy_violations": [],
             }
-            value = add_audit_bases(value, packet)
+            value = grade_only_wire(value, packet)
             content = [
                 {
                     "type": "text",

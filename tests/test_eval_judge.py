@@ -1683,39 +1683,51 @@ _DUPLICATE_FRAGMENTS = [
     ("false_pass", '"false_pass":true,"false_pa\\u0073s":true'),
     (
         "required_claims",
-        '"required_claims":{"c1":{"result":"met"}},"required_claims":{"c1":{"result":"met"}}',
+        '"required_claims":[{"id":"c1","result":"met"}],"required_claims":[{"id":"c1","result":"met"}]',
     ),
     (
         "statements",
-        '"statements":{"s1":{"factual":"supported","citation_support":"supported"}},"statements":{"s1":{"factual":"supported","citation_support":"supported"}}',
+        '"statements":[{"id":"s1","factual":"supported","citation_support":"supported"}],"statements":[{"id":"s1","factual":"supported","citation_support":"supported"}]',
     ),
     ("policy_violations", '"policy_violations":[],"policy_violations":[]'),
-    ("required_claims", '"required_claims":{"c1":{"result":"met"},"c1":{"result":"met"}}'),
-    ("required_claims", '"required_claims":{"c1":{"result":"missing"},"c1":{"result":"met"}}'),
-    ("required_claims", '"required_claims":{"c1":{"result":"met"},"c\\u0031":{"result":"met"}}'),
+    ("required_claims", '"required_claims":[{"id":"c1","id":"c1","result":"met"}]'),
+    ("required_claims", '"required_claims":[{"id":"foreign","id":"c1","result":"met"}]'),
+    ("required_claims", '"required_claims":[{"id":"c1","i\\u0064":"c1","result":"met"}]'),
     (
         "statements",
-        '"statements":{"s1":{"factual":"supported","citation_support":"supported"},"s1":{"factual":"supported","citation_support":"supported"}}',
+        '"statements":[{"id":"s1","id":"s1","factual":"supported","citation_support":"supported"}]',
     ),
     (
         "statements",
-        '"statements":{"s1":{"factual":"unsupported","citation_support":"supported"},"s\\u0031":{"factual":"supported","citation_support":"supported"}}',
+        '"statements":[{"id":"foreign","i\\u0064":"s1","factual":"supported","citation_support":"supported"}]',
     ),
-    ("required_claims", '"required_claims":{"c1":{"result":"met","result":"met"}}'),
-    ("required_claims", '"required_claims":{"c1":{"result":"missing","res\\u0075lt":"met"}}'),
+    ("required_claims", '"required_claims":[{"id":"c1","result":"met","result":"met"}]'),
+    ("required_claims", '"required_claims":[{"id":"c1","result":"missing","res\\u0075lt":"met"}]'),
     (
         "statements",
-        '"statements":{"s1":{"factual":"supported","factual":"supported","citation_support":"supported"}}',
-    ),
-    (
-        "statements",
-        '"statements":{"s1":{"factual":"unsupported","fact\\u0075al":"supported","citation_support":"supported"}}',
+        '"statements":[{"id":"s1","factual":"supported","factual":"supported","citation_support":"supported"}]',
     ),
     (
         "statements",
-        '"statements":{"s1":{"factual":"supported","citation_support":"supported","citation_s\\u0075pport":"supported"}}',
+        '"statements":[{"id":"s1","factual":"unsupported","fact\\u0075al":"supported","citation_support":"supported"}]',
+    ),
+    (
+        "statements",
+        '"statements":[{"id":"s1","factual":"supported","citation_support":"supported","citation_s\\u0075pport":"supported"}]',
     ),
 ]
+
+
+def test_duplicate_key_fixture_sibling_accepts_valid_wire7(value: JudgeInput) -> None:
+    value = sized_input(value, 1, 1)
+    expected = result(value)
+    raw_text = json.dumps(wire_payload(expected, value), indent=2)
+    test = harness(value)
+    test.port.response = message(value, content=[{"type": "text", "text": raw_text}])
+    evaluation = test.run()
+    assert evaluation.judgment == expected
+    assert len(test.port.counts) == len(test.port.creates) == 1
+    test.verify(evaluation, expected)
 
 
 @pytest.mark.parametrize("field_name,fragment", _DUPLICATE_FRAGMENTS)
@@ -1723,14 +1735,14 @@ def test_recursive_duplicate_json_keys_fail_billed_and_preserve_original_raw(
     value: JudgeInput, field_name: str, fragment: str
 ) -> None:
     value = sized_input(value, 1, 1)
+    valid_wire = wire_payload(result(value), value)
     members = {
-        "required_claims": '"required_claims":{"c1":{"result":"met"}}',
-        "statements": '"statements":{"s1":{"factual":"supported","citation_support":"supported"}}',
-        "false_pass": '"false_pass":true',
-        "policy_violations": '"policy_violations":[]',
+        name: f"{json.dumps(name)}:{json.dumps(payload)}" for name, payload in valid_wire.items()
     }
     members[field_name] = fragment
     raw_text = " {\n  " + ",\n  ".join(members.values()) + "\n}\n"
+    # Without duplicate rejection, every fragment must decode to the valid sibling.
+    assert json.loads(raw_text) == valid_wire
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": raw_text}])
     with pytest.raises(JudgeFailure) as caught:

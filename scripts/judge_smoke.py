@@ -48,7 +48,7 @@ from rent_navigator.trace import PRICING_HASH, TraceContext, provider_cost_total
 ROOT = Path(__file__).resolve().parents[1]
 CAP = Decimal("2.00")
 PACKET_IDS = (*tuple(f"J{number:02}" for number in range(1, 14)), "R04")
-MEASUREMENT_JUDGE_HASH = "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384"
+MEASUREMENT_JUDGE_HASH = "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04"
 
 
 def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:

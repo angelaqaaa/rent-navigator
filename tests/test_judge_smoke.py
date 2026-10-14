@@ -237,8 +237,7 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
 ) -> None:
     smoke = load_smoke(monkeypatch)
     monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
-    # Exercise each provenance guard against the current profile in this fake only.
-    monkeypatch.setattr(smoke, "MEASUREMENT_JUDGE_HASH", smoke.judge_config_hash())
+    assert smoke.MEASUREMENT_JUDGE_HASH == smoke.judge_config_hash()
     calls: list[list[str]] = []
 
     def git(command: list[str], **kwargs: Any) -> Any:
@@ -308,21 +307,35 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
     assert not output.exists() and clients == []
 
 
-def test_historical_measurement_identity_rejects_revised_rubric_before_execution(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize("drift", ["historical_hash", "rubric"])
+def test_measurement_identity_rejects_wrong_profile_before_execution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, drift: str
 ) -> None:
     smoke = load_smoke(monkeypatch)
     monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
-    assert smoke.MEASUREMENT_JUDGE_HASH == (
-        "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384"
+    assert (
+        smoke.MEASUREMENT_JUDGE_HASH
+        == smoke.judge_config_hash()
+        == ("258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04")
     )
+    if drift == "historical_hash":
+        monkeypatch.setattr(
+            smoke,
+            "judge_config_hash",
+            lambda: "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384",
+        )
+    else:
+        from rent_navigator.eval import judge
+
+        monkeypatch.setattr(judge, "JUDGE_SYSTEM", judge.JUDGE_SYSTEM + "Synthetic rubric drift.")
+        assert smoke.judge_config_hash() != smoke.MEASUREMENT_JUDGE_HASH
 
     def prohibited(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("Identity drift must stop before provenance reads or provider setup")
 
     monkeypatch.setattr(smoke.subprocess, "check_output", prohibited)
     monkeypatch.setattr(smoke, "create_client", prohibited)
-    output = tmp_path / "historical-measurement"
+    output = tmp_path / "wrong-profile-measurement"
     with pytest.raises(ValueError, match="Measurement runner or judge identity differs"):
         asyncio.run(
             smoke.run_smoke(

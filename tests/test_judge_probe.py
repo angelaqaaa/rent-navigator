@@ -442,8 +442,8 @@ def test_diagnostic_deadline_is_probe_local_and_cancels_one_fake_call(
     assert cancelled == [True]
     assert result.cost.actual_cost_usd is None and not result.cost.usage_complete
     assert result.cost.reserved_cost_usd == Decimal("0.21384")
-    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 8192
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.13192")
+    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 16384
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.21384")
 
 
 def test_diagnostic_cli_prints_only_five_fields_with_no_artifact_write(
@@ -622,7 +622,7 @@ def test_diagnostic_one_fake_call_safe_output_full_decode_and_cost(
     assert result.elapsed_seconds == 1.25
     assert result.cost.actual_cost_usd == (None if unknown_usage else Decimal("0.003"))
     assert result.cost.reserved_cost_usd == Decimal(
-        "0.21384" if profile == "high-output" else "0.13192"
+        "0.21384" if profile == "high-output" else "0.21384"
     )
     assert result.cost.usage_complete is (not unknown_usage)
     output = json.dumps(result.terminal_fields())
@@ -696,7 +696,7 @@ def test_dump_matches_real_judge_recording_fake(
     )
     judge = RealJudge(
         RecordingMessages(),
-        budget=SpendLedger(Decimal("0.15")),
+        budget=SpendLedger(Decimal("0.30")),
         metadata=StringIO(),
         raw_provider=StringIO(),
         run_id=UUID("10000000-0000-4000-8000-000000000003"),

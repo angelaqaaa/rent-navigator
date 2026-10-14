@@ -339,10 +339,10 @@ class Deadline:
         if (
             isinstance(duration_seconds, bool)
             or not isinstance(duration_seconds, int | float)
-            or not 0 < duration_seconds <= 180
+            or not 0 < duration_seconds <= 300
             or not math.isfinite(duration_seconds)
         ):
-            raise ValueError("Deadline duration must be finite numeric seconds within (0, 180]")
+            raise ValueError("Deadline duration must be finite numeric seconds within (0, 300]")
         return cls(clock() + float(duration_seconds), clock)
 
     def remaining(self) -> float:

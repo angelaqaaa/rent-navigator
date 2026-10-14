@@ -59,7 +59,7 @@ def test_model_mismatch_stops_before_any_following_generation(
     expected_cost = Decimal("0.0015") * (position - 1)
     assert Decimal(receipt["actual_usd"]) == expected_cost
     assert Decimal(receipt["unresolved_hold_usd"]) == (
-        Decimal("0.13192") if mismatch_at == "judge" else Decimal("0.027")
+        Decimal("0.21384") if mismatch_at == "judge" else Decimal("0.027")
     )
     assert not receipt["complete"]
     reconciled = [event for event in receipt["events"] if event["event"] == "reconciled"]
@@ -267,8 +267,8 @@ def test_model_anomaly_keeps_prior_verified_cost_and_current_full_hold() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.0015")
-    assert receipt.unresolved_hold_usd == Decimal("0.13192")
-    assert budget.ledger.committed_usd == Decimal("0.13342")
+    assert receipt.unresolved_hold_usd == Decimal("0.21384")
+    assert budget.ledger.committed_usd == Decimal("0.21534")
     assert not receipt.complete
 
 
@@ -334,9 +334,9 @@ def test_exact_model_normal_cost_is_still_settled() -> None:
         (ACTOR_MODEL, 21000, 1200, "0.027", False),
         (ACTOR_MODEL, 21001, 1200, "0.027001", True),
         (ACTOR_MODEL, 21000, 1201, "0.027005", True),
-        (JUDGE_MODEL, 25000, 8192, "0.13192", False),
-        (JUDGE_MODEL, 25001, 8192, "0.131922", True),
-        (JUDGE_MODEL, 25000, 8193, "0.131930", True),
+        (JUDGE_MODEL, 25000, 16384, "0.21384", False),
+        (JUDGE_MODEL, 25001, 16384, "0.213842", True),
+        (JUDGE_MODEL, 25000, 16385, "0.213850", True),
     ],
 )
 def test_full_reservation_and_overage_keep_exact_known_billing(
@@ -360,7 +360,7 @@ def test_full_reservation_and_overage_keep_exact_known_billing(
             budget.reserve(model)
 
 
-@pytest.mark.parametrize("model,expected", [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")])
+@pytest.mark.parametrize("model,expected", [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")])
 def test_missing_usage_preserves_full_new_hold_and_stops(
     model: RequestedModel, expected: str
 ) -> None:

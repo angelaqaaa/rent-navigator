@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import json
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -53,7 +54,7 @@ def test_selected_measurement_records_ten_votes_without_qualifying_gate(
     assert summary["unstarted_votes"] == []
     assert summary["planned_votes"] == summary["generation_attempts"] == 10
     assert summary["calibration_denominator"] == 9
-    assert summary["reservation_forecast_usd"] == "1.31920"
+    assert summary["reservation_forecast_usd"] == "2.13840"
     assert summary["source_commit"] == summary["judging_source_commit"] == SOURCE
     assert summary["runner_commit"] == RUNNER
     assert not smoke._passes_gate(summary, output, SOURCE)
@@ -140,10 +141,13 @@ def test_measurement_continues_and_keeps_each_failed_row(
             clock=lambda: now,
         )
     )
-    assert created == selected
-    assert summary["measurement_complete"] is True and summary["complete"] is True
+    expected_created = selected[:1] if failure == "decode" else selected
+    assert created == expected_created
+    assert summary["measurement_complete"] is (failure != "decode")
+    assert summary["complete"] is (failure != "decode")
     assert summary["gate_passed"] is False and not smoke._passes_gate(summary, output, SOURCE)
-    assert summary["completed_votes"] == selected and summary["unstarted_votes"] == []
+    assert summary["completed_votes"] == expected_created
+    assert summary["unstarted_votes"] == (selected[1:] if failure == "decode" else [])
     failed = json.loads((output / (("R04" if failure == "r04" else "J06") + ".json")).read_text())
     assert failed["failed_criterion"] == expected_reason
     if failure == "flip":
@@ -151,7 +155,7 @@ def test_measurement_continues_and_keeps_each_failed_row(
     if failure == "decode":
         assert failed["decode_rejection_reason"] == "json_invalid"
         assert failed["actual_cost_usd"] == "0.003"
-        assert summary["decoded_votes"] == 2
+        assert summary["decoded_votes"] == 0
     assert "synthetic-private-invalid-json" not in "".join(
         path.read_text() for path in output.iterdir()
     )
@@ -185,6 +189,52 @@ def test_complete_fourteen_vote_measurement_cannot_pass_gate_or_cli_gate(
     assert summary["r04_smoke_passed"] is True and summary["fail_to_pass_flips"] == 0
     assert summary["gate_passed"] is False
     assert not smoke._passes_gate(summary, output, SOURCE)
+    assert summary["source_commit"] == summary["judging_source_commit"] == SOURCE
+    assert summary["runner_commit"] == SOURCE
+    assert summary["judge_config_hash"] == smoke.MEASUREMENT_JUDGE_HASH
+    assert summary["budget_limit_usd"] == "3.00"
+    assert summary["reservation_forecast_usd"] == "2.99376"
+    assert summary["completed_votes"] == list(smoke.PACKET_IDS)
+    assert summary["reportable"] is False and summary["official_n16_evaluation"] is False
+
+
+@pytest.mark.parametrize(
+    "cap,forecast",
+    [
+        ("2.99", "2.99376"),
+        ("3.01", "2.99376"),
+        ("NaN", "2.99376"),
+        ("-1", "2.99376"),
+        ("3.00", "1.84688"),
+        ("3.00", "NaN"),
+        ("3.00", "2.99375"),
+    ],
+)
+def test_k2_forecast_and_cap_reject_before_evidence_or_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cap: str, forecast: str
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: SOURCE)
+
+    def forbidden(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Invalid funding bounds must stop before vote or client setup")
+
+    monkeypatch.setattr(smoke, "fixed_votes", forbidden)
+    monkeypatch.setattr(smoke, "create_client", forbidden)
+    output = tmp_path / "absent"
+    with pytest.raises(ValueError, match="forecast and cap"):
+        asyncio.run(
+            smoke.run_smoke(
+                source_commit=SOURCE,
+                runner_commit=SOURCE,
+                evidence_dir=output,
+                measurement=True,
+                packets=list(smoke.PACKET_IDS),
+                cap_usd=Decimal(cap),
+                forecast_usd=Decimal(forecast),
+            )
+        )
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("packets", [None, [], ["J05", "J05"], ["unknown"], ["J06", "J05"]])
@@ -245,7 +295,7 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
         if command[1:3] == ["rev-parse", "--verify"]:
             if drift == "unresolved":
                 raise subprocess.CalledProcessError(128, command)
-            return (RUNNER if drift == "source" else SOURCE) + "\n"
+            return (SOURCE if drift == "source" else RUNNER) + "\n"
         if command[1] == "merge-base":
             if drift == "not_ancestor":
                 raise subprocess.CalledProcessError(1, command)
@@ -261,7 +311,7 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
         if command[1] == "show":
             assert smoke.__file__ is not None
             source = Path(smoke.__file__).read_text()
-            if drift == "script" and command[2].startswith(RUNNER):
+            if drift == "script" and len([call for call in calls if call[1] == "show"]) == 2:
                 source = source.replace("def fixed_votes()", "def changed_votes()", 1)
             return source
         raise AssertionError("Unexpected provenance command")
@@ -288,14 +338,14 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
     monkeypatch.setattr(smoke, "create_client", forbidden_client)
     runner = None if drift == "missing_runner" else SOURCE if drift == "runner" else RUNNER
     if drift == "none":
-        assert smoke._measurement_provenance(SOURCE, runner) == RUNNER
+        assert smoke._measurement_provenance(RUNNER, runner) == RUNNER
         assert any(command[1] == "merge-base" for command in calls)
         assert any(command[1] == "diff" and "--no-renames" in command for command in calls)
     else:
         with pytest.raises(ValueError):
             asyncio.run(
                 smoke.run_smoke(
-                    source_commit=SOURCE,
+                    source_commit=RUNNER,
                     runner_commit=runner,
                     evidence_dir=output,
                     live=True,
@@ -307,7 +357,7 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
     assert not output.exists() and clients == []
 
 
-@pytest.mark.parametrize("drift", ["historical_hash", "rubric"])
+@pytest.mark.parametrize("drift", ["historical_hash", "run1_hash", "rubric"])
 def test_measurement_identity_rejects_wrong_profile_before_execution(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, drift: str
 ) -> None:
@@ -316,13 +366,17 @@ def test_measurement_identity_rejects_wrong_profile_before_execution(
     assert (
         smoke.MEASUREMENT_JUDGE_HASH
         == smoke.judge_config_hash()
-        == ("258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04")
+        == ("23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8")
     )
-    if drift == "historical_hash":
+    if drift in {"historical_hash", "run1_hash"}:
         monkeypatch.setattr(
             smoke,
             "judge_config_hash",
-            lambda: "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384",
+            lambda: (
+                "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04"
+                if drift == "run1_hash"
+                else "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384"
+            ),
         )
     else:
         from rent_navigator.eval import judge
@@ -404,9 +458,9 @@ def test_measurement_hard_guards_keep_reservation_and_unstarted_votes(
         assert row["failure_code"] == "budget_exhausted"
     else:
         assert row["actual_cost_usd"] is None and row["usage_complete"] is False
-        assert row["reserved_cost_usd"] == "0.13192"
+        assert row["reserved_cost_usd"] == "0.21384"
         assert summary["cost"]["actual_cost_usd"] is None
-        assert summary["cost"]["reserved_cost_usd"] == "0.13192"
+        assert summary["cost"]["reserved_cost_usd"] == "0.21384"
     assert all(sentinel not in path.read_text() for path in output.iterdir())
 
 
@@ -490,10 +544,10 @@ def test_offline_cli_completes_all_fourteen_votes_without_a_client(
     assert summary["calibration_matched"] == summary["calibration_denominator"] == 13
     assert summary["r04_smoke_passed"] is True
     assert summary["complete"] is True and summary["reportable"] is False
-    assert summary["budget_limit_usd"] == "2.00"
-    assert summary["reservation_forecast_usd"] == "1.84688"
+    assert summary["budget_limit_usd"] == "3.00"
+    assert summary["reservation_forecast_usd"] == "2.99376"
     assert summary["cost"]["actual_cost_usd"] == "0.042"
-    assert summary["cost"]["reserved_cost_usd"] == "1.84688"
+    assert summary["cost"]["reserved_cost_usd"] == "2.99376"
     assert summary["batch_committed_usd"] == "0.042"
     assert sorted(p.name for p in out.iterdir()) == [
         *(f"J{n:02}.json" for n in range(1, 14)),
@@ -790,7 +844,7 @@ def test_failure_records_preserve_accounting_and_privacy(
             assert row["thinking_metrics"] is None
         assert calls == ["count", "create"]
         assert row["actual_cost_usd"] is None and row["usage_complete"] is False
-        assert row["reserved_cost_usd"] == "0.13192"
+        assert row["reserved_cost_usd"] == "0.21384"
         assert summary["recorded_votes"] == 1
         if failure == "http":
             assert row["provider_request_id"] == "req_synthetic_failure"

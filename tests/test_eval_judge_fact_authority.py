@@ -405,7 +405,7 @@ def test_grade_wire_rejects_fact_witness_fields_with_known_billing(
     assert caught.value.code == "invalid_generated_output"
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.003")
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
     assert test.records()[-1].value["content"][0]["text"] == original
     assert "Synthetic forbidden field" not in test.metadata.getvalue()
     test.verify(accounting)
@@ -428,4 +428,4 @@ def test_identity_binds_grade_only_wire_and_unchanged_packet_capacity() -> None:
         != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
     )
     assert "approved_facts_schema" in judge_module._PACKET_POLICY
-    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 8192
+    assert MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 16384

@@ -80,7 +80,7 @@ def test_layouts_keep_usage_and_replay_without_reasoning_payloads(
         accounting = failure.value.accounting
         test.verify(accounting)
     assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.003")
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
     raw = test.records()[-1].value
     assert raw["usage"]["output_tokens"] == 100
     assert raw["judge_projection"]["omitted_blocks"] == count
@@ -179,7 +179,7 @@ def test_unknown_usage_keeps_full_reservation_after_projection(
         test.run()
     assert failure.value.accounting.cost.actual_cost_usd is None
     assert not failure.value.accounting.cost.usage_complete
-    assert test.budget.committed_usd == Decimal("0.13192")
+    assert test.budget.committed_usd == Decimal("0.21384")
     assert thinking_metrics(response)["thinking_tokens"] is None
     test.verify(failure.value.accounting)
 
@@ -339,11 +339,25 @@ def test_rubric_delta_binds_computed_fields_and_executed_argument_scope(
     assert false_pass_scope + routing + "Apply only evidenced S01-S08" in current
     assert old_routing not in current
     assert judge.judge_config_hash() != proposal_hash
+    from dataclasses import replace
+
+    from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES, policy_manifest
+
+    old_policy = {
+        **MODEL_POLICIES,
+        JUDGE_MODEL: replace(MODEL_POLICIES[JUDGE_MODEL], max_output_tokens=8192),
+    }
+    old_manifest = policy_manifest()
+    old_manifest[JUDGE_MODEL]["max_output_tokens"] = 8192
+    previous = current.replace(computed, "").replace(scope, old_scope).replace(routing, "")
     with monkeypatch.context() as patch:
+        patch.setattr(judge, "MODEL_POLICIES", old_policy)
+        patch.setattr(judge, "policy_manifest", lambda: old_manifest)
+        patch.setattr(judge, "_JUDGE_DEADLINE_SECONDS", 180)
+        assert judge.judge_config_hash() == (
+            "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04"
+        )
         patch.setattr(judge, "JUDGE_SYSTEM", current.replace(routing, old_routing))
         assert judge.judge_config_hash() == proposal_hash
-    previous = current.replace(computed, "").replace(scope, old_scope).replace(routing, "")
-    assert judge.judge_config_hash() != previous_hash
-    with monkeypatch.context() as patch:
         patch.setattr(judge, "JUDGE_SYSTEM", previous)
         assert judge.judge_config_hash() == previous_hash

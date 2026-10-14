@@ -206,7 +206,7 @@ def assert_capture(
         assert (
             evidence.cost.reserved_cost_usd
             == evidence.committed
-            == (Decimal(".13192") if surface == "judge" else Decimal(".027"))
+            == (Decimal(".21384") if surface == "judge" else Decimal(".027"))
         )
         assert evidence.stopped
     evidence.replay(evidence.raw)

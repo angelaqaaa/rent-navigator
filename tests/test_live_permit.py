@@ -1,6 +1,7 @@
-"""Synthetic future permits verify fixed funding; fixtures authorize no execution."""
+"""Historical deferred-permit fixtures preserve their original policy and funding."""
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -8,10 +9,24 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from rent_navigator.eval import permit as permit_module
 from rent_navigator.eval.models import Activation
 from rent_navigator.eval.permit import LivePermit, _reservation
+from rent_navigator.model_policy import JUDGE_MODEL, MODEL_POLICIES
 
 NOW = datetime(2026, 9, 23, 15, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def historical_permit_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        permit_module,
+        "MODEL_POLICIES",
+        {
+            **MODEL_POLICIES,
+            JUDGE_MODEL: replace(MODEL_POLICIES[JUDGE_MODEL], max_output_tokens=8192),
+        },
+    )
 
 
 def permit_payload() -> dict[str, Any]:

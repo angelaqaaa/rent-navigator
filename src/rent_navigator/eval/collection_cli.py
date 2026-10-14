@@ -18,10 +18,14 @@ from rent_navigator.eval.data import load_gold
 from rent_navigator.eval.dry_run import DryRunManifest, collect_dry_run, dry_run_forecast
 from rent_navigator.eval.offline import file_hash
 from rent_navigator.index import SearchHit, build_index, search
+from rent_navigator.model_policy import ACTOR_MODEL, JUDGE_MODEL, MODEL_POLICIES
 from rent_navigator.models import ISODate, SourceCommit
 from rent_navigator.provider import MessagesPort, ProviderFailure, SpendLedger, create_client
 
-COLLECTION_FORECAST = Decimal("29.15320")
+COLLECTION_FORECAST = (
+    298 * MODEL_POLICIES[ACTOR_MODEL].reservation_usd
+    + 160 * MODEL_POLICIES[JUDGE_MODEL].reservation_usd
+)
 PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing"
 
 
@@ -92,7 +96,7 @@ def add_collection_commands(commands: Any) -> None:
             "--cap-usd",
             type=_amount,
             required=True,
-            help="Flat cap, at most 32 USD for collection or 1 USD for dry run",
+            help="Flat cap, at most 43 USD for collection or 1 USD for dry run",
         )
         child.add_argument(
             "--forecast-usd",
@@ -138,7 +142,7 @@ def add_collection_commands(commands: Any) -> None:
 
 def collection_command(arguments: argparse.Namespace) -> None:
     cap, forecast = arguments.cap_usd, arguments.forecast_usd
-    maximum = Decimal("32.00") if arguments.command == "collect" else Decimal("1.00")
+    maximum = Decimal("43.00") if arguments.command == "collect" else Decimal("1.00")
     if (
         not cap.is_finite()
         or not 0 <= cap <= maximum

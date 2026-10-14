@@ -282,7 +282,7 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
     assert evaluated.judgment == result(value)
     validate_smoke_result(value, evaluated.judgment)
     assert evaluated.cost.actual_cost_usd == Decimal("0.003")
-    assert evaluated.cost.reserved_cost_usd == Decimal("0.13192")
+    assert evaluated.cost.reserved_cost_usd == Decimal("0.21384")
     assert test.budget.committed_usd == Decimal("0.003")
     assert len(test.port.counts) == len(test.port.creates) == 1
     count, create = test.port.counts[0], test.port.creates[0]
@@ -291,11 +291,11 @@ def test_exact_judge_configuration_count_then_one_generation_and_separate_accoun
         for key, item in create.items()
         if key not in {"max_tokens", "stream", "service_tier", "timeout"}
     } == {key: item for key, item in count.items() if key != "timeout"}
-    assert create["max_tokens"] == 8192
+    assert create["max_tokens"] == 16384
     assert create["thinking"] == {"type": "adaptive", "display": "omitted"}
     assert create["output_config"]["effort"] == "high"
     assert not ({"temperature", "top_p", "top_k", "extra_body", "tools"} & set(create))
-    assert create["timeout"] == pytest.approx(179.9)
+    assert create["timeout"] == pytest.approx(299.9)
     assert [item.provider_operation for item in evaluated.records] == [
         "count_tokens",
         "generation",
@@ -379,8 +379,8 @@ def test_missing_generation_usage_retains_reservation_and_safe_failure(
         test.run()
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
-    assert test.budget.committed_usd == Decimal("0.13192") and test.budget.stopped
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
+    assert test.budget.committed_usd == Decimal("0.21384") and test.budget.stopped
     assert SENTINEL not in test.metadata.getvalue() + test.raw.getvalue() + str(caught.value)
     test.verify(accounting)
 
@@ -425,8 +425,8 @@ def test_real_judge_preserves_exact_failure_version_reason_and_unknown_hold(
         test.run()
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
-    assert test.budget.committed_usd == Decimal("0.13192") and test.budget.stopped
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
+    assert test.budget.committed_usd == Decimal("0.21384") and test.budget.stopped
     assert len(test.port.counts) == len(test.port.creates) == 1
     terminal = test.records()[-1]
     assert terminal.event == "failure" and terminal.operation == "generation"
@@ -487,7 +487,7 @@ def test_raw_failure_envelope_rejects_invalid_version_reason_and_payload(
     with pytest.raises(ValidationError):
         RawJudgeRecord.model_validate_json(terminal.model_dump_json())
     assert caught.value.accounting.cost.actual_cost_usd is None
-    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.13192")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.21384")
 
 
 def test_absent_usage_on_returned_response_is_incomplete(value: JudgeInput) -> None:
@@ -496,7 +496,7 @@ def test_absent_usage_on_returned_response_is_incomplete(value: JudgeInput) -> N
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.accounting.cost.actual_cost_usd is None
-    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.21384")
     assert test.budget.stopped
     assert len(test.records()) == 4
 
@@ -523,14 +523,14 @@ def test_full_deadline_covers_count_generation_and_final_validation(
 ) -> None:
     test = harness(value)
     if stage == "count":
-        test.port.count_delay = 180
+        test.port.count_delay = 300
     elif stage == "generation":
-        test.port.generation_delay = 180
+        test.port.generation_delay = 300
     else:
 
         def slow_parse(response: Message, input_value: JudgeInput) -> JudgeResult:
             parsed = parse_judgment(response, input_value)
-            test.clock.now += 180
+            test.clock.now += 300
             return parsed
 
         monkeypatch.setattr("rent_navigator.eval.judge.parse_judgment", slow_parse)
@@ -726,7 +726,7 @@ def test_missing_usage_response_keeps_null_cost_during_partial_evidence_verifica
     test.verify(accounting)
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
 
 
 @pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
@@ -743,8 +743,8 @@ def test_native_boolean_usage_survives_judge_recording_and_failed_replay(
     assert caught.value.code == "provider_error"
     accounting = caught.value.accounting
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == Decimal(".13192")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal(".13192")
+    assert accounting.cost.reserved_cost_usd == Decimal(".21384")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".21384")
     assert test.records()[-1].value["usage"][field] is True
     test.verify(accounting)
     with pytest.raises(JudgeFailure):
@@ -810,7 +810,7 @@ def count_failure(
 
     async def count(**kwargs: Any) -> MessageTokensCount:
         test.port.counts.append(deepcopy(kwargs))
-        test.clock.now = 191 if expired else 10.1
+        test.clock.now = 311 if expired else 10.1
         return MessageTokensCount.model_construct(**tokens)
 
     monkeypatch.setattr(test.port, "count_tokens", count)
@@ -961,7 +961,7 @@ def test_failed_native_usage_shapes_have_faithful_or_safe_judge_evidence(
         test.run()
     accounting = caught.value.accounting
     assert caught.value.code == "provider_error" and accounting.cost.actual_cost_usd is None
-    assert test.budget.stopped and test.budget.committed_usd == Decimal(".13192")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal(".21384")
     terminal = test.records()[-1]
     if shape in {"object", "non_sdk"}:
         assert terminal.event == "failure" and terminal.value == {
@@ -1032,8 +1032,8 @@ def test_judge_model_anomaly_keeps_raw_tokens_but_unknown_pricing_and_full_hold(
     assert accounting.cost.actual_cost_usd is None
     assert not accounting.cost.usage_complete
     assert accounting.cost.input_tokens is None and accounting.cost.output_tokens is None
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.21384")
     assert len(test.port.counts) == len(test.port.creates) == 1
     generation = next(
         record for record in accounting.records if record.provider_operation == "generation"

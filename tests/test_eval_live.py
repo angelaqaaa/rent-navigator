@@ -32,7 +32,7 @@ from rent_navigator.eval.live import (
 from rent_navigator.eval.live_budget import LiveBudget, receipt_from_events
 from rent_navigator.eval.models import CASE_IDS
 from rent_navigator.eval.offline import Baseline, file_hash, run_offline
-from rent_navigator.eval.permit import LivePermit
+from rent_navigator.eval.permit import LivePermit, _reservation
 from rent_navigator.extract import EXTRACTION_SYSTEM
 from rent_navigator.index import build_index, search
 from rent_navigator.model_policy import MODEL_POLICIES, RequestedModel
@@ -58,10 +58,10 @@ def permit(baseline_sha256: str = "7" * 64) -> LivePermit:
         funded_slot="synthetic_regression",
         max_actor_calls=77,
         max_judge_calls=39,
-        reserved_usd=Decimal("7.22388"),
+        reserved_usd=_reservation(77, 39),
         incurred_usd=Decimal("0.676401"),
         held_usd=Decimal(0),
-        still_required_usd=Decimal("30.64364"),
+        still_required_usd=_reservation(298, 160) + 7 * _reservation(3, 1),
         development_cap_usd=Decimal(62),
         provider_funding_usd=Decimal(75),
         demo_reserved_usd=Decimal(9),
@@ -449,7 +449,7 @@ def test_native_boolean_judge_usage_retains_failed_gate_replay(
     assert getattr(accounting.cost, field) is None
     receipt = json.loads((fixture.directory / "receipt.json").read_text())
     assert Decimal(receipt["actual_usd"]) == Decimal("0.003")
-    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.13192")
+    assert Decimal(receipt["unresolved_hold_usd"]) == Decimal("0.21384")
     assert not receipt["complete"]
     failed = verify(fixture, require_pass=False)
     assert not failed.passed and not failed.evaluation_complete
@@ -566,7 +566,7 @@ def test_known_usage_refunds_reservation_and_preserves_future_reserves() -> None
     )
     receipt = budget.receipt()
     assert receipt.actual_usd == Decimal("0.003") and receipt.unresolved_hold_usd == 0
-    assert receipt.permit.still_required_usd == Decimal("30.64364")
+    assert receipt.permit.still_required_usd == Decimal("44.32428")
 
 
 @pytest.mark.parametrize(

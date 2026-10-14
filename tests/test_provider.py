@@ -236,7 +236,7 @@ def assert_accounting(
 
 @pytest.mark.parametrize(
     ("model", "max_tokens", "actual", "reservation"),
-    [(ACTOR_MODEL, 1200, "0.0015", "0.027"), (JUDGE_MODEL, 8192, "0.003", "0.13192")],
+    [(ACTOR_MODEL, 1200, "0.0015", "0.027"), (JUDGE_MODEL, 16384, "0.003", "0.21384")],
 )
 def test_fixed_generation_settings_and_count_payload_parity(
     model: RequestedModel, max_tokens: int, actual: str, reservation: str
@@ -332,8 +332,8 @@ def test_no_optional_generation_features_are_inserted() -> None:
     [
         (ACTOR_MODEL, 20000, True, "0.0015", "0.027"),
         (ACTOR_MODEL, 20001, False, "0.0015", "0.027"),
-        (JUDGE_MODEL, 24000, True, "0.003", "0.13192"),
-        (JUDGE_MODEL, 24001, False, "0.003", "0.13192"),
+        (JUDGE_MODEL, 24000, True, "0.003", "0.21384"),
+        (JUDGE_MODEL, 24001, False, "0.003", "0.21384"),
     ],
 )
 def test_preflight_limit_rejects_before_any_paid_call(
@@ -375,7 +375,7 @@ def test_invalid_count_response_never_enters_generation(estimate: object) -> Non
     ],
 )
 @pytest.mark.parametrize(
-    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")]
 )
 def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
     usage: object,
@@ -405,7 +405,7 @@ def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
     ],
 )
 @pytest.mark.parametrize(
-    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")]
 )
 def test_nonzero_unpriced_categories_make_entire_cost_unknown(
     extra: dict[str, Any], model: RequestedModel, reservation: str
@@ -446,8 +446,8 @@ def test_zero_categories_and_nonbilling_metadata_preserve_known_usage(
     [
         (ACTOR_MODEL, 21000, False, "0.0215", "0.027"),
         (ACTOR_MODEL, 21001, True, "0.021501", "0.027"),
-        (JUDGE_MODEL, 25000, False, "0.051", "0.13192"),
-        (JUDGE_MODEL, 25001, True, "0.051002", "0.13192"),
+        (JUDGE_MODEL, 25000, False, "0.051", "0.21384"),
+        (JUDGE_MODEL, 25001, True, "0.051002", "0.21384"),
     ],
 )
 def test_input_reservation_overage_keeps_exact_cost_and_stops_further_batches(
@@ -518,7 +518,7 @@ def test_unverified_returned_model_preserves_full_hold_and_raw_usage(
         )
     fake, ledger = RecordingMessages(response), SpendLedger(Decimal("1"))
     outcome = asyncio.run(perform(fake, ledger, model=model))
-    reservation = "0.027" if model == ACTOR_MODEL else "0.13192"
+    reservation = "0.027" if model == ACTOR_MODEL else "0.21384"
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
     generation = next(r for r in outcome.records if r.provider_operation == "generation")
@@ -546,8 +546,8 @@ def test_invalid_generation_outcomes_preserve_known_cost(stop: str) -> None:
     [
         (ACTOR_MODEL, 1200, "0.007", "0.027", True),
         (ACTOR_MODEL, 1201, "0.007005", "0.027", False),
-        (JUDGE_MODEL, 8192, "0.08392", "0.13192", True),
-        (JUDGE_MODEL, 8193, "0.08393", "0.13192", False),
+        (JUDGE_MODEL, 16384, "0.16584", "0.21384", True),
+        (JUDGE_MODEL, 16385, "0.16585", "0.21384", False),
     ],
 )
 def test_output_above_fixed_budget_is_invalid_but_not_free(
@@ -741,7 +741,7 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
 
 
 @pytest.mark.parametrize(
-    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")]
 )
 def test_task_cancellation_records_inflight_generation_and_leaves_no_background_call(
     model: RequestedModel, reservation: str
@@ -806,7 +806,7 @@ def test_unpriced_service_tier_requires_reforecast(tier: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")]
 )
 def test_zero_usage_is_known_free_and_reservation_refund_permits_the_next_call(
     model: RequestedModel, reservation: str

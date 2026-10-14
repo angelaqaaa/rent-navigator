@@ -7,7 +7,7 @@
   },
   "packet_policy_version": 3,
   "wire_policy_version": 8,
-  "judge_config_hash": "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04",
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
   "historical_manifest_sha256": "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81",
   "historical_sizing_file_sha256": "4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b",
   "provider_calls": 0,

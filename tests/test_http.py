@@ -2,14 +2,17 @@
 
 import asyncio
 import json
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from io import StringIO
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import httpx
 import pytest
-from anthropic.types import MessageTokensCount
+from anthropic.types import Message, MessageTokensCount
 from eval_fixtures import canonical_hits
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -18,9 +21,10 @@ from test_eval_real_collection import SyntheticRealCompositionPort
 from rent_navigator.admission import Admission, DailyBudget
 from rent_navigator.app import create_app
 from rent_navigator.corpus import Corpus, load_corpus
+from rent_navigator.eval.data import load_gold
 from rent_navigator.models import ERROR_HTTP_STATUSES, ErrorCode, ErrorResponse, disclaimer_for
-from rent_navigator.provider import ProviderFailure
-from rent_navigator.trace import TraceRecord
+from rent_navigator.provider import Deadline, ProviderFailure
+from rent_navigator.trace import TraceRecord, provider_cost_totals
 
 SOURCE = "1" * 40
 ORIGIN = "https://example.test"
@@ -208,6 +212,162 @@ def test_http_deadline_covers_free_preflight_before_generation(corpus: Corpus) -
         response = client.post("/api/ask", json=question())
     assert response.status_code == 504 and response.json()["error"]["code"] == "deadline_exceeded"
     assert port.actor_calls == 0
+
+
+@pytest.mark.parametrize(
+    "phase,committed,actual,preflights,generations",
+    [
+        ("body", "0", "0", 0, 0),
+        ("preflight", "0", "0", 1, 0),
+        ("generation", "0.027", None, 1, 1),
+        ("second_preflight", "0.0015", "0.0015", 2, 1),
+    ],
+)
+def test_external_request_cancellation_propagates_and_reconciles(
+    corpus: Corpus,
+    phase: str,
+    committed: str,
+    actual: str | None,
+    preflights: int,
+    generations: int,
+) -> None:
+    async def run() -> None:
+        ready, blocked = asyncio.Event(), asyncio.Event()
+        secret = "Synthetic private cancellation tenant@example.test."
+
+        class BlockingBody(httpx.AsyncByteStream):
+            async def __aiter__(self) -> AsyncIterator[bytes]:
+                ready.set()
+                await blocked.wait()
+                yield secret.encode()
+
+        class BlockingPort(SyntheticRealCompositionPort):
+            preflights = 0
+            generations = 0
+
+            async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+                self.preflights += 1
+                if phase == "preflight" or phase == "second_preflight" and self.preflights == 2:
+                    ready.set()
+                    await blocked.wait()
+                return await super().count_tokens(**kwargs)
+
+            async def create(self, **kwargs: Any) -> Message:
+                self.generations += 1
+                if phase == "generation":
+                    ready.set()
+                    await blocked.wait()
+                return await super().create(**kwargs)
+
+        stream, port = StringIO(), BlockingPort()
+        budget = DailyBudget(clock=lambda: fresh_clock(corpus))
+        gate = Admission(public_origin=ORIGIN, budget=budget)
+        app = create_app(
+            source_commit=SOURCE,
+            corpus=corpus,
+            messages=port,
+            metadata=stream,
+            admission=gate,
+            retrieve=lambda query: canonical_hits(corpus, query),
+            wall_clock=lambda: fresh_clock(corpus),
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            if phase == "body":
+                request = client.post("/api/ask", content=BlockingBody())
+            elif phase == "generation":
+                request = client.post(
+                    "/api/extract", json={"attempt_id": str(uuid4()), "letter": secret}
+                )
+            elif phase == "second_preflight":
+                case = next(row for row in load_gold(Path("eval"), corpus).cases if row.id == "R01")
+                request = client.post("/api/ask", json=case.request.model_dump(mode="json"))
+            else:
+                request = client.post("/api/ask", json={**question(), "question": secret})
+            task = asyncio.create_task(request)
+            try:
+                await asyncio.wait_for(ready.wait(), 2)
+                assert task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                assert task.cancelled() and task.cancelling() == 1
+            finally:
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+        records = [TraceRecord.model_validate_json(line) for line in stream.getvalue().splitlines()]
+        endpoints = [row for row in records if row.record_kind == "endpoint"]
+        assert len(endpoints) == 1 and endpoints[0].response_code == "deadline_exceeded"
+        assert port.preflights == preflights and port.generations == generations
+        assert (
+            len([row for row in records if row.provider_operation == "generation"]) == generations
+        )
+        totals = provider_cost_totals(records)
+        assert totals.actual_cost_usd == (Decimal(actual) if actual is not None else None)
+        assert totals.usage_complete is (actual is not None)
+        assert endpoints[0].actual_cost_usd == totals.actual_cost_usd
+        assert endpoints[0].usage_complete == totals.usage_complete
+        if actual is None:
+            assert totals.reserved_cost_usd == endpoints[0].reserved_cost_usd == Decimal("0.027")
+        assert budget.committed_usd == Decimal(committed)
+        assert budget.stopped is (actual is None)
+        assert budget._pending == {} and gate._semaphore._value == 2
+        assert secret not in stream.getvalue() and "tenant@example.test" not in stream.getvalue()
+
+    asyncio.run(run())
+
+
+def test_internal_http_timeout_keeps_504_and_releases_admission(
+    corpus: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requested_durations: list[float] = []
+    original_start = Deadline.start
+
+    def short_deadline(*, clock: Callable[[], float], duration_seconds: float) -> Deadline:
+        requested_durations.append(duration_seconds)
+        return original_start(clock=clock, duration_seconds=0.1)
+
+    monkeypatch.setattr(Deadline, "start", short_deadline)
+
+    async def run() -> None:
+        class BlockingPort(SyntheticRealCompositionPort):
+            async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+                await asyncio.Event().wait()
+                return await super().count_tokens(**kwargs)
+
+        stream, port = StringIO(), BlockingPort()
+        budget = DailyBudget(clock=lambda: fresh_clock(corpus))
+        gate = Admission(public_origin=ORIGIN, budget=budget)
+        app = create_app(
+            source_commit=SOURCE,
+            corpus=corpus,
+            messages=port,
+            metadata=stream,
+            admission=gate,
+            wall_clock=lambda: fresh_clock(corpus),
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            task = asyncio.create_task(
+                client.post(
+                    "/api/extract",
+                    json={"attempt_id": str(uuid4()), "letter": "Synthetic letter."},
+                )
+            )
+            response = await asyncio.wait_for(task, 2)
+            assert not task.cancelled() and task.cancelling() == 0
+        assert response.status_code == 504
+        assert ErrorResponse.model_validate_json(response.content).error.code == "deadline_exceeded"
+        records = [TraceRecord.model_validate_json(line) for line in stream.getvalue().splitlines()]
+        assert len([row for row in records if row.record_kind == "endpoint"]) == 1
+        assert port.actor_calls == 0 and budget.committed_usd == 0
+        assert budget._pending == {} and gate._semaphore._value == 2
+
+    asyncio.run(run())
+    assert requested_durations == [45.0]
 
 
 def test_framework_422_is_the_safe_error_envelope(corpus: Corpus) -> None:

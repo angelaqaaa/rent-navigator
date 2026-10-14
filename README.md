@@ -87,7 +87,7 @@ Both HTTP routes and local collection reject a corpus older than 90 days. Admiss
 
 ## Local image collection and dry run
 
-These entry points are implemented, but a command is not paid authority. The owner currently prohibits collection on the calibrated judge configuration pending the separate design decision. No judge configuration, rubric, labels or evidence changed in this integration. A future paid command requires a fresh exact-command go with its cap.
+These entry points are implemented, but a command is not paid authority. The calibration gate remains failed; the owner's 2026-10-14 conditional release decision is recorded in `CONTRACTS.md`, and collection remains held pending fresh paid execution approval and subject to its disclosure, targeted audit and judge freeze obligations. No judge configuration, rubric, labels or evidence changed in this integration. A future paid command requires a fresh exact-command go with its cap.
 
 Keyless help:
 

@@ -263,7 +263,10 @@ def create_app(
                     )
                 code = "ok"
                 return JSONResponse(content=response.model_dump(mode="json"))
-        except (ProviderFailure, asyncio.CancelledError) as error:
+        except asyncio.CancelledError:
+            code = "deadline_exceeded"
+            raise
+        except ProviderFailure as error:
             failure = ProviderFailure.from_exception(error)
         except Exception:
             failure = ProviderFailure("provider_error")

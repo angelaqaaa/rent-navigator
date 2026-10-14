@@ -572,7 +572,16 @@ def test_generated_answer_refusal_discriminator_invariants(payload: JsonObject) 
 
 
 @pytest.mark.parametrize(
-    "ids", [["s2"], ["s1", "s1"], ["s1", "s3"], ["s2", "s1"], ["s1", "s2", "s3", "s4", "s5"]]
+    "ids",
+    [
+        ["s2"],
+        ["s1", "s1"],
+        ["s1", "s3"],
+        ["s2", "s1"],
+        ["s1", "s2", "s3", "s4", "s6"],
+        ["s1", "s2", "s3", "s4", "s5", "s5"],
+        ["s1", "s2", "s3", "s4", "s5", "s6", "s7"],
+    ],
 )
 def test_statement_sequence_is_fixed_for_generated_and_http_outputs(ids: list[str]) -> None:
     statements = [{**statement(), "id": statement_id} for statement_id in ids]
@@ -584,13 +593,49 @@ def test_statement_sequence_is_fixed_for_generated_and_http_outputs(ids: list[st
         AskResponse.model_validate_json(json.dumps({**ask_response(), "statements": statements}))
 
 
-def test_four_statements_and_240_unicode_characters_are_supported() -> None:
-    statements = [{**statement(), "id": f"s{index}", "text": "租" * 240} for index in range(1, 5)]
-    GeneratedResult.model_validate_json(
-        json.dumps({"kind": "answer", "refusal_reason": None, "statements": statements})
-    )
+@pytest.mark.parametrize("length", [1, 240, 241, 350, 599, 600])
+def test_six_statements_preserve_allowed_unicode_text_and_citations(length: int) -> None:
+    statements = [
+        {
+            **statement(),
+            "id": f"s{index}",
+            "text": "租" * length,
+            "citation_ids": ["a" * 64],
+        }
+        for index in range(1, 7)
+    ]
+    generated = {"kind": "answer", "refusal_reason": None, "statements": statements}
+    response = {
+        **ask_response(),
+        "answer": "\n".join(item["text"] for item in statements),
+        "statements": statements,
+        "citations": [citation()],
+    }
+    for model, payload in ((GeneratedResult, generated), (AskResponse, response)):
+        parsed = model.model_validate_json(json.dumps(payload))
+        assert json.loads(parsed.model_dump_json()) == payload
+
+
+@pytest.mark.parametrize("text", ["", "租" * 601, None, True, 1, 1.5, [], {}])
+def test_statement_text_rejects_size_violations_and_nonstring_wire_types(text: object) -> None:
+    invalid = {**statement(), "text": text}
+    for model, payload in (
+        (Statement, invalid),
+        (GeneratedResult, {"kind": "answer", "refusal_reason": None, "statements": [invalid]}),
+        (AskResponse, {**ask_response(), "statements": [invalid]}),
+    ):
+        with pytest.raises(ValidationError):
+            model.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("status,statements", [("answered", []), ("refused", [statement()])])
+def test_http_answer_and_refusal_statement_requirements_are_unchanged(
+    status: str, statements: list[JsonObject]
+) -> None:
     with pytest.raises(ValidationError):
-        Statement.model_validate_json(json.dumps({**statement(), "text": "租" * 241}))
+        AskResponse.model_validate_json(
+            json.dumps({**ask_response(), "status": status, "statements": statements})
+        )
 
 
 def test_baseline_generated_statements_may_have_no_citations() -> None:

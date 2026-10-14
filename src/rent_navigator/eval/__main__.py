@@ -30,7 +30,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         if command == "verify-offline":
             child.add_argument("--manifest-sha256", required=True)
             child.add_argument("--prerequisites", required=True)
+    from rent_navigator.eval.live_cli import add_commands, live_command
+
+    add_commands(commands)
     arguments = parser.parse_args(argv)
+    if arguments.command in {"live-gate", "verify-live"}:
+        try:
+            live_command(arguments)
+        except Exception:
+            parser.exit(1, "Live execution or evidence verification failed safely.\n")
+        return
     try:
         corpus = load_corpus()
         if arguments.command in {"validate-gold", "plan"}:

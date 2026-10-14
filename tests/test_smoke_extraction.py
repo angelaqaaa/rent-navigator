@@ -27,7 +27,7 @@ def test_offline_smoke_records_synthetic_successes_without_real_client(
     assert report["live_acceptance"] == "NOT RUN"
     assert report["real_generation_attempts"] == 0
     assert report["generation_attempts"] == 2
-    assert report["budget_reservation_limit_usd"] == "0.038"
+    assert report["budget_reservation_limit_usd"] == "0.054"
     assert report["availability"] == []
     assert [case["matches_expected"] for case in report["cases"]] == [True, True]
     assert report["cases"][0]["extraction"] == {
@@ -42,7 +42,7 @@ def test_offline_smoke_records_synthetic_successes_without_real_client(
         for line in (evidence / "metadata.jsonl").read_text().splitlines()
     ]
     assert len(records) == 6
-    assert report["token_accounting"]["reserved_cost_usd"] == "0.038"
+    assert report["token_accounting"]["reserved_cost_usd"] == "0.054"
     assert provider_cost_totals(records).model_dump(mode="json") == report["token_accounting"]
     for _, letter, _ in smoke.CASES:
         assert letter not in (evidence / "metadata.jsonl").read_text()
@@ -155,5 +155,5 @@ def test_live_control_flow_with_fake_client_preserves_attempts_and_stops(
     assert report["live_acceptance"] == ("PASS" if outcome == "success" else "INCOMPLETE")
     if outcome == "missing_usage":
         assert report["token_accounting"]["actual_cost_usd"] is None
-        assert report["token_accounting"]["reserved_cost_usd"] == "0.019"
+        assert report["token_accounting"]["reserved_cost_usd"] == "0.027"
         assert report["reforecast_required"]

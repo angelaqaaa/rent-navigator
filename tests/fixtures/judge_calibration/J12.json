@@ -1,0 +1,96 @@
+{
+  "adjudication_notes": [
+    "The frozen required claim explicitly excludes covered care-home units from N1. The answer says any covered unit, so the proposed claim result is contradicted rather than treating every missing qualification as missing. The same source supplies the N3 counterexample. Independent review must adjudicate the final full claim and target grades before execution."
+  ],
+  "derivation": "Derived from J11: remove only the non-care-home qualification and make the covered-unit mapping universal with any. Required claim and full source remain unchanged.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "contradicted"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "unsupported",
+        "factual": "contradicted"
+      }
+    }
+  },
+  "fixture_id": "J12",
+  "provider_packet": {
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1"
+        ],
+        "heading": "N2 instructions — Section B: When to use a different notice",
+        "id": "159f1606191fb2ba2371af88f610c3a5ea219bb31502ac68565c23a3707b95d8",
+        "reference": "e1",
+        "text": "SECTION\nB When to use a different notice\n\nThere are three other notices that a landlord can use when increasing a tenant’s rent:\n\n• Use Form N1 to increase the rent for any rental unit (other than a care home\nrental unit) that is covered by the rules limiting rent increases under the RTA.\n• Use Form N3 (Notice to Increase the Rent and/or Charges for Care Services and\nMeals) to increase the rent for any care home unit that is covered by the rules\nlimiting rent increases under the Residential Tenancies Act, 2006.\n• Use Form N10 if you and the tenant have agreed to increase the rent above the\nguideline because you:\n have done or will do capital work, or\n have provided or will provide a new or additional service."
+      }
+    ],
+    "expected_tool_result": null,
+    "observed_tool_result": null,
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "For an ordinary increase under the RTA rules limiting rent increases, the N1 mapping for covered rental units excludes care-home rental units."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "159f1606191fb2ba2371af88f610c3a5ea219bb31502ac68565c23a3707b95d8"
+        ],
+        "id": "s1",
+        "text": "For an ordinary increase, Form N1 is used for any rental unit covered by the RTA rules limiting rent increases."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "The required claim excludes covered care-home units from N1, but the answer includes any covered rental unit; the source specifies N3 for that excluded category.",
+        "result": "contradicted"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "The own passage limits N1 to non-care-home units and cannot support the universal claim.",
+          "tool_fields": []
+        },
+        "citation_support": "unsupported",
+        "factual": "contradicted",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "The source specifies N3 for covered care-home units, a counterexample to N1 for any covered rental unit.",
+          "tool_fields": []
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "snapshot:C50",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "N1 mapping with material qualification removed"
+}

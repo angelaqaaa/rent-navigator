@@ -1,0 +1,108 @@
+{
+  "adjudication_notes": [],
+  "derivation": "Handwritten narrow positive control from the complete frozen section 191(3) passage. No dates or arithmetic are invented.",
+  "expected_judgment": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_support": "supported",
+        "factual": "supported"
+      }
+    }
+  },
+  "fact_authority_derivation": {
+    "approval_file_sha256": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+    "approved_case_id": null,
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "fact_source": "null",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "historical_amount_gap": false,
+    "historical_fixture_file": "tests/fixtures/judge_calibration/J09.json",
+    "historical_fixture_sha256": "28222d442e80474a955479291713dac90e7cb18a6717543a7483c4420814303a",
+    "packet_policy_version": 3,
+    "schema_version": 1,
+    "wire_policy_version": 5
+  },
+  "fixture_id": "J09",
+  "provider_packet": {
+    "approved_facts": null,
+    "evidence": [
+      {
+        "canonical": true,
+        "cited_by": [
+          "s1"
+        ],
+        "heading": "RTA s. 191 — How notice or document given",
+        "id": "f98fecd206abbbaf02afa4334a3275ae052e19d5ee8f5b609c28f22a96fcc05a",
+        "reference": "e1",
+        "text": "(2) A notice or document that is not given in accordance with this section shall be deemed to have been validly given if it is proven that its contents actually came to the attention of the person for whom it was intended within the required time period. 2006, c. 17, s. 191 (2).\n\nMail\n\n(3) A notice or document given by mail shall be deemed to have been given on the fifth day after mailing. 2006, c. 17, s. 191 (3)."
+      }
+    ],
+    "expected_tool_result": null,
+    "observed_tool_result": null,
+    "required_claims": [
+      {
+        "id": "c1",
+        "text": "An ordinary notice given by mail is deemed given on the fifth day after mailing, rather than on the dispatch day."
+      }
+    ],
+    "statements": [
+      {
+        "citation_ids": [
+          "f98fecd206abbbaf02afa4334a3275ae052e19d5ee8f5b609c28f22a96fcc05a"
+        ],
+        "id": "s1",
+        "text": "Under section 191(3), a notice or document given by mail is deemed to have been given on the fifth day after mailing."
+      }
+    ]
+  },
+  "purpose": "synthetic_non_scored_judge_calibration",
+  "representative_audit_output": {
+    "false_pass": false,
+    "policy_violations": [],
+    "required_claims": {
+      "c1": {
+        "answer_statement_ids": [
+          "s1"
+        ],
+        "coverage_basis": "s1 express this required meaning: An ordinary notice given by mail is deemed given on the fifth day after mailing, rather than on the dispatch day.",
+        "result": "met"
+      }
+    },
+    "statements": {
+      "s1": {
+        "citation_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "Section 191(3) expressly deems a mailed notice given on the fifth day after mailing.",
+          "tool_fields": []
+        },
+        "citation_support": "supported",
+        "factual": "supported",
+        "factual_basis": {
+          "evidence_refs": [
+            "e1"
+          ],
+          "summary": "Section 191(3) expressly deems a mailed notice given on the fifth day after mailing.",
+          "tool_fields": []
+        }
+      }
+    }
+  },
+  "review_status": "proposed_expectations_pending_independent_review",
+  "source_provenance": {
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "diagnostic_run_id": "53daaeff-1d09-4dd3-9cae-7ed4cbe9bce8",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "original_key": "snapshot:C26",
+    "source_sha": "defceb35a175b95162b9d13ef7d27e40c3164817"
+  },
+  "title": "Ordinary fifth-day mail service"
+}

@@ -30,6 +30,7 @@ from test_extract import synthetic_message
 import rent_navigator.agent as agent_module
 import rent_navigator.extract as extract_module
 from rent_navigator.agent import RetrievalContext, agent_config_hash
+from rent_navigator.context import context_provenance
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.extract import extract_letter, extraction_config_hash
 from rent_navigator.guards import REDACTION_POLICY_HASH, redact_text
@@ -85,16 +86,24 @@ def payload_of(parameters: dict[str, Any]) -> dict[str, Any]:
 
 def assert_isolated(harness: Harness, case: SecurityCase) -> None:
     assert case.injected_retrieved_text is not None
+    provenance = context_provenance(
+        harness.request.mode,
+        harness.arm,
+        tuple(hit.chunk.id for hit in harness.hits),
+        harness.corpus,
+    )
     for parameters in (*harness.fake.counts, *harness.fake.creates):
         payload = payload_of(parameters)
         assert payload["untrusted_retrieved_text"] == case.injected_retrieved_text
         assert payload["evidence"] == [
-            {"id": hit.chunk.id, "heading": hit.chunk.heading, "text": hit.chunk.text}
-            for hit in harness.hits
+            {"id": chunk.id, "heading": chunk.heading, "text": chunk.text}
+            for chunk in (harness.corpus.chunk(i) for i in provenance.initial_context_evidence_ids)
         ]
         assert case.injected_retrieved_text not in json.dumps(parameters["system"])
     endpoint = harness.endpoint()
     assert endpoint.retrieved_evidence_ids == tuple(hit.chunk.id for hit in harness.hits)
+    assert endpoint.foundation_evidence_ids == tuple(provenance.foundation_evidence_ids)
+    assert endpoint.initial_context_evidence_ids == tuple(provenance.initial_context_evidence_ids)
     assert case.injected_retrieved_text not in harness.stream.getvalue()
     assert_count_matches_generation(harness.fake)
 
@@ -133,14 +142,20 @@ def test_citations_require_supplied_canonical_evidence(
     forged: bool,
 ) -> None:
     case = cases[case_id]
+    harness = harness_for(case, corpus, [])
+    provenance = context_provenance(
+        harness.request.mode, "production", tuple(hit.chunk.id for hit in harness.hits), corpus
+    )
     identifier = (
         "0" * 64
         if forged
         else next(
-            chunk.id for chunk in corpus.chunks if chunk.id not in case.canonical_evidence_ids
+            chunk.id
+            for chunk in corpus.chunks
+            if chunk.id not in provenance.initial_context_evidence_ids
         )
     )
-    harness = harness_for(case, corpus, [final_message([identifier])])
+    harness.fake.responses = [final_message([identifier])]
     with pytest.raises(ProviderFailure) as caught:
         asyncio.run(harness.run(retrieve=lambda _: envelope(harness, case), redact=redact_text))
     assert caught.value.code == "invalid_generated_output"
@@ -268,6 +283,8 @@ def test_s05_baseline_never_receives_retrieval_or_sidecar(
         assert set(payload) == {"mode", "question"}
         assert case.injected_retrieved_text not in json.dumps(parameters)
     assert harness.endpoint().retrieved_evidence_ids == ()
+    assert harness.endpoint().foundation_evidence_ids == ()
+    assert harness.endpoint().initial_context_evidence_ids == ()
 
 
 def test_s06_contacts_redacted_before_extraction_and_question_requests(
@@ -634,6 +651,8 @@ def test_invalid_envelopes_fail_safely_before_provider(corpus: Corpus, invalid: 
     assert caught.value.code == "provider_error"
     assert not harness.fake.counts and not harness.fake.creates
     assert harness.endpoint().retrieved_evidence_ids == ()
+    assert harness.endpoint().foundation_evidence_ids == ()
+    assert harness.endpoint().initial_context_evidence_ids == ()
     assert "SENTINEL" not in str(caught.value) + harness.stream.getvalue()
 
 

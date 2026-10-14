@@ -262,8 +262,8 @@ class ToolResult(StrictModel):
 
 
 class Statement(StrictModel):
-    id: Literal["s1", "s2", "s3", "s4"]
-    text: Annotated[str, Field(max_length=240)]
+    id: Literal["s1", "s2", "s3", "s4", "s5", "s6"]
+    text: Annotated[str, Field(min_length=1, max_length=600)]
     citation_ids: list[str]
 
 
@@ -277,7 +277,7 @@ def _validate_statement_sequence(statements: list[Statement]) -> None:
 class GeneratedResult(StrictModel):
     kind: Literal["answer", "refusal"]
     refusal_reason: RefusalReason | None
-    statements: Annotated[list[Statement], Field(max_length=4)]
+    statements: Annotated[list[Statement], Field(max_length=6)]
 
     @model_validator(mode="after")
     def answer_or_refusal(self) -> Self:
@@ -302,7 +302,7 @@ class AskResponse(StrictModel):
     trace_id: CanonicalUUID
     status: Literal["answered", "refused"]
     answer: str
-    statements: Annotated[list[Statement], Field(max_length=4)]
+    statements: Annotated[list[Statement], Field(max_length=6)]
     tool_result: ToolResult | None
     citations: list[Citation]
     snapshot_date: ISODate

@@ -11,10 +11,11 @@ from io import StringIO
 from typing import Annotated, Any, Literal, Protocol, TextIO
 from uuid import UUID, uuid4
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from rent_navigator.agent import agent_config_hash, answer
 from rent_navigator.corpus import Chunk, Corpus
+from rent_navigator.eval.judge_decode import JudgeDecodeReason
 from rent_navigator.eval.metrics import classify
 from rent_navigator.eval.models import (
     CASE_IDS,
@@ -26,31 +27,38 @@ from rent_navigator.eval.models import (
     JudgeResult,
     ResultRow,
 )
-from rent_navigator.eval.recording import SyntheticAllowlist, SyntheticRecorder
+from rent_navigator.eval.recording import RawProviderRecord, SyntheticAllowlist, SyntheticRecorder
 from rent_navigator.extract import extract_letter, extraction_config_hash
 from rent_navigator.guards import redact_text
 from rent_navigator.index import SearchHit
 from rent_navigator.models import (
     ASK_REQUEST_ADAPTER,
+    AskRequest,
     AskResponse,
     CanonicalUUID,
+    ErrorCode,
     ErrorDetail,
     ErrorResponse,
     Extraction,
     ExtractRequest,
+    NoticeFacts,
+    RentFacts,
     Sha256,
     SourceCommit,
     StrictModel,
     ToolResult,
+    ToolStatus,
     disclaimer_for,
 )
 from rent_navigator.provider import (
     Deadline,
+    FailureDiagnosticV2,
     MessagesPort,
     ProviderAdapter,
     ProviderFailure,
     SpendBudget,
 )
+from rent_navigator.security_cases import SecurityCaseId
 from rent_navigator.trace import (
     JUDGE_MODEL,
     PRICING_HASH,
@@ -60,8 +68,6 @@ from rent_navigator.trace import (
     TraceContext,
     TraceRecord,
     TraceRecorder,
-    Usage,
-    cost_for_usage,
     provider_cost_totals,
 )
 
@@ -146,6 +152,8 @@ def protocol_hash() -> str:
             "warmups": [entry.model_dump() for entry in warmups],
             "measured": [entry.model_dump() for entry in measured],
             "result_schema": ResultRow.model_json_schema(),
+            "raw_provider_schema": RawProviderRecord.model_json_schema(),
+            "trace_schema": TraceRecord.model_json_schema(),
             "judge_schema": JudgeResult.model_json_schema(),
             "rules": {
                 "latency": "sum of serving calls through trace completion; no judge",
@@ -157,6 +165,10 @@ def protocol_hash() -> str:
                 "classification": "exact, claims, factual, false_pass, policy",
                 "citation_gate": "separate production condition",
                 "retrieval": "macro MRR@5 and gain(2**grade-1) NDCG@5 over six QA",
+                "context": "required R/F/C; accepted analysis seeds independently recomputed",
+                "provider_evidence": (
+                    "native-token-type/strict-failed-replay/independent-input-limit/count-timeout-v2"
+                ),
             },
         }
     )
@@ -174,6 +186,32 @@ class JudgeEvaluation(JudgeAccounting):
     judgment: JudgeResult
 
 
+class JudgeFailure(Exception):
+    """A safe failure retaining all known judge accounting, never a judgment."""
+
+    def __init__(
+        self,
+        code: ErrorCode,
+        accounting: JudgeAccounting,
+        *,
+        diagnostic: FailureDiagnosticV2 | None = None,
+        decode_rejection_reason: JudgeDecodeReason | None = None,
+    ) -> None:
+        self.code = code
+        self.accounting = accounting
+        self.diagnostic = diagnostic or ProviderFailure(code).diagnostic
+        self.decode_rejection_reason: JudgeDecodeReason | None = TypeAdapter(
+            JudgeDecodeReason | None
+        ).validate_python(decode_rejection_reason, strict=True)
+        if self.decode_rejection_reason is not None and (
+            not isinstance(self.diagnostic, FailureDiagnosticV2)
+            or self.diagnostic.category != "local_guard"
+            or self.code not in {"invalid_generated_output", "provider_error"}
+        ):
+            raise ValueError("Local decode observations require a version-2 local guard")
+        super().__init__(ProviderFailure(code).message)
+
+
 def validate_judge_accounting(value: JudgeAccounting, context: TraceContext) -> None:
     if value.config_hash != context.config_hash or value.requested_model_id != JUDGE_MODEL:
         raise ValueError("Judge identity mismatch")
@@ -185,16 +223,15 @@ def validate_judge_accounting(value: JudgeAccounting, context: TraceContext) -> 
             or record.config_hash != context.config_hash
             or record.source_commit != context.source_commit
             or record.corpus_hash != context.corpus_hash
+            or record.pricing_hash != context.pricing_hash
+            or (record.record_kind == "provider_call" and record.requested_model_id != JUDGE_MODEL)
             for record in value.records
         )
         or sum(record.record_kind == "endpoint" for record in value.records) != 1
+        or sum(record.provider_operation == "generation" for record in value.records) > 1
     ):
         raise ValueError("Judge trace mismatch")
-    expected_cost = cost_for_usage(
-        JUDGE_MODEL,
-        Usage(input_tokens=value.cost.input_tokens, output_tokens=value.cost.output_tokens),
-    )
-    if value.cost != expected_cost or provider_cost_totals(value.records) != value.cost:
+    if provider_cost_totals(value.records) != value.cost:
         raise ValueError("Judge accounting mismatch")
     if value.returned_model_id is not None and any(
         record.returned_model_id != value.returned_model_id
@@ -202,6 +239,101 @@ def validate_judge_accounting(value: JudgeAccounting, context: TraceContext) -> 
         if record.provider_operation == "generation"
     ):
         raise ValueError("Judge returned model differs from call metadata")
+
+
+def _complete_fact_json(value: object) -> str:
+    if isinstance(value, NoticeFacts | RentFacts):
+        return value.model_dump_json()
+    return json.dumps(value)
+
+
+class ApprovedNoticeFacts(StrictModel):
+    """Complete approved scenario premises, validated by the declared notice kind."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    kind: Literal["notice"]
+    facts: NoticeFacts
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def complete_notice_facts(cls, value: object) -> NoticeFacts:
+        return NoticeFacts.model_validate_json(_complete_fact_json(value))
+
+
+class ApprovedRentFacts(StrictModel):
+    """Complete approved scenario premises, validated by the declared rent kind."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    kind: Literal["rent"]
+    facts: RentFacts
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def complete_rent_facts(cls, value: object) -> RentFacts:
+        return RentFacts.model_validate_json(_complete_fact_json(value))
+
+
+ApprovedFacts = Annotated[ApprovedNoticeFacts | ApprovedRentFacts, Field(discriminator="kind")]
+APPROVED_FACTS_ADAPTER: TypeAdapter[ApprovedFacts | None] = TypeAdapter(ApprovedFacts | None)
+
+
+def validate_approved_facts(value: object) -> ApprovedFacts | None:
+    """Revalidate complete actual facts before any base-class serialization can strip them."""
+    if isinstance(value, ApprovedNoticeFacts | ApprovedRentFacts):
+        value = {"kind": value.kind, "facts": json.loads(_complete_fact_json(value.facts))}
+    return APPROVED_FACTS_ADAPTER.validate_json(json.dumps(value))
+
+
+def approved_facts_from_request(request: AskRequest) -> ApprovedFacts | None:
+    """Read scenario facts by the declared mode; never infer them from observed outputs."""
+    envelope = (
+        validate_approved_facts(
+            {"kind": request.mode, "facts": json.loads(_complete_fact_json(request.facts))}
+        )
+        if request.mode != "question"
+        else None
+    )
+    ASK_REQUEST_ADAPTER.validate_json(request.model_dump_json())
+    return envelope
+
+
+def approved_facts_from_case(case: GoldCase) -> ApprovedFacts | None:
+    """Revalidate original approved-case equalities before reading its request premises."""
+    GoldCase.model_validate_json(case.model_dump_json())
+    return approved_facts_from_request(case.request)
+
+
+class JudgeSafetyContext(StrictModel):
+    """Trusted policy context; invariants need not appear as repeated answer text."""
+
+    policy_claims: Literal[True] = True
+    confirmed_facts: NoticeFacts | RentFacts | None
+    expected_tool_status: ToolStatus | None
+    policy_ids: tuple[SecurityCaseId, ...] = (
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S08",
+    )
+
+    @field_validator("policy_claims", mode="before")
+    @classmethod
+    def strict_policy_mode(cls, value: object) -> Literal[True]:
+        if value is not True:
+            raise ValueError("Safety policy mode must be boolean true")
+        return True
+
+    @model_validator(mode="after")
+    def fixed_policy_ids(self) -> "JudgeSafetyContext":
+        if self.policy_ids != ("S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08"):
+            raise ValueError("Safety context requires the fixed policy inventory")
+        return self
 
 
 @dataclass(frozen=True)
@@ -214,6 +346,20 @@ class JudgeInput:
     response: AskResponse
     actual_tool_result: ToolResult | None
     cited_evidence: tuple[Chunk, ...]
+    approved_facts: ApprovedFacts | None
+    safety_context: JudgeSafetyContext | None = None
+
+    def __post_init__(self) -> None:
+        envelope = validate_approved_facts(self.approved_facts)
+        object.__setattr__(self, "approved_facts", envelope)
+        if self.safety_context is not None:
+            confirmed = self.safety_context.confirmed_facts
+            if (None if confirmed is None else json.loads(_complete_fact_json(confirmed))) != (
+                None if envelope is None else envelope.facts.model_dump(mode="json")
+            ):
+                raise ValueError(
+                    "Safety confirmed facts must exactly match approved scenario facts"
+                )
 
 
 class JudgePort(Protocol):
@@ -262,12 +408,13 @@ async def run_attempt(
     judge_config_hash: str | None = None,
     warmup: bool = False,
     clock: Callable[[], float] = time.monotonic,
+    attempt_id: UUID | None = None,
 ) -> AttemptOutcome:
     """One attempt; extraction mismatch never feeds corrected facts to analysis."""
     allowlist.require(case)
     if case.id != entry.case_id:
         raise ValueError("Attempt does not match planned case")
-    attempt_id = uuid4()
+    attempt_id = attempt_id or uuid4()
     request_data = case.request.model_dump(mode="json")
     request_data["attempt_id"] = str(attempt_id)
     request = ASK_REQUEST_ADAPTER.validate_json(json.dumps(request_data))
@@ -348,6 +495,11 @@ async def run_attempt(
             trace.finish(code)
             latency_ms += (clock() - started) * 1000
 
+    def observed_retrieve(query: str) -> tuple[SearchHit, ...]:
+        hits = retrieve(query)
+        recorder.observe_retrieval(hits)
+        return hits
+
     if response is None and all(item.passed for item in assertions):
         ctx = context("analysis")
         analysis_started = True
@@ -357,7 +509,7 @@ async def run_attempt(
                 request,
                 provider=provider,
                 corpus=corpus,
-                retrieve=retrieve,
+                retrieve=observed_retrieve,
                 redact=redact_text,
                 deadline=Deadline.start(clock=clock),
                 context=ctx,
@@ -410,6 +562,18 @@ async def run_attempt(
         if record.record_kind == "endpoint" and record.phase == "analysis"
         for identifier in record.retrieved_evidence_ids
     ]
+    foundation_ids = [
+        identifier
+        for record in records
+        if record.record_kind == "endpoint" and record.phase == "analysis"
+        for identifier in record.foundation_evidence_ids
+    ]
+    initial_context_ids = [
+        identifier
+        for record in records
+        if record.record_kind == "endpoint" and record.phase == "analysis"
+        for identifier in record.initial_context_evidence_ids
+    ]
     cost = provider_cost_totals(records)
     if not cost.usage_complete:
         reasons.append("serving_usage_missing")
@@ -442,6 +606,7 @@ async def run_attempt(
                         cited_evidence=tuple(
                             corpus.chunk(citation.id) for citation in response.citations
                         ),
+                        approved_facts=approved_facts_from_case(case),
                     ),
                     context=judge_context,
                 )
@@ -465,6 +630,16 @@ async def run_attempt(
                     (claim.id for claim in case.required_claims),
                     (statement.id for statement in response.statements),
                 )
+            except JudgeFailure as error:
+                judged = None
+                try:
+                    validate_judge_accounting(error.accounting, judge_context)
+                    judge_accounting = error.accounting
+                    if not error.accounting.cost.usage_complete:
+                        reasons.append("judge_usage_missing")
+                except ValueError:
+                    reasons.append("judge_accounting_invalid")
+                reasons.append("judge_invalid")
             except asyncio.CancelledError:
                 judged = None
                 reasons.extend(("interrupted", "judge_invalid"))
@@ -494,6 +669,8 @@ async def run_attempt(
         attempt_id=attempt_id,
         trace_ids=trace_ids,
         retrieved_ids=retrieved_ids,
+        foundation_evidence_ids=foundation_ids,
+        initial_context_evidence_ids=initial_context_ids,
         response=response,
         actual_extract=actual_extract,
         actual_tool_args=actual_args,

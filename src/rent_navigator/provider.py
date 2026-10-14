@@ -13,12 +13,27 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from hashlib import sha256
 from threading import Lock
-from typing import Any, Protocol
+from typing import Annotated, Any, Literal, NoReturn, Protocol, Self
 
-from anthropic import APITimeoutError, AsyncAnthropic
+from anthropic import (
+    APIConnectionError,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncAnthropic,
+)
 from anthropic.types import Message, MessageParam, MessageTokensCount, ToolChoiceParam, ToolParam
 from anthropic.types import Usage as SDKUsage
-from pydantic import TypeAdapter, ValidationError
+from pydantic import (
+    ConfigDict,
+    Discriminator,
+    Field,
+    Tag,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from rent_navigator.model_policy import (
     ACTOR_MODEL,
@@ -27,7 +42,7 @@ from rent_navigator.model_policy import (
     RequestedModel,
     policy_manifest,
 )
-from rent_navigator.models import ErrorCode
+from rent_navigator.models import ErrorCode, StrictModel
 from rent_navigator.trace import (
     CostSummary,
     ReturnedModel,
@@ -50,13 +65,263 @@ _SAFE_MESSAGES: dict[ErrorCode, str] = {
 }
 
 
-class ProviderFailure(Exception):
-    """A fixed safe error code; never retain provider bodies or validation text."""
+class FailureDiagnostic(StrictModel):
+    """Closed diagnostic categories; no provider text or objects are retained."""
 
-    def __init__(self, code: ErrorCode) -> None:
-        self.code = code
-        self.message = _SAFE_MESSAGES[code]
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    schema_version: Literal[1]
+    category: Literal[
+        "sdk_timeout",
+        "sdk_connection",
+        "http_error",
+        "sdk_response_validation",
+        "local_timeout",
+        "cancelled",
+        "local_guard",
+        "unknown",
+    ]
+    http_status: Annotated[int, Field(strict=True)] | None
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def strict_version(cls, value: object) -> object:
+        if type(value) is not int or value != 1:
+            raise ValueError("failure diagnostic version must be integer 1")
+        return value
+
+    @model_validator(mode="after")
+    def category_status(self) -> Self:
+        if self.category == "http_error":
+            valid = self.http_status is not None and 400 <= self.http_status <= 599
+        elif self.category == "sdk_response_validation":
+            valid = self.http_status is None or 100 <= self.http_status <= 599
+        else:
+            valid = self.http_status is None
+        if not valid:
+            raise ValueError("failure category and HTTP status are inconsistent")
+        return self
+
+
+class FailureDiagnosticV2(StrictModel):
+    """Versioned rejection labels without retaining a provider error body."""
+
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    schema_version: Literal[2]
+    category: Literal[
+        "sdk_timeout",
+        "sdk_connection",
+        "http_error",
+        "sdk_response_validation",
+        "local_timeout",
+        "cancelled",
+        "local_guard",
+        "unknown",
+    ]
+    http_status: Annotated[int, Field(strict=True)] | None
+    rejection_reason: Literal["schema_complexity", "unclassified"] | None
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def strict_version(cls, value: object) -> object:
+        if type(value) is not int or value != 2:
+            raise ValueError("failure diagnostic version must be integer 2")
+        return value
+
+    @model_validator(mode="after")
+    def category_status_reason(self) -> Self:
+        if self.category == "http_error":
+            valid = self.http_status is not None and 400 <= self.http_status <= 599
+        elif self.category == "sdk_response_validation":
+            valid = self.http_status is None or 100 <= self.http_status <= 599
+        else:
+            valid = self.http_status is None
+        if not valid:
+            raise ValueError("failure category and HTTP status are inconsistent")
+        rejected_request = self.category == "http_error" and self.http_status == 400
+        if rejected_request != (self.rejection_reason is not None):
+            raise ValueError("failure category, HTTP status and rejection reason are inconsistent")
+        return self
+
+
+def _diagnostic_version(value: object) -> int | None:
+    if isinstance(value, FailureDiagnostic | FailureDiagnosticV2):
+        version: object = value.schema_version
+    elif isinstance(value, dict):
+        version = value.get("schema_version")
+    else:
+        return None
+    if type(version) is int and version == 1:
+        return 1
+    if type(version) is int and version == 2:
+        return 2
+    return None
+
+
+class FailureEnvelope(StrictModel):
+    """Bind a safe error code to the exact versioned diagnostic semantics."""
+
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    code: ErrorCode
+    diagnostic: Annotated[
+        Annotated[FailureDiagnostic, Tag(1)] | Annotated[FailureDiagnosticV2, Tag(2)],
+        Discriminator(_diagnostic_version),
+    ]
+
+    @model_validator(mode="after")
+    def code_category(self) -> Self:
+        if self.diagnostic.category in {"sdk_timeout", "local_timeout", "cancelled"}:
+            valid = self.code == "deadline_exceeded"
+        elif self.diagnostic.category == "local_guard":
+            valid = self.code != "deadline_exceeded"
+        else:
+            valid = self.code == "provider_error"
+        if not valid:
+            raise ValueError("failure code and diagnostic category are inconsistent")
+        return self
+
+
+class ProviderFailure(Exception):
+    """Retain only a fixed safe code/message and the validated diagnostic."""
+
+    def __init__(
+        self,
+        code: ErrorCode,
+        *,
+        diagnostic: FailureDiagnostic | FailureDiagnosticV2 | None = None,
+    ) -> None:
+        envelope = FailureEnvelope(
+            code=code,
+            diagnostic=diagnostic
+            if diagnostic is not None
+            else FailureDiagnosticV2(
+                schema_version=2,
+                category="local_timeout" if code == "deadline_exceeded" else "local_guard",
+                http_status=None,
+                rejection_reason=None,
+            ),
+        )
+        self.code = envelope.code
+        self.message = _SAFE_MESSAGES[envelope.code]
+        self.diagnostic = envelope.diagnostic
         super().__init__(self.message)
+
+    @classmethod
+    def from_exception(cls, error: BaseException) -> "ProviderFailure":
+        envelope = failure_envelope(error)
+        return cls(envelope.code, diagnostic=envelope.diagnostic)
+
+
+class ResponseEnvelopeFailure(ProviderFailure):
+    """Typed signal from the existing envelope guard, retaining no response fields."""
+
+    def __init__(self) -> None:
+        super().__init__("provider_error")
+
+
+def validate_response_envelope(response: object) -> Message:
+    """Require the existing native message type and assistant role."""
+    if not isinstance(response, Message) or response.role != "assistant":
+        raise ResponseEnvelopeFailure()
+    return response
+
+
+_SCHEMA_COMPLEXITY_MESSAGES = (
+    "Schema is too complex for compilation.",
+    "The compiled grammar is too large, which would cause performance issues. "
+    "Simplify your tool schemas or reduce the number of strict tools.",
+)
+
+
+def _http_400_rejection_reason(
+    error: APIStatusError,
+) -> Literal["schema_complexity", "unclassified"]:
+    try:
+        body = error.body
+        if type(body) is not dict:
+            return "unclassified"
+        if "error" in body:
+            root_type = body.get("type")
+            if type(root_type) is str and root_type == "invalid_request_error":
+                return "unclassified"
+            detail = body["error"]
+            if type(detail) is not dict:
+                return "unclassified"
+        else:
+            detail = body
+        error_type = detail.get("type")
+        message = detail.get("message")
+        if (
+            type(error_type) is str
+            and type(message) is str
+            and error_type == "invalid_request_error"
+            and message in _SCHEMA_COMPLEXITY_MESSAGES
+        ):
+            return "schema_complexity"
+    except BaseException:
+        return "unclassified"
+    return "unclassified"
+
+
+def classify_failure(error: BaseException) -> FailureDiagnostic | FailureDiagnosticV2:
+    """Classify typed errors with one bounded HTTP 400 body observation."""
+    if isinstance(error, ProviderFailure):
+        return FailureEnvelope(code=error.code, diagnostic=error.diagnostic).diagnostic
+    category: Literal[
+        "sdk_timeout",
+        "sdk_connection",
+        "http_error",
+        "sdk_response_validation",
+        "local_timeout",
+        "cancelled",
+        "unknown",
+    ] = "unknown"
+    status: int | None = None
+    reason: Literal["schema_complexity", "unclassified"] | None = None
+    if isinstance(error, APITimeoutError):
+        category = "sdk_timeout"
+    elif isinstance(error, APIConnectionError):
+        category = "sdk_connection"
+    elif isinstance(error, (APIResponseValidationError, APIStatusError)):
+        try:
+            value = error.status_code
+        except BaseException:
+            value = None
+        if isinstance(error, APIResponseValidationError):
+            category = "sdk_response_validation"
+            status = value if type(value) is int and 100 <= value <= 599 else None
+        elif type(value) is int and 400 <= value <= 599:
+            category, status = "http_error", value
+            if status == 400:
+                reason = _http_400_rejection_reason(error)
+    elif isinstance(error, asyncio.CancelledError):
+        category = "cancelled"
+    elif isinstance(error, TimeoutError):
+        category = "local_timeout"
+    return FailureDiagnosticV2(
+        schema_version=2, category=category, http_status=status, rejection_reason=reason
+    )
+
+
+def failure_envelope(error: BaseException) -> FailureEnvelope:
+    diagnostic = classify_failure(error)
+    code: ErrorCode = "provider_error"
+    if isinstance(error, ProviderFailure):
+        code = error.code
+    elif diagnostic.category in {"sdk_timeout", "local_timeout", "cancelled"}:
+        code = "deadline_exceeded"
+    return FailureEnvelope(code=code, diagnostic=diagnostic)
+
+
+def _raise_failure(failure: ProviderFailure) -> NoReturn:
+    try:
+        raise failure from None
+    finally:
+        # A context-manager caller may still be handling a raw exception here.
+        failure.__context__ = None
+        failure.__cause__ = None
 
 
 @dataclass(frozen=True)
@@ -65,8 +330,20 @@ class Deadline:
     clock: Callable[[], float] = field(default=time.monotonic, repr=False)
 
     @classmethod
-    def start(cls, *, clock: Callable[[], float] = time.monotonic) -> "Deadline":
-        return cls(clock() + 45.0, clock)
+    def start(
+        cls,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        duration_seconds: float = 45.0,
+    ) -> "Deadline":
+        if (
+            isinstance(duration_seconds, bool)
+            or not isinstance(duration_seconds, int | float)
+            or not 0 < duration_seconds <= 180
+            or not math.isfinite(duration_seconds)
+        ):
+            raise ValueError("Deadline duration must be finite numeric seconds within (0, 180]")
+        return cls(clock() + float(duration_seconds), clock)
 
     def remaining(self) -> float:
         remaining = self.expires_at - self.clock()
@@ -79,11 +356,14 @@ class Deadline:
 
     @asynccontextmanager
     async def limit(self) -> AsyncIterator[None]:
+        failure = None
         try:
             async with asyncio.timeout(self.remaining()):
                 yield
-        except TimeoutError:
-            raise ProviderFailure("deadline_exceeded") from None
+        except TimeoutError as error:
+            failure = ProviderFailure.from_exception(error)
+        if failure is not None:
+            _raise_failure(failure)
 
 
 @dataclass(frozen=True)
@@ -258,8 +538,12 @@ def _usage(message: Message) -> Usage | None:
 
 def _error_code(error: BaseException) -> ErrorCode:
     if isinstance(error, ProviderFailure):
-        return error.code
-    if isinstance(error, (APITimeoutError, TimeoutError, asyncio.CancelledError)):
+        return FailureEnvelope(code=error.code, diagnostic=error.diagnostic).code
+    if isinstance(error, APITimeoutError):
+        return "deadline_exceeded"
+    if isinstance(error, (APIConnectionError, APIResponseValidationError, APIStatusError)):
+        return "provider_error"
+    if isinstance(error, (asyncio.CancelledError, TimeoutError)):
         return "deadline_exceeded"
     return "provider_error"
 
@@ -291,8 +575,10 @@ class ProviderAdapter:
         tools: Sequence[ToolParam] | None = None,
         tool_choice: ToolChoiceParam | None = None,
         output_schema: dict[str, Any] | None = None,
+        judge_reasoning: Literal["adaptive"] | None = None,
     ) -> Message:
         """Count once and generate at most once, preserving usage before validation."""
+        failure: ProviderFailure
         try:
             if model not in MODEL_POLICIES or self._budget.stopped:
                 raise ProviderFailure("provider_error")
@@ -313,6 +599,20 @@ class ProviderAdapter:
                 payload["output_config"] = {
                     "format": {"type": "json_schema", "schema": deepcopy(output_schema)}
                 }
+            if judge_reasoning is not None:
+                if (
+                    judge_reasoning != "adaptive"
+                    or model != JUDGE_MODEL
+                    or output_schema is None
+                    or tools is not None
+                    or tool_choice is not None
+                ):
+                    raise ProviderFailure("provider_error")
+                from rent_navigator.judge_profile import judge_request_settings
+
+                settings = judge_request_settings()
+                payload["thinking"] = settings["thinking"]
+                payload["output_config"].update(settings["output_config"])
             _reject_paid_features(payload)
             with trace.stage("preflight"):
                 async with deadline.limit():
@@ -358,14 +658,6 @@ class ProviderAdapter:
                                 response = await self._messages.create(
                                     **generation, timeout=timeout
                                 )
-                                usage = _usage(response)
-                                call.usage = usage
-                                cost = cost_for_usage(model, usage)
-                                reforecast = not cost.usage_complete or (
-                                    usage is not None
-                                    and usage.input_tokens is not None
-                                    and usage.input_tokens > policy.reserved_input_tokens
-                                )
                                 with trace.stage("validation"):
                                     try:
                                         call.returned_model_id = TypeAdapter(
@@ -374,15 +666,27 @@ class ProviderAdapter:
                                             getattr(response, "model", None), strict=True
                                         )
                                     except ValidationError:
+                                        usage = None
+                                        call.usage = None
+                                        reforecast = True
                                         raise ProviderFailure("provider_error") from None
+                                    if call.returned_model_id != model:
+                                        usage = None
+                                        call.usage = None
+                                        reforecast = True
+                                        raise ProviderFailure("provider_error") from None
+                                    usage = _usage(response)
+                                    call.usage = usage
+                                    cost = cost_for_usage(model, usage)
+                                    reforecast = not cost.usage_complete or (
+                                        usage is not None
+                                        and usage.input_tokens is not None
+                                        and usage.input_tokens > policy.reserved_input_tokens
+                                    )
                                     if reforecast:
                                         raise ProviderFailure("provider_error")
                                     deadline.check()
-                                    if (
-                                        not isinstance(response, Message)
-                                        or response.role != "assistant"
-                                    ):
-                                        raise ProviderFailure("provider_error")
+                                    response = validate_response_envelope(response)
                                     if response.stop_reason not in ("end_turn", "tool_use") or (
                                         usage is not None
                                         and usage.output_tokens is not None
@@ -399,7 +703,9 @@ class ProviderAdapter:
                         )
         except asyncio.CancelledError:
             raise
-        except ProviderFailure:
-            raise
+        except ResponseEnvelopeFailure as error:
+            failure = error
         except Exception as error:
-            raise ProviderFailure(_error_code(error)) from None
+            failure = ProviderFailure.from_exception(error)
+        # Raising outside the handler avoids retaining the raw exception in __context__.
+        _raise_failure(failure)

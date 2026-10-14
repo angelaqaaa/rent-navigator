@@ -1,0 +1,839 @@
+{
+  "$defs": {
+    "JudgeClaim_c1": {
+      "type": "object",
+      "title": "JudgeOrdinaryClaimResult",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ordinary_coverage"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "met",
+            "missing",
+            "contradicted"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the complete original claim exactly. Positive/conflicting observations require actual answer anchors. Conflict precedes omission then positive; the explicit result must agree.\n\n{maxItems: 164}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 164}"
+              },
+              "observation": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "necessary_implication",
+                  "omitted",
+                  "conflicting"
+                ]
+              },
+              "answer_anchors": {
+                "type": "array",
+                "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 4}",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "statement_id": {
+                      "type": "string",
+                      "enum": [
+                        "s1",
+                        "s2",
+                        "s3",
+                        "s4"
+                      ]
+                    },
+                    "quote": {
+                      "type": "string",
+                      "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "statement_id",
+                    "quote"
+                  ]
+                }
+              },
+              "basis": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 360, pattern: \\S}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "observation",
+              "answer_anchors",
+              "basis"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "result",
+        "parts"
+      ]
+    },
+    "JudgeClaim_c2": {
+      "type": "object",
+      "title": "JudgeOrdinaryClaimResult",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ordinary_coverage"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "met",
+            "missing",
+            "contradicted"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the complete original claim exactly. Positive/conflicting observations require actual answer anchors. Conflict precedes omission then positive; the explicit result must agree.\n\n{maxItems: 115}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 115}"
+              },
+              "observation": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "necessary_implication",
+                  "omitted",
+                  "conflicting"
+                ]
+              },
+              "answer_anchors": {
+                "type": "array",
+                "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 4}",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "statement_id": {
+                      "type": "string",
+                      "enum": [
+                        "s1",
+                        "s2",
+                        "s3",
+                        "s4"
+                      ]
+                    },
+                    "quote": {
+                      "type": "string",
+                      "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "statement_id",
+                    "quote"
+                  ]
+                }
+              },
+              "basis": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 360, pattern: \\S}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "observation",
+              "answer_anchors",
+              "basis"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "result",
+        "parts"
+      ]
+    },
+    "JudgeClaim_c3": {
+      "type": "object",
+      "title": "JudgeOrdinaryClaimResult",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ordinary_coverage"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "met",
+            "missing",
+            "contradicted"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the complete original claim exactly. Positive/conflicting observations require actual answer anchors. Conflict precedes omission then positive; the explicit result must agree.\n\n{maxItems: 174}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 174}"
+              },
+              "observation": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "necessary_implication",
+                  "omitted",
+                  "conflicting"
+                ]
+              },
+              "answer_anchors": {
+                "type": "array",
+                "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 4}",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "statement_id": {
+                      "type": "string",
+                      "enum": [
+                        "s1",
+                        "s2",
+                        "s3",
+                        "s4"
+                      ]
+                    },
+                    "quote": {
+                      "type": "string",
+                      "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "statement_id",
+                    "quote"
+                  ]
+                }
+              },
+              "basis": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 360, pattern: \\S}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "observation",
+              "answer_anchors",
+              "basis"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "result",
+        "parts"
+      ]
+    },
+    "JudgeClaim_c4": {
+      "type": "object",
+      "title": "JudgeOrdinaryClaimResult",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ordinary_coverage"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "met",
+            "missing",
+            "contradicted"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the complete original claim exactly. Positive/conflicting observations require actual answer anchors. Conflict precedes omission then positive; the explicit result must agree.\n\n{maxItems: 104}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 104}"
+              },
+              "observation": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "necessary_implication",
+                  "omitted",
+                  "conflicting"
+                ]
+              },
+              "answer_anchors": {
+                "type": "array",
+                "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 4}",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "statement_id": {
+                      "type": "string",
+                      "enum": [
+                        "s1",
+                        "s2",
+                        "s3",
+                        "s4"
+                      ]
+                    },
+                    "quote": {
+                      "type": "string",
+                      "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "statement_id",
+                    "quote"
+                  ]
+                }
+              },
+              "basis": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 360, pattern: \\S}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "observation",
+              "answer_anchors",
+              "basis"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "result",
+        "parts"
+      ]
+    },
+    "JudgeStatement_s1": {
+      "type": "object",
+      "title": "JudgeCitedStatementResult",
+      "properties": {
+        "factual": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported",
+            "contradicted"
+          ]
+        },
+        "citation_support": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the full original statement; both audits grade the same segment.\n\n{maxItems: 294}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 294}"
+              },
+              "factual_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_dfae7b0b522a9443b9ff853da563d5cf858022e161d96cc1982e9f17a5f70efe"
+              },
+              "citation_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_70815c76131461ad7d39129588c87fcd22b4374b8c32ed009e4bea965e7fe4c2"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "factual_audit",
+              "citation_audit"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "factual",
+        "citation_support",
+        "parts"
+      ]
+    },
+    "JudgeStatement_s2": {
+      "type": "object",
+      "title": "JudgeCitedStatementResult",
+      "properties": {
+        "factual": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported",
+            "contradicted"
+          ]
+        },
+        "citation_support": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the full original statement; both audits grade the same segment.\n\n{maxItems: 174}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 174}"
+              },
+              "factual_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_dfae7b0b522a9443b9ff853da563d5cf858022e161d96cc1982e9f17a5f70efe"
+              },
+              "citation_audit": {
+                "type": "object",
+                "description": "Positive/conflicting factual observations require a source/tool/fact witness; positive/conflicting citation observations require an own source anchor. Explicit grades must obey conflict/insufficiency/positive precedence.",
+                "properties": {
+                  "observation": {
+                    "type": "string",
+                    "enum": [
+                      "explicit",
+                      "necessary_implication",
+                      "insufficient",
+                      "conflicting"
+                    ]
+                  },
+                  "source_anchors": {
+                    "type": "array",
+                    "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 2}",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "reference": {
+                          "type": "string",
+                          "enum": [
+                            "e1",
+                            "e3"
+                          ]
+                        },
+                        "quote": {
+                          "type": "string",
+                          "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "reference",
+                        "quote"
+                      ]
+                    }
+                  },
+                  "tool_fields": {
+                    "type": "array",
+                    "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "fact_fields": {
+                    "type": "array",
+                    "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "basis": {
+                    "type": "string",
+                    "description": "{minLength: 1, maxLength: 320, pattern: \\S}"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "observation",
+                  "source_anchors",
+                  "tool_fields",
+                  "fact_fields",
+                  "basis"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "factual_audit",
+              "citation_audit"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "factual",
+        "citation_support",
+        "parts"
+      ]
+    },
+    "JudgeStatement_s3": {
+      "type": "object",
+      "title": "JudgeCitedStatementResult",
+      "properties": {
+        "factual": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported",
+            "contradicted"
+          ]
+        },
+        "citation_support": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the full original statement; both audits grade the same segment.\n\n{maxItems: 159}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 159}"
+              },
+              "factual_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_dfae7b0b522a9443b9ff853da563d5cf858022e161d96cc1982e9f17a5f70efe"
+              },
+              "citation_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_70815c76131461ad7d39129588c87fcd22b4374b8c32ed009e4bea965e7fe4c2"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "factual_audit",
+              "citation_audit"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "factual",
+        "citation_support",
+        "parts"
+      ]
+    },
+    "JudgeStatement_s4": {
+      "type": "object",
+      "title": "JudgeCitedStatementResult",
+      "properties": {
+        "factual": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported",
+            "contradicted"
+          ]
+        },
+        "citation_support": {
+          "type": "string",
+          "enum": [
+            "supported",
+            "unsupported"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "description": "Concatenate texts to the full original statement; both audits grade the same segment.\n\n{maxItems: 214}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "{minLength: 1, maxLength: 214}"
+              },
+              "factual_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_dfae7b0b522a9443b9ff853da563d5cf858022e161d96cc1982e9f17a5f70efe"
+              },
+              "citation_audit": {
+                "$ref": "#/$defs/SharedAudit_v1_70815c76131461ad7d39129588c87fcd22b4374b8c32ed009e4bea965e7fe4c2"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "factual_audit",
+              "citation_audit"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "factual",
+        "citation_support",
+        "parts"
+      ]
+    },
+    "SharedAudit_v1_70815c76131461ad7d39129588c87fcd22b4374b8c32ed009e4bea965e7fe4c2": {
+      "type": "object",
+      "description": "Positive/conflicting factual observations require a source/tool/fact witness; positive/conflicting citation observations require an own source anchor. Explicit grades must obey conflict/insufficiency/positive precedence.",
+      "properties": {
+        "observation": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "necessary_implication",
+            "insufficient",
+            "conflicting"
+          ]
+        },
+        "source_anchors": {
+          "type": "array",
+          "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 1}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "enum": [
+                  "e1"
+                ]
+              },
+              "quote": {
+                "type": "string",
+                "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "reference",
+              "quote"
+            ]
+          }
+        },
+        "tool_fields": {
+          "type": "array",
+          "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fact_fields": {
+          "type": "array",
+          "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+          "items": {
+            "type": "string"
+          }
+        },
+        "basis": {
+          "type": "string",
+          "description": "{minLength: 1, maxLength: 320, pattern: \\S}"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "observation",
+        "source_anchors",
+        "tool_fields",
+        "fact_fields",
+        "basis"
+      ]
+    },
+    "SharedAudit_v1_dfae7b0b522a9443b9ff853da563d5cf858022e161d96cc1982e9f17a5f70efe": {
+      "type": "object",
+      "description": "Positive/conflicting factual observations require a source/tool/fact witness; positive/conflicting citation observations require an own source anchor. Explicit grades must obey conflict/insufficiency/positive precedence.",
+      "properties": {
+        "observation": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "necessary_implication",
+            "insufficient",
+            "conflicting"
+          ]
+        },
+        "source_anchors": {
+          "type": "array",
+          "description": "One exact contiguous quotation per named trusted text, in trusted order.\n\n{maxItems: 3}",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "enum": [
+                  "e1",
+                  "e2",
+                  "e3"
+                ]
+              },
+              "quote": {
+                "type": "string",
+                "description": "An exact contiguous quotation from the original text selected by its ID.\n\n{minLength: 1}"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "reference",
+              "quote"
+            ]
+          }
+        },
+        "tool_fields": {
+          "type": "array",
+          "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fact_fields": {
+          "type": "array",
+          "description": "Unique permitted pointers/IDs in trusted enumeration order.\n\n{uniqueItems: True, maxItems: 0}",
+          "items": {
+            "type": "string"
+          }
+        },
+        "basis": {
+          "type": "string",
+          "description": "{minLength: 1, maxLength: 320, pattern: \\S}"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "observation",
+        "source_anchors",
+        "tool_fields",
+        "fact_fields",
+        "basis"
+      ]
+    }
+  },
+  "type": "object",
+  "title": "JudgeResult",
+  "properties": {
+    "required_claims": {
+      "type": "object",
+      "properties": {
+        "c1": {
+          "$ref": "#/$defs/JudgeClaim_c1"
+        },
+        "c2": {
+          "$ref": "#/$defs/JudgeClaim_c2"
+        },
+        "c3": {
+          "$ref": "#/$defs/JudgeClaim_c3"
+        },
+        "c4": {
+          "$ref": "#/$defs/JudgeClaim_c4"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "c1",
+        "c2",
+        "c3",
+        "c4"
+      ]
+    },
+    "statements": {
+      "type": "object",
+      "properties": {
+        "s1": {
+          "$ref": "#/$defs/JudgeStatement_s1"
+        },
+        "s2": {
+          "$ref": "#/$defs/JudgeStatement_s2"
+        },
+        "s3": {
+          "$ref": "#/$defs/JudgeStatement_s3"
+        },
+        "s4": {
+          "$ref": "#/$defs/JudgeStatement_s4"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "s1",
+        "s2",
+        "s3",
+        "s4"
+      ]
+    },
+    "false_pass": {
+      "type": "boolean",
+      "title": "False Pass"
+    },
+    "policy_violations": {
+      "type": "array",
+      "title": "Policy Violations",
+      "items": {
+        "type": "string",
+        "enum": [
+          "S01",
+          "S02",
+          "S03",
+          "S04",
+          "S05",
+          "S06",
+          "S07",
+          "S08"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "required_claims",
+    "statements",
+    "false_pass",
+    "policy_violations"
+  ]
+}

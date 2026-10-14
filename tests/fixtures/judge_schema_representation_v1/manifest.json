@@ -1,0 +1,55 @@
+{
+  "approved_source": {
+    "approval_file_sha256": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+    "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+    "gold_file_sha256": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb"
+  },
+  "files": {
+    "J01.json": "06e2dc68ec78db233c1d92f9daeb5df3ee26ad367ffb28dd5c9b6c2aa1a63a41",
+    "J02.json": "2fd99e28d5721d889b40627a268a0c99e89e9865ade25aad9e790b3595f7ae56",
+    "J03.json": "0804e26538b38d0019c5ce8aeb461682bac05cbe2357a311e6ba8db622e0fee4",
+    "J04.json": "3398ae3897eada27334eed6520909d98a06f9fb2ae8a3b887a9557135d823f8e",
+    "J05.json": "b60e954703bf1ce32c1d6051e6f2944ffe8ad253f68a600c234e023f4d4d866b",
+    "J06.json": "f2668aacc56be6a55d2415e9251307cb82021934be1afe5b90254ab2b66dfcc1",
+    "J07.json": "ba6a11dadfa97aab4f1062fb1d396395e2bb8b6abdc54e9a6230d0e669c13956",
+    "J08.json": "a486a40f5857f1edf6700f3c65bf69774f9212947315719aee80427a1fefc700",
+    "J09.json": "4340fb0fca135fce888eb1580806e68adb633925e1b9755911d2e0a89c692fef",
+    "J10.json": "8c78f59d1cc18f78191a91b7d460f08f339ba831cdf48d2c607eca74ca0b456d",
+    "J11.json": "0893ab37bcdfa5fa8e78ce896b4713cdd96c9366dcd779bfad2aa57f777518b4",
+    "J12.json": "e5d5ba708663e3a1542a3175bd8c82a2d42d4694d60267c6a885d61a5a47604c",
+    "J13.json": "ad7c95e9e0b43ad08af528296eecbb3347eb8bfa29b86f926eae8f361c42f7f5"
+  },
+  "fixture_directory": "tests/fixtures/judge_calibration_v2",
+  "fixture_ids": [
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "J07",
+    "J08",
+    "J09",
+    "J10",
+    "J11",
+    "J12",
+    "J13"
+  ],
+  "legacy_manifest_sha256": "383184ce7c37ce605d335e2041b2b70e04c400dbb430d6662930738d62c10a81",
+  "legacy_sizes_sha256": "4fbcd0b998a203789d8df26a0ab050575f028cd2ba422ed5437d52ec2104198b",
+  "packet_policy_version": 3,
+  "prepared_judge_config_hash": "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7",
+  "purpose": "offline_judge_schema_representation",
+  "representation": {
+    "classes": [
+      "audit_object",
+      "statement_definition"
+    ],
+    "name": "exact_subtree_factoring",
+    "stage": "post_sdk_transform",
+    "version": 1
+  },
+  "schema_version": 1,
+  "sizing_file_sha256": "5e7e816583d601755064c6f512ef53f2ad07db6f02c15226ea4b04c4281e07a4",
+  "wire_policy_version": 5
+}

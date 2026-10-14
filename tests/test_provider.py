@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from io import StringIO
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -26,6 +27,12 @@ from anthropic.types import (
     Usage as SDKUsage,
 )
 from pydantic import TypeAdapter
+from sdk_test_boundary import (
+    FILESYSTEM_APIS,
+    SDKBoundary,
+    constructor_filesystem_boundary,
+    install_sdk_boundary,
+)
 
 import rent_navigator.provider as provider_module
 from rent_navigator.model_policy import policy_manifest
@@ -61,6 +68,11 @@ SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 _DEFAULT_USAGE = object()
+
+
+@pytest.fixture
+def real_sdk_boundary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SDKBoundary:
+    return install_sdk_boundary(monkeypatch, tmp_path)
 
 
 class Clock:
@@ -224,7 +236,7 @@ def assert_accounting(
 
 @pytest.mark.parametrize(
     ("model", "max_tokens", "actual", "reservation"),
-    [(ACTOR_MODEL, 600, "0.0015", "0.019"), (JUDGE_MODEL, 800, "0.003", "0.024")],
+    [(ACTOR_MODEL, 1200, "0.0015", "0.027"), (JUDGE_MODEL, 8192, "0.003", "0.13192")],
 )
 def test_fixed_generation_settings_and_count_payload_parity(
     model: RequestedModel, max_tokens: int, actual: str, reservation: str
@@ -318,10 +330,10 @@ def test_no_optional_generation_features_are_inserted() -> None:
 @pytest.mark.parametrize(
     ("model", "estimate", "allowed", "actual", "reservation"),
     [
-        (ACTOR_MODEL, 15000, True, "0.0015", "0.019"),
-        (ACTOR_MODEL, 15001, False, "0.0015", "0.019"),
-        (JUDGE_MODEL, 7000, True, "0.003", "0.024"),
-        (JUDGE_MODEL, 7001, False, "0.003", "0.024"),
+        (ACTOR_MODEL, 20000, True, "0.0015", "0.027"),
+        (ACTOR_MODEL, 20001, False, "0.0015", "0.027"),
+        (JUDGE_MODEL, 24000, True, "0.003", "0.13192"),
+        (JUDGE_MODEL, 24001, False, "0.003", "0.13192"),
     ],
 )
 def test_preflight_limit_rejects_before_any_paid_call(
@@ -362,7 +374,9 @@ def test_invalid_count_response_never_enters_generation(estimate: object) -> Non
         malformed_usage(input_tokens=-1, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+)
 def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
     usage: object,
     model: RequestedModel,
@@ -390,7 +404,9 @@ def test_missing_partial_or_invalid_usage_keeps_reservation_and_stops_batches(
         {"unrecognized_billed_tokens": 1},
     ],
 )
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+)
 def test_nonzero_unpriced_categories_make_entire_cost_unknown(
     extra: dict[str, Any], model: RequestedModel, reservation: str
 ) -> None:
@@ -421,17 +437,17 @@ def test_zero_categories_and_nonbilling_metadata_preserve_known_usage(
     fake, ledger = RecordingMessages(reply(usage=usage)), SpendLedger(Decimal("1"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is None
-    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.027", complete=True)
     assert not ledger.stopped and not ledger.reforecast_required
 
 
 @pytest.mark.parametrize(
     ("model", "input_tokens", "overage", "cost", "reservation"),
     [
-        (ACTOR_MODEL, 16000, False, "0.0165", "0.019"),
-        (ACTOR_MODEL, 16001, True, "0.016501", "0.019"),
-        (JUDGE_MODEL, 8000, False, "0.017", "0.024"),
-        (JUDGE_MODEL, 8001, True, "0.017002", "0.024"),
+        (ACTOR_MODEL, 21000, False, "0.0215", "0.027"),
+        (ACTOR_MODEL, 21001, True, "0.021501", "0.027"),
+        (JUDGE_MODEL, 25000, False, "0.051", "0.13192"),
+        (JUDGE_MODEL, 25001, True, "0.051002", "0.13192"),
     ],
 )
 def test_input_reservation_overage_keeps_exact_cost_and_stops_further_batches(
@@ -465,9 +481,9 @@ def test_invalid_returned_model_id_retains_accounting_without_leaking_metadata(
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert_accounting(
         outcome,
-        actual="0.0015" if usage is _DEFAULT_USAGE else None,
-        reserved="0.019",
-        complete=usage is _DEFAULT_USAGE,
+        actual=None,
+        reserved="0.027",
+        complete=False,
     )
     generation = next(
         record for record in outcome.records if record.provider_operation == "generation"
@@ -479,21 +495,63 @@ def test_invalid_returned_model_id_retains_accounting_without_leaking_metadata(
     assert "input_value" not in outcome.log
 
 
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+@pytest.mark.parametrize("fault", ["other", "missing", "null", "invalid", "bool", "number"])
+def test_unverified_returned_model_preserves_full_hold_and_raw_usage(
+    model: RequestedModel, fault: str
+) -> None:
+    response = reply(model=model)
+    other = JUDGE_MODEL if model == ACTOR_MODEL else ACTOR_MODEL
+    if fault == "missing":
+        del response.model
+    else:
+        response = response.model_copy(
+            update={
+                "model": {
+                    "other": other,
+                    "null": None,
+                    "invalid": "synthetic/invalid-model-id",
+                    "bool": True,
+                    "number": 123,
+                }[fault]
+            }
+        )
+    fake, ledger = RecordingMessages(response), SpendLedger(Decimal("1"))
+    outcome = asyncio.run(perform(fake, ledger, model=model))
+    reservation = "0.027" if model == ACTOR_MODEL else "0.13192"
+    assert outcome.failure is not None and outcome.failure.code == "provider_error"
+    assert_accounting(outcome, actual=None, reserved=reservation, complete=False)
+    generation = next(r for r in outcome.records if r.provider_operation == "generation")
+    assert generation.returned_model_id == (other if fault == "other" else None)
+    assert generation.input_tokens is None and generation.output_tokens is None
+    assert response.usage.input_tokens == 1000 and response.usage.output_tokens == 100
+    assert ledger.committed_usd == Decimal(reservation)
+    assert ledger.stopped and ledger.reforecast_required
+    subsequent = asyncio.run(perform(fake, ledger, model=model, trace_number=2))
+    assert subsequent.failure is not None
+    assert len(fake.counts) == len(fake.creates) == 1
+
+
 @pytest.mark.parametrize("stop", ["refusal", "max_tokens", "model_context_window_exceeded"])
 def test_invalid_generation_outcomes_preserve_known_cost(stop: str) -> None:
     fake, ledger = RecordingMessages(reply(stop=stop)), SpendLedger(Decimal("1"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "invalid_generated_output"
     assert len(fake.counts) == len(fake.creates) == 1
-    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.027", complete=True)
 
 
 @pytest.mark.parametrize(
-    ("model", "output", "actual", "reservation"),
-    [(ACTOR_MODEL, 601, "0.004005", "0.019"), (JUDGE_MODEL, 801, "0.01001", "0.024")],
+    ("model", "output", "actual", "reservation", "allowed"),
+    [
+        (ACTOR_MODEL, 1200, "0.007", "0.027", True),
+        (ACTOR_MODEL, 1201, "0.007005", "0.027", False),
+        (JUDGE_MODEL, 8192, "0.08392", "0.13192", True),
+        (JUDGE_MODEL, 8193, "0.08393", "0.13192", False),
+    ],
 )
 def test_output_above_fixed_budget_is_invalid_but_not_free(
-    model: RequestedModel, output: int, actual: str, reservation: str
+    model: RequestedModel, output: int, actual: str, reservation: str, allowed: bool
 ) -> None:
     fake, ledger = (
         RecordingMessages(
@@ -502,8 +560,12 @@ def test_output_above_fixed_budget_is_invalid_but_not_free(
         SpendLedger(Decimal("1")),
     )
     outcome = asyncio.run(perform(fake, ledger, model=model))
-    assert outcome.failure is not None and outcome.failure.code == "invalid_generated_output"
+    if allowed:
+        assert outcome.failure is None
+    else:
+        assert outcome.failure is not None and outcome.failure.code == "invalid_generated_output"
     assert_accounting(outcome, actual=actual, reserved=reservation, complete=True)
+    assert ledger.committed_usd == Decimal(actual)
 
 
 def test_native_tool_use_blocks_and_stop_reason_are_preserved() -> None:
@@ -569,11 +631,11 @@ def test_provider_failures_are_safe_single_attempts_with_complete_accounting(
     assert_accounting(
         outcome,
         actual=None if operation == "create" else "0",
-        reserved="0.019" if operation == "create" else "0",
+        reserved="0.027" if operation == "create" else "0",
         complete=operation == "count",
         generation_count=int(operation == "create"),
     )
-    assert ledger.committed_usd == (Decimal("0.019") if operation == "create" else Decimal(0))
+    assert ledger.committed_usd == (Decimal("0.027") if operation == "create" else Decimal(0))
 
 
 def test_deadline_defaults_to_45_seconds_and_rejects_exact_expiry() -> None:
@@ -618,7 +680,7 @@ def test_generation_finishing_after_deadline_keeps_returned_usage() -> None:
     fake = RecordingMessages(before_create=consume_deadline)
     outcome = asyncio.run(perform(fake, ledger, clock=clock))
     assert outcome.failure is not None and outcome.failure.code == "deadline_exceeded"
-    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.027", complete=True)
 
 
 def test_two_calls_share_one_absolute_deadline() -> None:
@@ -637,14 +699,14 @@ def test_two_calls_share_one_absolute_deadline() -> None:
         assert first.failure is None
         second = await perform(fake, ledger, clock=clock, deadline=deadline, trace_number=2)
         assert second.failure is not None and second.failure.code == "deadline_exceeded"
-        assert_accounting(second, actual="0.0015", reserved="0.019", complete=True)
+        assert_accounting(second, actual="0.0015", reserved="0.027", complete=True)
         assert ledger.committed_usd == Decimal("0.003")
 
     asyncio.run(scenario())
 
 
 def test_insufficient_budget_does_not_enter_generation() -> None:
-    fake, ledger = RecordingMessages(), SpendLedger(Decimal("0.018999"))
+    fake, ledger = RecordingMessages(), SpendLedger(Decimal("0.026999"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "budget_exhausted"
     assert not fake.creates
@@ -661,11 +723,11 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
 
         fake, ledger = (
             RecordingMessages(before_create=hold_generation),
-            SpendLedger(Decimal("0.019")),
+            SpendLedger(Decimal("0.027")),
         )
         first = asyncio.create_task(perform(fake, ledger))
         await entered.wait()
-        assert ledger.committed_usd == Decimal("0.019")
+        assert ledger.committed_usd == Decimal("0.027")
         second = await perform(fake, ledger, trace_number=2)
         assert second.failure is not None and second.failure.code == "budget_exhausted"
         assert len(fake.creates) == 1
@@ -673,12 +735,14 @@ def test_concurrent_attempts_cannot_overreserve_shared_budget() -> None:
         completed = await first
         assert completed.failure is None
         assert ledger.committed_usd == Decimal("0.0015")
-        assert_accounting(completed, actual="0.0015", reserved="0.019", complete=True)
+        assert_accounting(completed, actual="0.0015", reserved="0.027", complete=True)
 
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+)
 def test_task_cancellation_records_inflight_generation_and_leaves_no_background_call(
     model: RequestedModel, reservation: str
 ) -> None:
@@ -738,10 +802,12 @@ def test_unpriced_service_tier_requires_reforecast(tier: str) -> None:
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is not None and outcome.failure.code == "provider_error"
     assert ledger.stopped
-    assert_accounting(outcome, actual=None, reserved="0.019", complete=False)
+    assert_accounting(outcome, actual=None, reserved="0.027", complete=False)
 
 
-@pytest.mark.parametrize(("model", "reservation"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(
+    ("model", "reservation"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")]
+)
 def test_zero_usage_is_known_free_and_reservation_refund_permits_the_next_call(
     model: RequestedModel, reservation: str
 ) -> None:
@@ -792,7 +858,7 @@ def test_expiry_during_validation_does_not_return_success(monkeypatch: pytest.Mo
     monkeypatch.setattr(TypeAdapter, "validate_python", expire_after_validation)
     outcome = asyncio.run(perform(fake, ledger, clock=clock))
     assert outcome.failure is not None and outcome.failure.code == "deadline_exceeded"
-    assert_accounting(outcome, actual="0.0015", reserved="0.019", complete=True)
+    assert_accounting(outcome, actual="0.0015", reserved="0.027", complete=True)
     assert (
         next(
             stage for stage in outcome.records[-1].stage_durations if stage.stage == "validation"
@@ -874,7 +940,9 @@ def test_deadline_limit_cancels_awaited_work_without_background_tasks() -> None:
 
 
 def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         requests: list[httpx2.Request] = []
@@ -898,12 +966,26 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
             )
 
         constructor_calls: list[dict[str, Any]] = []
+        transports: list[httpx2.AsyncClient] = []
+        client: AsyncAnthropic | None = None
 
         def construct(**kwargs: Any) -> AsyncAnthropic:
             constructor_calls.append(kwargs)
-            return AsyncAnthropic(
-                **kwargs, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
-            )
+            transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+            transports.append(transport)
+            real_sdk_boundary.transports.append(transport)
+            original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    constructed = AsyncAnthropic(**kwargs, http_client=transport)
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not requests
+            assert constructed.credentials is None and constructed._token_cache is None
+            return constructed
 
         monkeypatch.setattr(provider_module, "AsyncAnthropic", construct)
         monkeypatch.setattr(
@@ -917,8 +999,8 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
                 monkeypatch.setattr(logging.getLogger(name), "disabled", False)
                 monkeypatch.setattr(logging.getLogger(name), "level", logging.getLogger(name).level)
         caplog.set_level(logging.DEBUG)
-        client = create_client(api_key="synthetic-test-key")
         try:
+            client = create_client(api_key="synthetic-test-key")
             assert constructor_calls == [
                 {
                     "api_key": "synthetic-test-key",
@@ -948,7 +1030,7 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
             count_body, create_body = [json.loads(request.content) for request in requests]
             assert create_body["temperature"] == 0
             assert create_body["service_tier"] == "standard_only"
-            assert create_body["max_tokens"] == 600 and create_body["stream"] is False
+            assert create_body["max_tokens"] == 1200 and create_body["stream"] is False
             for name in ("model", "system", "messages", "thinking", "output_config"):
                 assert count_body[name] == create_body[name]
             assert "temperature" not in count_body and "max_tokens" not in count_body
@@ -956,7 +1038,13 @@ def test_real_sdk_serialization_uses_fixed_base_no_retry_and_no_debug_payload(
             assert "synthetic-test-key" not in caplog.text
             assert SYNTHETIC_CONTENT not in trace_stream.getvalue()
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                for transport in transports:
+                    await transport.aclose()
+                assert transports and all(transport.is_closed for transport in transports)
 
     asyncio.run(scenario())
 
@@ -977,7 +1065,9 @@ def test_client_rejects_custom_headers_without_constructing_sdk(
 
 @pytest.mark.parametrize("failed_operation", ["count", "generation"])
 def test_real_sdk_does_not_retry_failed_mock_transport_calls(
-    failed_operation: str, monkeypatch: pytest.MonkeyPatch
+    failed_operation: str,
+    monkeypatch: pytest.MonkeyPatch,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         paths: list[str] = []
@@ -991,11 +1081,25 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
                 json={"type": "error", "error": {"type": "api_error", "message": SYNTHETIC_ERROR}},
             )
 
+        transports: list[httpx2.AsyncClient] = []
+        client: AsyncAnthropic | None = None
+
         def construct(**kwargs: Any) -> AsyncAnthropic:
-            return AsyncAnthropic(
-                **kwargs,
-                http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
-            )
+            transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+            transports.append(transport)
+            real_sdk_boundary.transports.append(transport)
+            original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    constructed = AsyncAnthropic(**kwargs, http_client=transport)
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not paths
+            assert constructed.credentials is None and constructed._token_cache is None
+            return constructed
 
         monkeypatch.setattr(provider_module, "AsyncAnthropic", construct)
         monkeypatch.setattr(os, "environ", {})
@@ -1004,8 +1108,8 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
             if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
                 monkeypatch.setattr(logging.getLogger(name), "disabled", False)
                 monkeypatch.setattr(logging.getLogger(name), "level", logging.getLogger(name).level)
-        client = create_client(api_key="synthetic-test-key")
         try:
+            client = create_client(api_key="synthetic-test-key")
             clock, ledger = Clock(), SpendLedger(Decimal("1"))
             trace, stream = recorder(clock)
             adapter = ProviderAdapter(cast(MessagesPort, client.messages), budget=ledger)
@@ -1032,12 +1136,18 @@ def test_real_sdk_does_not_retry_failed_mock_transport_calls(
             assert_accounting(
                 Outcome(None, error.value, records, stream.getvalue()),
                 actual=None if generation else "0",
-                reserved="0.019" if generation else "0",
+                reserved="0.027" if generation else "0",
                 complete=not generation,
                 generation_count=int(generation),
             )
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                for transport in transports:
+                    await transport.aclose()
+                assert transports and all(transport.is_closed for transport in transports)
 
     asyncio.run(scenario())
 
@@ -1056,7 +1166,7 @@ def test_partial_usage_preserves_each_valid_known_counter(
     assert generation.output_tokens == output_tokens
     assert outcome.records[-1].input_tokens == input_tokens
     assert outcome.records[-1].output_tokens == output_tokens
-    assert_accounting(outcome, actual=None, reserved="0.019", complete=False)
+    assert_accounting(outcome, actual=None, reserved="0.027", complete=False)
 
 
 @pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
@@ -1181,6 +1291,7 @@ def test_queued_cancellation_after_count_return_never_dispatches_generation() ->
 
 def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request(
     monkeypatch: pytest.MonkeyPatch,
+    real_sdk_boundary: SDKBoundary,
 ) -> None:
     async def scenario() -> None:
         paths: list[str] = []
@@ -1207,20 +1318,38 @@ def test_queued_cancellation_after_sdk_count_return_never_sends_messages_request
             )
 
         monkeypatch.setattr(os, "environ", {})
-        client = AsyncAnthropic(
-            api_key="synthetic-test-key",
-            base_url="https://api.anthropic.com",
-            max_retries=0,
-            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
-        )
+        transport = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+        real_sdk_boundary.transports.append(transport)
+        client: AsyncAnthropic | None = None
+        original_apis = tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS)
         try:
+            try:
+                with constructor_filesystem_boundary(monkeypatch, real_sdk_boundary):
+                    client = AsyncAnthropic(
+                        api_key="synthetic-test-key",
+                        base_url="https://api.anthropic.com",
+                        max_retries=0,
+                        http_client=transport,
+                    )
+            finally:
+                assert (
+                    tuple(getattr(owner, name) for owner, name in FILESYSTEM_APIS) == original_apis
+                )
+            assert real_sdk_boundary.attempts == [("Path.open", real_sdk_boundary.pointer)]
+            assert not paths
+            assert client.credentials is None and client._token_cache is None
             ledger, clock = SpendLedger(Decimal("1")), Clock()
             adapter = ProviderAdapter(cast(MessagesPort, client.messages), budget=ledger)
             outcome = await observe_cancelled_child(adapter, clock)
             assert paths == ["/v1/messages/count_tokens"]
             assert_no_generation_after_queued_cancellation(outcome, ledger)
         finally:
-            await client.close()
+            try:
+                if client is not None:
+                    await client.close()
+            finally:
+                await transport.aclose()
+                assert transport.is_closed
 
     asyncio.run(scenario())
 
@@ -1259,11 +1388,11 @@ def test_shared_ledger_freeze_refunds_already_reserved_undispatched_call() -> No
                 reservations.append(ticket)
                 return ticket
 
-        ledger = RecordingLedger(Decimal("0.038"))
+        ledger = RecordingLedger(Decimal("0.054"))
 
         async def verify_both_reserved_before_first_dispatch() -> None:
             assert len(reservations) == 2
-            assert ledger.committed_usd == Decimal("0.038")
+            assert ledger.committed_usd == Decimal("0.054")
             assert not ledger.stopped
 
         first_fake = RecordingMessages(
@@ -1277,14 +1406,14 @@ def test_shared_ledger_freeze_refunds_already_reserved_undispatched_call() -> No
         assert len(reservations) == 2
         assert len(first_fake.creates) == 1
         assert first.failure is not None and first.failure.code == "provider_error"
-        assert_accounting(first, actual=None, reserved="0.019", complete=False)
+        assert_accounting(first, actual=None, reserved="0.027", complete=False)
         assert second.failure is not None and second.failure.code == "provider_error"
         assert len(second_fake.counts) == 1
         assert not second_fake.creates
         assert [record.provider_operation for record in second.records] == ["count_tokens", None]
         assert second.records[-1].response_code == "provider_error"
         assert_accounting(second, actual="0", reserved="0", complete=True, generation_count=0)
-        assert ledger.committed_usd == Decimal("0.019")
+        assert ledger.committed_usd == Decimal("0.027")
         assert ledger.stopped and ledger.reforecast_required
 
     asyncio.run(scenario())
@@ -1320,11 +1449,11 @@ def test_retained_second_request_estimate_is_admitted_by_uniform_actor_policy() 
     fake = RecordingMessages(
         reply(usage=SDKUsage(input_tokens=12289, output_tokens=100)), estimate=12289
     )
-    ledger = SpendLedger(Decimal("0.019"))
+    ledger = SpendLedger(Decimal("0.027"))
     outcome = asyncio.run(perform(fake, ledger))
     assert outcome.failure is None
     assert len(fake.counts) == len(fake.creates) == 1
-    assert fake.creates[0]["max_tokens"] == 600
-    assert_accounting(outcome, actual="0.012789", reserved="0.019", complete=True)
+    assert fake.creates[0]["max_tokens"] == 1200
+    assert_accounting(outcome, actual="0.012789", reserved="0.027", complete=True)
     assert ledger.committed_usd == Decimal("0.012789")
     assert not ledger.stopped

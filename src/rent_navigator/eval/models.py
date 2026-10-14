@@ -194,6 +194,8 @@ class ResultRow(EvaluationModel):
     attempt_id: CanonicalUUID
     trace_ids: list[CanonicalUUID]
     retrieved_ids: Annotated[list[Sha256], Field(max_length=5)]
+    foundation_evidence_ids: list[Sha256]
+    initial_context_evidence_ids: list[Sha256]
     response: AskResponse | ErrorResponse | None
     actual_extract: Extraction | None
     actual_tool_args: NoticeFacts | RentFacts | None
@@ -215,6 +217,8 @@ class ResultRow(EvaluationModel):
             len(set(assertion_ids)) != len(assertion_ids)
             or len(set(self.trace_ids)) != len(self.trace_ids)
             or len(set(self.retrieved_ids)) != len(self.retrieved_ids)
+            or len(set(self.foundation_evidence_ids)) != len(self.foundation_evidence_ids)
+            or len(set(self.initial_context_evidence_ids)) != len(self.initial_context_evidence_ids)
         ):
             raise ValueError("result assertion, trace and retrieval identifiers must be unique")
         complete = self.input_tokens is not None and self.output_tokens is not None

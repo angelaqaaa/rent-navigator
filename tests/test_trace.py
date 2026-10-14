@@ -82,9 +82,9 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     actor = cost_for_usage(ACTOR_MODEL, usage)
     judge = cost_for_usage(JUDGE_MODEL, usage)
     assert actor.actual_cost_usd == Decimal("0.004069")
-    assert actor.reserved_cost_usd == Decimal("0.019")
+    assert actor.reserved_cost_usd == Decimal("0.027")
     assert judge.actual_cost_usd == Decimal("0.008138")
-    assert judge.reserved_cost_usd == Decimal("0.024")
+    assert judge.reserved_cost_usd == Decimal("0.13192")
     assert actor.usage_complete is True
     assert json.loads(actor.model_dump_json())["actual_cost_usd"] == "0.004069"
 
@@ -98,7 +98,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         Usage(input_tokens=None, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.019"), (JUDGE_MODEL, "0.024")])
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")])
 def test_synthetic_missing_usage_retains_reservation(
     usage: Usage | None, model: RequestedModel, reserved: str
 ) -> None:
@@ -112,38 +112,76 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
     manifest = policy_manifest()
     assert manifest == {
         ACTOR_MODEL: {
-            "preflight_limit": 15000,
-            "reserved_input_tokens": 16000,
-            "max_output_tokens": 600,
+            "preflight_limit": 20000,
+            "reserved_input_tokens": 21000,
+            "max_output_tokens": 1200,
             "input_per_million": "1",
             "output_per_million": "5",
         },
         JUDGE_MODEL: {
-            "preflight_limit": 7000,
-            "reserved_input_tokens": 8000,
-            "max_output_tokens": 800,
+            "preflight_limit": 24000,
+            "reserved_input_tokens": 25000,
+            "max_output_tokens": 8192,
             "input_per_million": "2",
             "output_per_million": "10",
         },
     }
-    assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.019")
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.024")
+    assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.027")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.13192")
     assert (
         PRICING_HASH
         == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     )
     assert PRICING_HASH != "b36ccff4b6bc11e7343861e7400ba18a710b14659b6cb1a3d7eab72390897b4d"
+    previous = policy_manifest()
+    previous[JUDGE_MODEL]["max_output_tokens"] = 3200
+    old_pricing = sha256(
+        json.dumps(previous, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert old_pricing == "a0fd95da6b8d48fb709704a5fc85e32ec431084bffac743d521beb0beec72d02"
+    assert PRICING_HASH != old_pricing
     manifest[ACTOR_MODEL]["reserved_input_tokens"] = 8000
-    assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 16000
+    assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 21000
+
+
+def test_current_capacity_forecast_preserves_historical_gap_and_approved_funding() -> None:
+    actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
+    judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
+    assert actor == Decimal("0.027") and judge == Decimal("0.13192")
+    release = 298 * actor + 160 * judge
+    gate = 77 * actor + 39 * judge
+    development = 3 * actor + judge
+    diagnostics = 26 * actor + 7 * judge
+    calibration = 13 * judge
+    assert (release, gate, development, diagnostics, calibration) == (
+        Decimal("29.15320"),
+        Decimal("7.22388"),
+        Decimal("0.21292"),
+        Decimal("1.62544"),
+        Decimal("1.71496"),
+    )
+    future = 576 * actor + 291 * judge
+    assert future == release + 3 * gate + 7 * development + diagnostics == Decimal("53.94072")
+    known, historical_hold = Decimal("0.729081"), Decimal("0.082")
+    exposure = future + calibration + known + historical_hold
+    assert exposure == Decimal("56.466761")
+    assert exposure - Decimal("42") == Decimal("14.466761")
+    assert exposure + Decimal("9") + Decimal("4") == Decimal("69.466761")
+    # The previous checkpoint and failed third generation retain their old policy.
+    old_judge = Decimal("0.082")
+    historical_future = 576 * actor + 291 * old_judge
+    assert historical_future == Decimal("39.414")
+    assert historical_hold == old_judge
 
 
 def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:
     zero = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=0, output_tokens=0))
     assert zero.actual_cost_usd == Decimal(0)
     assert zero.usage_complete is True
-    overage = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=17000, output_tokens=600))
-    assert overage.actual_cost_usd == Decimal("0.020")
-    assert overage.reserved_cost_usd == Decimal("0.019")
+    overage = cost_for_usage(ACTOR_MODEL, Usage(input_tokens=30000, output_tokens=1200))
+    assert overage.actual_cost_usd == Decimal("0.036")
+    assert overage.reserved_cost_usd == Decimal("0.027")
+    assert overage.actual_cost_usd > overage.reserved_cost_usd
 
 
 @pytest.mark.parametrize(
@@ -194,7 +232,7 @@ def test_synthetic_stage_timing_call_metadata_and_no_double_counting() -> None:
     assert endpoint.corpus_hash is None
     total = provider_cost_totals(records)
     assert total.actual_cost_usd == Decimal("0.0015")
-    assert total.reserved_cost_usd == Decimal("0.019")
+    assert total.reserved_cost_usd == Decimal("0.027")
     assert total.input_tokens == 1000
     assert total.output_tokens == 100
     assert total.actual_cost_usd == endpoint.actual_cost_usd
@@ -220,7 +258,7 @@ def test_synthetic_failed_call_and_stage_keep_duration_and_unknown_cost() -> Non
     assert records[0].response_code == endpoint.response_code == "deadline_exceeded"
     assert endpoint.actual_cost_usd is None
     assert endpoint.usage_complete is False
-    assert endpoint.reserved_cost_usd == Decimal("0.019")
+    assert endpoint.reserved_cost_usd == Decimal("0.027")
     assert "private synthetic letter" not in stream.getvalue()
     assert "raw provider exception" not in stream.getvalue()
 
@@ -249,7 +287,7 @@ def test_synthetic_missing_call_makes_entire_endpoint_cost_incomplete() -> None:
     assert total.input_tokens == 1050
     assert total.output_tokens is None
     assert endpoint.actual_cost_usd is total.actual_cost_usd is None
-    assert total.reserved_cost_usd == Decimal("0.038")
+    assert total.reserved_cost_usd == Decimal("0.054")
 
 
 def test_synthetic_attempt_links_extraction_and_analysis_without_text() -> None:
@@ -268,6 +306,8 @@ def test_synthetic_attempt_links_extraction_and_analysis_without_text() -> None:
         tool_name="notice_deadline_check",
         check_statuses=(CheckMetadata(id="notice", status="fail"),),
         retrieved_evidence_ids=("f" * 64, "a" * 64),
+        foundation_evidence_ids=("b" * 64,),
+        initial_context_evidence_ids=("b" * 64, "a" * 64, "f" * 64),
         cited_evidence_ids=("a" * 64,),
     )
     assert extract_record.attempt_id == analysis_record.attempt_id
@@ -277,6 +317,63 @@ def test_synthetic_attempt_links_extraction_and_analysis_without_text() -> None:
     assert analysis_record.check_statuses[0].status == "fail"
     assert extract_record.duration_ms + analysis_record.duration_ms == 375
     assert records_from(stream)[0].actual_cost_usd == Decimal(0)
+
+
+@pytest.mark.parametrize(
+    "field", ["retrieved_evidence_ids", "foundation_evidence_ids", "initial_context_evidence_ids"]
+)
+def test_context_provenance_fields_are_required_without_old_artifact_defaults(field: str) -> None:
+    trace, _, _ = synthetic_recorder()
+    payload = json.loads(trace.finish("ok").model_dump_json())
+    del payload[field]
+    with pytest.raises(ValidationError):
+        TraceRecord.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("phase", ["extraction", "judge", "analysis"])
+def test_context_provenance_is_endpoint_only_and_nonapplicable_values_are_explicit(
+    phase: str,
+) -> None:
+    context = TraceContext.model_validate(synthetic_context().model_copy(update={"phase": phase}))
+    trace, _, stream = synthetic_recorder(context=context)
+    with trace.provider_call(ACTOR_MODEL, operation="count_tokens"):
+        pass
+    trace.finish("ok")
+    for record in records_from(stream):
+        payload = json.loads(record.model_dump_json())
+        for field in (
+            "retrieved_evidence_ids",
+            "foundation_evidence_ids",
+            "initial_context_evidence_ids",
+        ):
+            assert payload[field] == []
+            if record.record_kind == "provider_call" or phase != "analysis":
+                with pytest.raises(ValidationError):
+                    TraceRecord.model_validate_json(json.dumps({**payload, field: ["a" * 64]}))
+
+
+def test_analysis_trace_keeps_rank_bound_but_allows_full_unique_context() -> None:
+    context = TraceContext.model_validate(
+        synthetic_context().model_copy(update={"phase": "analysis"})
+    )
+    trace, _, _ = synthetic_recorder(context=context)
+    identifiers = tuple(f"{index:064x}" for index in range(21))
+    record = trace.finish(
+        "ok",
+        retrieved_evidence_ids=identifiers[:5],
+        foundation_evidence_ids=identifiers,
+        initial_context_evidence_ids=identifiers,
+    )
+    payload = json.loads(record.model_dump_json())
+    with pytest.raises(ValidationError):
+        TraceRecord.model_validate_json(
+            json.dumps({**payload, "retrieved_evidence_ids": list(identifiers[:6])})
+        )
+    for field in ("foundation_evidence_ids", "initial_context_evidence_ids"):
+        with pytest.raises(ValidationError):
+            TraceRecord.model_validate_json(
+                json.dumps({**payload, field: [identifiers[0], identifiers[0]]})
+            )
 
 
 @pytest.mark.parametrize(
@@ -462,7 +559,7 @@ def test_synthetic_invalid_completion_preserves_accounting(
         assert result.output_tokens == (100 if known_usage else None)
         assert result.usage_complete is known_usage
         assert result.actual_cost_usd == (Decimal("0.0015") if known_usage else None)
-        assert result.reserved_cost_usd == Decimal("0.019")
+        assert result.reserved_cost_usd == Decimal("0.027")
     for record in records:
         assert record.requested_model_id == ACTOR_MODEL
         assert record.returned_model_id is None
@@ -501,7 +598,7 @@ def test_synthetic_rejected_completion_keeps_contiguous_call_accounting(
     assert total.actual_cost_usd == endpoint.actual_cost_usd
     assert total.actual_cost_usd == (Decimal("0.003") if known_usage else None)
     assert total.usage_complete is known_usage
-    assert total.reserved_cost_usd == endpoint.reserved_cost_usd == Decimal("0.038")
+    assert total.reserved_cost_usd == endpoint.reserved_cost_usd == Decimal("0.054")
     with pytest.raises(ValueError, match="Duplicate provider call"):
         provider_cost_totals([*records, records[0]])
     with pytest.raises(ValueError, match="does not match"):

@@ -194,7 +194,7 @@ def test_k2_judge_reservation_and_current_release_forecasts() -> None:
     assert actor == Decimal("0.027")
     assert judge == Decimal("0.21384")
     assert 298 * actor + 160 * judge == Decimal("42.26040")
-    assert 8 * actor + 3 * judge == Decimal("0.85752")
+    assert 5 * actor + 3 * judge == Decimal("0.77652")
     assert 14 * judge == Decimal("2.99376")
     assert _reservation(298, 160) == Decimal("42.26040")
     # The deferred historical permit cannot fund its full inventory at the new limits.

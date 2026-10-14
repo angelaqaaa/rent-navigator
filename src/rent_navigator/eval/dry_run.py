@@ -31,9 +31,8 @@ from rent_navigator.trace import TraceContext, TraceRecord, provider_cost_totals
 
 
 def dry_run_forecast() -> Decimal:
-    """Reserve eight actor calls conservatively; the fixed attempts use five."""
     return (
-        8 * MODEL_POLICIES[ACTOR_MODEL].reservation_usd
+        5 * MODEL_POLICIES[ACTOR_MODEL].reservation_usd
         + 3 * MODEL_POLICIES[JUDGE_MODEL].reservation_usd
     )
 

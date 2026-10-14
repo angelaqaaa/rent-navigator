@@ -64,7 +64,7 @@ def test_command_records_ledger_before_operations_and_preserves_read_only_data(
                 ledger["batches"][0]["cap_usd"]
             )
             assert Decimal(ledger["batches"][0]["forecast_usd"]) == Decimal(
-                "42.26040" if command == "collect" else "0.85752"
+                "42.26040" if command == "collect" else "0.77652"
             )
             assert Decimal(ledger["batches"][0]["cap_usd"]) == Decimal(
                 "43" if command == "collect" else "1"

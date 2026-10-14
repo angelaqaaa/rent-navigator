@@ -237,6 +237,8 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
 ) -> None:
     smoke = load_smoke(monkeypatch)
     monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    # Exercise each provenance guard against the current profile in this fake only.
+    monkeypatch.setattr(smoke, "MEASUREMENT_JUDGE_HASH", smoke.judge_config_hash())
     calls: list[list[str]] = []
 
     def git(command: list[str], **kwargs: Any) -> Any:
@@ -304,6 +306,36 @@ def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
                 )
             )
     assert not output.exists() and clients == []
+
+
+def test_historical_measurement_identity_rejects_revised_rubric_before_execution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    assert smoke.MEASUREMENT_JUDGE_HASH == (
+        "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384"
+    )
+
+    def prohibited(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Identity drift must stop before provenance reads or provider setup")
+
+    monkeypatch.setattr(smoke.subprocess, "check_output", prohibited)
+    monkeypatch.setattr(smoke, "create_client", prohibited)
+    output = tmp_path / "historical-measurement"
+    with pytest.raises(ValueError, match="Measurement runner or judge identity differs"):
+        asyncio.run(
+            smoke.run_smoke(
+                source_commit=SOURCE,
+                runner_commit=RUNNER,
+                evidence_dir=output,
+                live=True,
+                billing_ready=True,
+                measurement=True,
+                packets=["J05"],
+            )
+        )
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("failure", ["missing_usage", "preflight", "cancelled", "model"])

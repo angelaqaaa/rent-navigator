@@ -158,7 +158,7 @@ def test_missing_packet3_and_extra_audit_fields_never_fall_back(
         _decode_judgment(
             compact_json(wire), load_historical_calibration(identifier)["provider_packet"]
         )
-    wire["statements"][0]["parts"] = []
+    wire["statements"][next(iter(wire["statements"]))]["parts"] = []
     with pytest.raises(ValueError):
         _decode_judgment(compact_json(wire), current["provider_packet"])
 
@@ -182,7 +182,11 @@ def test_grade_only_examples_map_unchanged_proposed_labels(identifier: str) -> N
     stressed = _decode_judgment(compact_json(stress), fixture["provider_packet"])
     assert [row.id for row in stressed.statements] == [row.id for row in result.statements]
     sizes = calibration_sizes(fixture)
-    assert sizes["structural_stress_output_utf8_bytes"] > sizes["representative_output_utf8_bytes"]
+    assert all(leaf["result"] == "contradicted" for leaf in stress["required_claims"].values())
+    assert all(leaf["factual"] == "contradicted" for leaf in stress["statements"].values())
+    assert all(flag is False for flag in stress["policy_violations"].values())
+    # Fixed policy keys can make a representative vote equal the largest label encoding.
+    assert sizes["structural_stress_output_utf8_bytes"] >= sizes["representative_output_utf8_bytes"]
     assert sizes["count_payload_without_timeout_utf8_bytes"] > sizes["packet_utf8_bytes"]
     assert all("token" not in key for key in sizes)
 
@@ -300,7 +304,7 @@ def test_retained_v2_manifest_and_sizes_bind_original_preparation(corpus: Corpus
     assert sizes["historical_manifest_sha256"] == sha256(manifest_raw).hexdigest()
     assert sizes["historical_sizing_file_sha256"] == manifest["sizing_file_sha256"]
     assert sizes["judge_config_hash"] == judge_config_hash()
-    assert sizes["wire_policy_version"] == 7
+    assert sizes["wire_policy_version"] == 8
     assert sizes["token_measurement"] is None
     assert sizes["provider_calls"] == sizes["count_calls"] == 0
     assert sizes["budget_status"] == "initial_offline_not_provider_accepted"
@@ -319,13 +323,13 @@ def test_regenerated_representation_worksheet_keeps_historical_manifest(corpus: 
     manifest = json.loads(manifest_raw)
     assert manifest["wire_policy_version"] == 5
     sizes = json.loads((directory / "sizes.json").read_bytes())
-    assert sizes["schema_version"] == 2 and sizes["wire_policy_version"] == 7
+    assert sizes["schema_version"] == 2 and sizes["wire_policy_version"] == 8
     assert sizes["judge_config_hash"] == judge_config_hash()
     assert sizes["historical_manifest_sha256"] == sha256(manifest_raw).hexdigest()
     assert sizes["historical_sizing_file_sha256"] == manifest["sizing_file_sha256"]
     assert sizes["token_measurement"] is None
     assert sizes["provider_calls"] == sizes["count_calls"] == 0
-    assert sizes["representation"] == {"name": "shared_grade_arrays", "version": 1}
+    assert sizes["representation"] == {"name": "shared_id_keyed_grades", "version": 1}
     assert set(sizes["fixtures"]) == set(CALIBRATION_IDS)
     for identifier in CALIBRATION_IDS:
         fresh = calibration_sizes(load_calibration(identifier, corpus=corpus))

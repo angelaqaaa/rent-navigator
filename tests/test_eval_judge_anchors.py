@@ -1,7 +1,6 @@
 """Grade-only coverage, strict legacy rejection and no anchor-based certification."""
 
 import json
-from copy import deepcopy
 from itertools import product
 from typing import Any
 
@@ -26,8 +25,8 @@ def test_frozen_labels_survive_without_audit_fields(identifier: str) -> None:
     } == expected["statements"]
     assert result.false_pass == expected["false_pass"]
     assert result.policy_violations == expected["policy_violations"]
-    assert all(set(row) == {"id", "result"} for row in wire["required_claims"])
-    assert all(set(row) == {"id", "factual", "citation_support"} for row in wire["statements"])
+    assert all(set(row) == {"result"} for row in wire["required_claims"].values())
+    assert all(set(row) == {"factual", "citation_support"} for row in wire["statements"].values())
 
 
 @pytest.mark.parametrize("family", ["required_claims", "statements"])
@@ -53,7 +52,7 @@ def test_frozen_labels_survive_without_audit_fields(identifier: str) -> None:
 @pytest.mark.parametrize("value", [None, "", False, [], {}])
 def test_anchor_wire_fields_are_always_rejected(family: str, field: str, value: object) -> None:
     packet, wire = calibration_witness("J01")
-    wire[family][0][field] = value
+    wire[family][next(iter(wire[family]))][field] = value
     with pytest.raises(ValueError):
         _decode_judgment(json.dumps(wire), packet)
 
@@ -73,22 +72,29 @@ def test_historical_representative_votes_have_no_fallback(identifier: str) -> No
 )
 def test_arrays_require_exact_once_only_identifiers(field: str, mutation: str) -> None:
     packet, wire = calibration_witness("J01")
+    first = next(iter(wire[field]))
+    raw = None
     if mutation == "missing":
-        wire[field].pop()
+        wire[field].pop(first)
     elif mutation == "duplicate":
-        wire[field].append(deepcopy(wire[field][0]))
-    elif mutation == "foreign":
-        wire[field][0]["id"] = "foreign"
-    elif mutation == "case":
-        wire[field][0]["id"] = wire[field][0]["id"].upper()
-    elif mutation == "space":
-        wire[field][0]["id"] += " "
+        raw = json.dumps(wire)
+        original = json.dumps(first) + ": " + json.dumps(wire[field][first])
+        raw = raw.replace(original, original + ", " + original, 1)
+    elif mutation in {"foreign", "case", "space"}:
+        name = (
+            "foreign"
+            if mutation == "foreign"
+            else first.upper()
+            if mutation == "case"
+            else first + " "
+        )
+        wire[field][name] = wire[field].pop(first)
     elif mutation == "object":
-        wire[field] = {row["id"]: row for row in wire[field]}
+        wire[field] = [{"id": identifier, **leaf} for identifier, leaf in wire[field].items()]
     else:
         wire[field] = None
     with pytest.raises(ValueError):
-        _decode_judgment(json.dumps(wire), packet)
+        _decode_judgment(raw if raw is not None else json.dumps(wire), packet)
 
 
 @pytest.mark.parametrize(
@@ -114,7 +120,9 @@ def test_factual_and_citation_domains_remain_independent(
         ]
         for i, row in enumerate(packet["evidence"], 1):
             row["reference"] = f"e{i}"
-    wire["statements"][0].update(factual=factual, citation_support=citation)
+    wire["statements"][next(iter(wire["statements"]))].update(
+        factual=factual, citation_support=citation
+    )
     if cited == (citation == "not_applicable"):
         with pytest.raises(ValueError):
             _decode_judgment(json.dumps(wire), packet)
@@ -125,20 +133,22 @@ def test_factual_and_citation_domains_remain_independent(
 
 
 @pytest.mark.parametrize(
-    "field", ["id", "result", "factual", "citation_support", "false_pass", "policy_violations"]
+    "field", ["c1", "result", "factual", "citation_support", "false_pass", "policy_violations"]
 )
 def test_equal_and_escaped_duplicate_keys_are_rejected(field: str) -> None:
     packet, wire = calibration_witness("J01")
     raw = json.dumps(wire)
     replacement = '"' + field[0] + f"\\u{ord(field[1]):04x}" + field[2:] + '"'
     value: Any = wire.get(field)
-    if field in {"id", "result"}:
-        value = wire["required_claims"][0][field]
+    if field == "c1":
+        value = wire["required_claims"]["c1"]
+    elif field == "result":
+        value = wire["required_claims"]["c1"][field]
     elif field in {"factual", "citation_support"}:
-        value = wire["statements"][0][field]
+        value = wire["statements"][next(iter(wire["statements"]))][field]
     original = json.dumps(field) + ": " + json.dumps(value)
     raw = raw.replace(original, original + ", " + replacement + ": " + json.dumps(value), 1)
-    with pytest.raises(ValueError, match="duplicate"):
+    with pytest.raises(ValueError, match="json_invalid"):
         _decode_judgment(raw, packet)
 
 
@@ -153,9 +163,9 @@ def test_generic_claim_count_and_unicode_ids_bind_without_position_inference() -
     packet, wire = calibration_witness("J01")
     identifiers = [f"claim/{i}~ %" for i in range(17)]
     packet["required_claims"] = [{"id": key, "text": "Synthetic target"} for key in identifiers]
-    wire["required_claims"] = [{"id": key, "result": "met"} for key in reversed(identifiers)]
-    wire["statements"].reverse()
+    wire["required_claims"] = {key: {"result": "met"} for key in reversed(identifiers)}
+    wire["statements"] = dict(reversed(list(wire["statements"].items())))
     result = _decode_judgment(json.dumps(wire), packet)
     assert [row.id for row in result.required_claims] == identifiers
     assert [row.id for row in result.statements] == [row["id"] for row in packet["statements"]]
-    assert judge_schema(packet)["$defs"]["claim_id"]["enum"] == identifiers
+    assert judge_schema(packet)["properties"]["required_claims"]["required"] == identifiers

@@ -15,6 +15,7 @@ from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_vali
 
 from rent_navigator.agent import agent_config_hash, answer
 from rent_navigator.corpus import Chunk, Corpus
+from rent_navigator.eval.judge_decode import JudgeDecodeReason
 from rent_navigator.eval.metrics import classify
 from rent_navigator.eval.models import (
     CASE_IDS,
@@ -51,6 +52,7 @@ from rent_navigator.models import (
 )
 from rent_navigator.provider import (
     Deadline,
+    FailureDiagnosticV2,
     MessagesPort,
     ProviderAdapter,
     ProviderFailure,
@@ -188,9 +190,26 @@ class JudgeEvaluation(JudgeAccounting):
 class JudgeFailure(Exception):
     """A safe failure retaining all known judge accounting, never a judgment."""
 
-    def __init__(self, code: ErrorCode, accounting: JudgeAccounting) -> None:
+    def __init__(
+        self,
+        code: ErrorCode,
+        accounting: JudgeAccounting,
+        *,
+        diagnostic: FailureDiagnosticV2 | None = None,
+        decode_rejection_reason: JudgeDecodeReason | None = None,
+    ) -> None:
         self.code = code
         self.accounting = accounting
+        self.diagnostic = diagnostic or ProviderFailure(code).diagnostic
+        self.decode_rejection_reason: JudgeDecodeReason | None = TypeAdapter(
+            JudgeDecodeReason | None
+        ).validate_python(decode_rejection_reason, strict=True)
+        if self.decode_rejection_reason is not None and (
+            not isinstance(self.diagnostic, FailureDiagnosticV2)
+            or self.diagnostic.category != "local_guard"
+            or self.code not in {"invalid_generated_output", "provider_error"}
+        ):
+            raise ValueError("Local decode observations require a version-2 local guard")
         super().__init__(ProviderFailure(code).message)
 
 

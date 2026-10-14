@@ -3,6 +3,7 @@
 import asyncio
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -13,6 +14,8 @@ import pytest
 from anthropic.types import Message, MessageTokensCount, TextBlock
 
 SOURCE = "a" * 40
+RUNNER = "b" * 40
+MEASUREMENT_PACKETS = [*(f"J{number:02}" for number in range(5, 14)), "R04"]
 
 
 def load_smoke(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
@@ -23,6 +26,449 @@ def load_smoke(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "head_sha", lambda: SOURCE)
     return module
+
+
+def test_selected_measurement_records_ten_votes_without_qualifying_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    monkeypatch.setattr(
+        smoke, "_measurement_provenance", lambda source, runner: RUNNER, raising=False
+    )
+    output = tmp_path / "synthetic-measurement"
+    summary = asyncio.run(
+        smoke.run_smoke(
+            source_commit=SOURCE,
+            runner_commit=RUNNER,
+            evidence_dir=output,
+            measurement=True,
+            packets=MEASUREMENT_PACKETS,
+        )
+    )
+    assert summary["purpose"] == "measurement after a failed gate"
+    assert summary["measurement"] is True and summary["gate_passed"] is False
+    assert summary["measurement_complete"] is True
+    assert summary["requested_votes"] == summary["completed_votes"] == MEASUREMENT_PACKETS
+    assert summary["unstarted_votes"] == []
+    assert summary["planned_votes"] == summary["generation_attempts"] == 10
+    assert summary["calibration_denominator"] == 9
+    assert summary["reservation_forecast_usd"] == "1.31920"
+    assert summary["source_commit"] == summary["judging_source_commit"] == SOURCE
+    assert summary["runner_commit"] == RUNNER
+    assert not smoke._passes_gate(summary, output, SOURCE)
+    assert sorted(path.stem for path in output.iterdir()) == sorted(
+        [*MEASUREMENT_PACKETS, "summary"]
+    )
+
+
+@pytest.mark.parametrize("failure", ["flip", "decode", "r04", "time", "output"])
+def test_measurement_continues_and_keeps_each_failed_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: RUNNER)
+    created: list[str] = []
+    now = 0.0
+    selected = ["J06", "J07", "R04"]
+    expected_reason = {
+        "flip": "fail_to_pass",
+        "decode": "call_failure",
+        "r04": "r04_smoke",
+        "time": "elapsed_bound",
+        "output": "usage_bound",
+    }[failure]
+
+    def factory(value: Any, expected: Any) -> Any:
+        identifier = selected[len(created)]
+        good = smoke.OfflineMessages(value, expected)
+
+        class Port:
+            async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+                return MessageTokensCount(input_tokens=1000)
+
+            async def create(self, **kwargs: Any) -> Message:
+                nonlocal now
+                created.append(identifier)
+                response: Message = await good.create(**kwargs)
+                if identifier == ("R04" if failure == "r04" else "J06"):
+                    block = response.content[0]
+                    assert isinstance(block, TextBlock)
+                    output = json.loads(block.text)
+                    if failure == "flip":
+                        for leaf in output["required_claims"].values():
+                            leaf["result"] = "met"
+                        for leaf in output["statements"].values():
+                            leaf["factual"] = "supported"
+                        output["false_pass"] = False
+                        output["policy_violations"] = {f"S{i:02}": False for i in range(1, 9)}
+                    elif failure == "r04":
+                        output["false_pass"] = False
+                    elif failure == "decode":
+                        return response.model_copy(
+                            update={
+                                "content": [
+                                    TextBlock(type="text", text="synthetic-private-invalid-json")
+                                ]
+                            }
+                        )
+                    elif failure == "time":
+                        now += 91
+                    elif failure == "output":
+                        response = response.model_copy(
+                            update={
+                                "usage": response.usage.model_copy(update={"output_tokens": 6001})
+                            }
+                        )
+                    response = response.model_copy(
+                        update={"content": [TextBlock(type="text", text=json.dumps(output))]}
+                    )
+                return response
+
+        return Port()
+
+    output = tmp_path / failure
+    summary = asyncio.run(
+        smoke.run_smoke(
+            source_commit=SOURCE,
+            runner_commit=RUNNER,
+            evidence_dir=output,
+            measurement=True,
+            packets=selected,
+            messages_factory=factory,
+            clock=lambda: now,
+        )
+    )
+    assert created == selected
+    assert summary["measurement_complete"] is True and summary["complete"] is True
+    assert summary["gate_passed"] is False and not smoke._passes_gate(summary, output, SOURCE)
+    assert summary["completed_votes"] == selected and summary["unstarted_votes"] == []
+    failed = json.loads((output / (("R04" if failure == "r04" else "J06") + ".json")).read_text())
+    assert failed["failed_criterion"] == expected_reason
+    if failure == "flip":
+        assert failed["fail_to_pass"] is True
+    if failure == "decode":
+        assert failed["decode_rejection_reason"] == "json_invalid"
+        assert failed["actual_cost_usd"] == "0.003"
+        assert summary["decoded_votes"] == 2
+    assert "synthetic-private-invalid-json" not in "".join(
+        path.read_text() for path in output.iterdir()
+    )
+
+
+def test_complete_fourteen_vote_measurement_cannot_pass_gate_or_cli_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: SOURCE)
+    output = tmp_path / "synthetic-all-fourteen"
+    assert (
+        smoke.main(
+            [
+                "--offline",
+                "--measurement",
+                "--packets",
+                *smoke.PACKET_IDS,
+                "--source-commit",
+                SOURCE,
+                "--runner-commit",
+                SOURCE,
+                "--evidence-dir",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["measurement_complete"] is True and summary["calibration_matched"] == 13
+    assert summary["r04_smoke_passed"] is True and summary["fail_to_pass_flips"] == 0
+    assert summary["gate_passed"] is False
+    assert not smoke._passes_gate(summary, output, SOURCE)
+
+
+@pytest.mark.parametrize("packets", [None, [], ["J05", "J05"], ["unknown"], ["J06", "J05"]])
+def test_measurement_rejects_bad_selection_before_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, packets: list[str] | None
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    output = tmp_path / "absent"
+    with pytest.raises(ValueError):
+        asyncio.run(
+            smoke.run_smoke(
+                source_commit=SOURCE,
+                runner_commit=RUNNER,
+                evidence_dir=output,
+                measurement=True,
+                packets=packets,
+            )
+        )
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("arguments", [{"packets": ["J05"]}, {"runner_commit": RUNNER}])
+def test_ordinary_gate_rejects_measurement_arguments(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, arguments: dict[str, Any]
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    output = tmp_path / "absent"
+    with pytest.raises(ValueError):
+        asyncio.run(smoke.run_smoke(source_commit=SOURCE, evidence_dir=output, **arguments))
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        "none",
+        "missing_runner",
+        "runner",
+        "unresolved",
+        "not_ancestor",
+        "source",
+        "unrelated",
+        "profile",
+        "dirty",
+        "script",
+    ],
+)
+def test_measurement_provenance_checks_ancestor_content_and_live_cleanliness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, drift: str
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    assert smoke.MEASUREMENT_JUDGE_HASH == smoke.judge_config_hash()
+    calls: list[list[str]] = []
+
+    def git(command: list[str], **kwargs: Any) -> Any:
+        calls.append(command)
+        if command[1:3] == ["rev-parse", "--verify"]:
+            if drift == "unresolved":
+                raise subprocess.CalledProcessError(128, command)
+            return (RUNNER if drift == "source" else SOURCE) + "\n"
+        if command[1] == "merge-base":
+            if drift == "not_ancestor":
+                raise subprocess.CalledProcessError(1, command)
+            return b""
+        if command[1] == "diff":
+            return (
+                "src/rent_navigator/eval/judge.py\0"
+                if drift == "unrelated"
+                else "scripts/judge_smoke.py\0tests/test_judge_smoke.py\0"
+            )
+        if command[1] == "status":
+            return " M scripts/judge_smoke.py\n" if drift == "dirty" else ""
+        if command[1] == "show":
+            assert smoke.__file__ is not None
+            source = Path(smoke.__file__).read_text()
+            if drift == "script" and command[2].startswith(RUNNER):
+                source = source.replace("def fixed_votes()", "def changed_votes()", 1)
+            return source
+        raise AssertionError("Unexpected provenance command")
+
+    monkeypatch.setattr(smoke.subprocess, "check_output", git)
+    if drift == "profile":
+        from rent_navigator.eval import judge
+
+        monkeypatch.setattr(
+            judge,
+            "judge_request_settings",
+            lambda: {
+                "thinking": {"type": "adaptive", "display": "omitted"},
+                "output_config": {"effort": "low"},
+            },
+        )
+    output = tmp_path / "provenance"
+    clients: list[str] = []
+
+    def forbidden_client(**kwargs: Any) -> Any:
+        clients.append("client")
+        raise AssertionError("No real client is permitted")
+
+    monkeypatch.setattr(smoke, "create_client", forbidden_client)
+    runner = None if drift == "missing_runner" else SOURCE if drift == "runner" else RUNNER
+    if drift == "none":
+        assert smoke._measurement_provenance(SOURCE, runner) == RUNNER
+        assert any(command[1] == "merge-base" for command in calls)
+        assert any(command[1] == "diff" and "--no-renames" in command for command in calls)
+    else:
+        with pytest.raises(ValueError):
+            asyncio.run(
+                smoke.run_smoke(
+                    source_commit=SOURCE,
+                    runner_commit=runner,
+                    evidence_dir=output,
+                    live=True,
+                    billing_ready=True,
+                    measurement=True,
+                    packets=["J05"],
+                )
+            )
+    assert not output.exists() and clients == []
+
+
+@pytest.mark.parametrize("drift", ["historical_hash", "rubric"])
+def test_measurement_identity_rejects_wrong_profile_before_execution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, drift: str
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "head_sha", lambda: RUNNER)
+    assert (
+        smoke.MEASUREMENT_JUDGE_HASH
+        == smoke.judge_config_hash()
+        == ("258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04")
+    )
+    if drift == "historical_hash":
+        monkeypatch.setattr(
+            smoke,
+            "judge_config_hash",
+            lambda: "89df22d995b0b0c89cd91ebfa6c587bf5cd589384801e28738e0604cb26e1384",
+        )
+    else:
+        from rent_navigator.eval import judge
+
+        monkeypatch.setattr(judge, "JUDGE_SYSTEM", judge.JUDGE_SYSTEM + "Synthetic rubric drift.")
+        assert smoke.judge_config_hash() != smoke.MEASUREMENT_JUDGE_HASH
+
+    def prohibited(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Identity drift must stop before provenance reads or provider setup")
+
+    monkeypatch.setattr(smoke.subprocess, "check_output", prohibited)
+    monkeypatch.setattr(smoke, "create_client", prohibited)
+    output = tmp_path / "wrong-profile-measurement"
+    with pytest.raises(ValueError, match="Measurement runner or judge identity differs"):
+        asyncio.run(
+            smoke.run_smoke(
+                source_commit=SOURCE,
+                runner_commit=RUNNER,
+                evidence_dir=output,
+                live=True,
+                billing_ready=True,
+                measurement=True,
+                packets=["J05"],
+            )
+        )
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("failure", ["missing_usage", "preflight", "cancelled", "model"])
+def test_measurement_hard_guards_keep_reservation_and_unstarted_votes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: RUNNER)
+    calls: list[str] = []
+    sentinel = "synthetic-private-hard-guard"
+
+    def factory(value: Any, expected: Any) -> Any:
+        good = smoke.OfflineMessages(value, expected)
+
+        class Port:
+            async def count_tokens(self, **kwargs: Any) -> MessageTokensCount:
+                calls.append("count")
+                return MessageTokensCount(input_tokens=24001 if failure == "preflight" else 1000)
+
+            async def create(self, **kwargs: Any) -> Message:
+                calls.append("generation")
+                if failure == "cancelled":
+                    raise asyncio.CancelledError(sentinel)
+                response: Message = await good.create(**kwargs)
+                return response.model_copy(
+                    update={"usage": None}
+                    if failure == "missing_usage"
+                    else {"model": "claude-haiku-4-5-20251001"}
+                )
+
+        return Port()
+
+    output = tmp_path / failure
+    summary = asyncio.run(
+        smoke.run_smoke(
+            source_commit=SOURCE,
+            runner_commit=RUNNER,
+            evidence_dir=output,
+            measurement=True,
+            packets=MEASUREMENT_PACKETS,
+            messages_factory=factory,
+        )
+    )
+    assert summary["measurement_complete"] is False and summary["complete"] is False
+    assert summary["gate_passed"] is False
+    assert summary["attempted_votes"] == summary["completed_votes"] == ["J05"]
+    assert summary["unstarted_votes"] == MEASUREMENT_PACKETS[1:]
+    assert calls == (["count"] if failure == "preflight" else ["count", "generation"])
+    row = json.loads((output / "J05.json").read_text())
+    assert row["failed_criterion"] == "call_failure"
+    if failure == "preflight":
+        assert row["actual_cost_usd"] == row["reserved_cost_usd"] == "0"
+        assert row["failure_code"] == "budget_exhausted"
+    else:
+        assert row["actual_cost_usd"] is None and row["usage_complete"] is False
+        assert row["reserved_cost_usd"] == "0.13192"
+        assert summary["cost"]["actual_cost_usd"] is None
+        assert summary["cost"]["reserved_cost_usd"] == "0.13192"
+    assert all(sentinel not in path.read_text() for path in output.iterdir())
+
+
+@pytest.mark.parametrize("close_failure", [False, True])
+def test_measurement_closes_recording_client_and_reports_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, close_failure: bool
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: RUNNER)
+    monkeypatch.setattr(smoke.subprocess, "check_output", lambda *args, **kwargs: "")
+    _, value, expected = next(vote for vote in smoke.fixed_votes() if vote[0] == "J05")
+    closed: list[str] = []
+
+    class Client:
+        messages = smoke.OfflineMessages(value, expected)
+
+        async def close(self) -> None:
+            closed.append("closed")
+            if close_failure:
+                raise ValueError("synthetic-private-close-failure")
+
+    monkeypatch.setattr(smoke, "create_client", lambda **kwargs: Client())
+    output = tmp_path / "synthetic-client-cleanup"
+    summary = asyncio.run(
+        smoke.run_smoke(
+            source_commit=SOURCE,
+            runner_commit=RUNNER,
+            evidence_dir=output,
+            live=True,
+            billing_ready=True,
+            measurement=True,
+            packets=["J05"],
+        )
+    )
+    assert closed == ["closed"]
+    assert summary["measurement_complete"] is not close_failure
+    assert summary["gate_passed"] is False
+    assert summary["stop_reason"] == ("provider_error" if close_failure else None)
+    assert "synthetic-private-close-failure" not in (output / "summary.json").read_text()
+
+
+def test_measurement_preserves_exclusive_destination(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    smoke = load_smoke(monkeypatch)
+    monkeypatch.setattr(smoke, "_measurement_provenance", lambda source, runner: RUNNER)
+    output = tmp_path / "existing-synthetic"
+    output.mkdir()
+    marker = output / "marker"
+    marker.write_text("synthetic-preserved")
+    with pytest.raises(FileExistsError):
+        asyncio.run(
+            smoke.run_smoke(
+                source_commit=SOURCE,
+                runner_commit=RUNNER,
+                evidence_dir=output,
+                measurement=True,
+                packets=["J05"],
+            )
+        )
+    assert [path.name for path in output.iterdir()] == ["marker"]
+    assert marker.read_text() == "synthetic-preserved"
 
 
 def test_offline_cli_completes_all_fourteen_votes_without_a_client(
@@ -257,9 +703,7 @@ def test_cli_requires_actual_r04_validator_success(
             if criterion == "false_pass":
                 output["false_pass"] = False
             else:
-                next(row for row in output["statements"] if row["id"] == "s3")["factual"] = (
-                    "supported"
-                )
+                output["statements"]["s3"]["factual"] = "supported"
             response = response.model_copy(
                 update={"content": [TextBlock(type="text", text=json.dumps(output))]}
             )
@@ -404,12 +848,12 @@ def test_fail_to_pass_stops_at_first_vote_and_preserves_unstarted_status(
         block = response.content[0]
         assert isinstance(block, TextBlock)
         grades = json.loads(block.text)
-        for claim in grades["required_claims"]:
+        for claim in grades["required_claims"].values():
             claim["result"] = "met"
-        for statement in grades["statements"]:
+        for statement in grades["statements"].values():
             statement["factual"] = "supported"
         grades["false_pass"] = False
-        grades["policy_violations"] = []
+        grades["policy_violations"] = {f"S{i:02}": False for i in range(1, 9)}
         return response.model_copy(
             update={"content": [TextBlock(type="text", text=json.dumps(grades))]}
         )

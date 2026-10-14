@@ -162,12 +162,11 @@ def resolve_judge_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return root
 
 
-# Frozen wire7 lint ceilings on 2026-10-13 after the owner-authorized J03 grammar probe.
-# The original constant name remains for unchanged historical worksheet compatibility.
-# These project limits do not infer provider bounds or acceptance of other packets.
-# Measured maxima are depth 5, 26 enum members and 1288 bytes; headroom is 0, 6 and 162.
-# The full fourteen-vote smoke remains pending.
-INITIAL_GRADE_LIMITS = {"depth": 5, "enum_members": 32, "bytes": 1450}
+# Re-frozen keyed-grade limits on 2026-10-13: 1971 bytes at four c1-c4 claims,
+# six s1-s6 statements, all uncited; ceil(1971 * 1.10) = 2169. All 64 mixes checked.
+# Claim.id has no maximum length; this finite bound uses the frozen approved ID inventory.
+# The original constant name preserves historical worksheet compatibility.
+INITIAL_GRADE_LIMITS = {"depth": 5, "enum_members": 9, "bytes": 2169}
 
 
 def schema_metrics(schema: dict[str, Any]) -> dict[str, int]:

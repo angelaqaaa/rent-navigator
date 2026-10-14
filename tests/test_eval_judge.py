@@ -333,13 +333,13 @@ def test_billed_invalid_judge_preserves_cost_trace_and_raw(
     if mutation == "missing_claim":
         payload["required_claims"] = {}
     elif mutation == "extra_claim":
-        payload["required_claims"].append({"id": "extra", "result": "met"})
+        payload["required_claims"]["extra"] = {"result": "met"}
     elif mutation == "legacy_array":
-        payload["required_claims"] = {
-            row["id"]: {"result": row["result"]} for row in payload["required_claims"]
-        }
+        payload["required_claims"] = [
+            {"id": identifier, **leaf} for identifier, leaf in payload["required_claims"].items()
+        ]
     elif mutation == "missing_statement":
-        payload["statements"].pop(0)
+        payload["statements"].pop(next(iter(payload["statements"])))
     elif mutation == "extra_field":
         payload["explanation"] = SENTINEL
     elif mutation == "max_tokens":
@@ -1173,9 +1173,9 @@ def test_policy_flags_remain_original_judgments_instead_of_being_silently_remove
     )
     evaluated = test.run()
     assert evaluated.judgment.policy_violations == ["S07"]
-    assert json.loads(test.records()[-1].value["content"][0]["text"])["policy_violations"] == [
-        "S07"
-    ]
+    flags = json.loads(test.records()[-1].value["content"][0]["text"])["policy_violations"]
+    assert {key for key, flag in flags.items() if flag} == {"S07"}
+    assert flags["S07"] is True
     test.verify(evaluated, evaluated.judgment)
     with pytest.raises(ValueError):
         validate_smoke_result(value, evaluated.judgment)
@@ -1249,8 +1249,8 @@ def test_shared_arrays_bind_count_generation_and_lossless_mapping(
     value = sized_input(value, claim_count, statement_count)
     expected = result(value)
     output = wire_payload(expected, value)
-    output["required_claims"].reverse()
-    output["statements"].reverse()
+    output["required_claims"] = dict(reversed(list(output["required_claims"].items())))
+    output["statements"] = dict(reversed(list(output["statements"].items())))
     raw_text = json.dumps(dict(reversed(list(output.items()))), indent=2)
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": raw_text}])
@@ -1267,18 +1267,18 @@ def test_shared_arrays_bind_count_generation_and_lossless_mapping(
     assert_closed_required_objects(schema)
     expanded = resolve_judge_schema(schema)
     for entry_field, ids, keys in (
-        ("required_claims", [row.id for row in value.required_claims], {"id", "result"}),
+        ("required_claims", [row.id for row in value.required_claims], {"result"}),
         (
             "statements",
             [row.id for row in value.response.statements],
-            {"id", "factual", "citation_support"},
+            {"factual", "citation_support"},
         ),
     ):
-        array = expanded["properties"][entry_field]
-        assert array["type"] == "array" and array["minItems"] == 1
-        leaf = array["items"]
-        assert set(leaf["properties"]) == set(leaf["required"]) == keys
-        assert leaf["properties"]["id"]["enum"] == ids
+        group = expanded["properties"][entry_field]
+        assert group["type"] == "object" and group["additionalProperties"] is False
+        assert group["required"] == ids and list(group["properties"]) == ids
+        for leaf in group["properties"].values():
+            assert set(leaf["properties"]) == set(leaf["required"]) == keys
     assert test.records()[-1].value["content"][0]["text"] == raw_text
     test.verify(evaluated, expected)
 
@@ -1329,8 +1329,8 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
     packet["required_claims"][0]["id"] = "different.technical_id"
     second = judge_schema(packet)
     assert first != second and first == judge_schema(original)
-    second["$defs"]["claim_id"]["enum"].clear()
-    assert judge_schema(packet)["$defs"]["claim_id"]["enum"]
+    second["properties"]["required_claims"]["required"].clear()
+    assert judge_schema(packet)["properties"]["required_claims"]["required"]
     assert module._wire_schema_template() == template
     assert judge_config_hash() == identity
     baseline = replace(
@@ -1346,7 +1346,13 @@ def test_wire_schemas_are_fresh_arm_independent_and_do_not_expose_legal_text(
         ),
         cited_evidence=(),
     )
-    assert judge_schema(build_judge_packet(baseline)) == first
+    baseline_schema = judge_schema(build_judge_packet(baseline))
+    assert baseline_schema != first
+    assert baseline_schema["$defs"] == first["$defs"]
+    assert (
+        baseline_schema["properties"]["statements"]["required"]
+        == first["properties"]["statements"]["required"]
+    )
     serialized = json.dumps(first)
     for secret in [
         str(value.response.attempt_id),
@@ -1378,7 +1384,7 @@ def test_global_identity_binds_wire_policy_grade_definitions_and_rubric(
 
     identity = judge_config_hash()
     if changed_part == "wire_policy":
-        monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": 8})
+        monkeypatch.setattr(module, "_WIRE_POLICY", {**module._WIRE_POLICY, "version": 9})
     elif changed_part == "citation_selection":
         monkeypatch.setattr(
             module, "_WIRE_POLICY", {**module._WIRE_POLICY, "applicability": "different rule"}
@@ -1403,10 +1409,10 @@ def test_grade_representation_is_versioned_with_unchanged_packet_policy() -> Non
     from rent_navigator.eval import judge as module
 
     assert module._WIRE_POLICY["schema_representation"] == {
-        "name": "shared_grade_arrays",
+        "name": "shared_id_keyed_grades",
         "version": 1,
     }
-    assert module._WIRE_POLICY["version"] == 7
+    assert module._WIRE_POLICY["version"] == 8
     assert module._PACKET_POLICY["version"] == 3
     assert judge_config_hash() != "0ce355b473863850ffa7449643cba30ab8d8d2563fccb3e3c912fa7272a117a7"
 
@@ -1439,11 +1445,8 @@ def test_citation_applicability_is_validated_locally_with_shared_schema(
     value = with_citation_presence(value, presence)
     packet = build_judge_packet(value)
     schema = judge_schema(packet)
-    assert schema["$defs"]["citation_support"]["enum"] == [
-        "supported",
-        "unsupported",
-        "not_applicable",
-    ]
+    assert schema["$defs"]["citation_support"]["enum"] == ["supported", "unsupported"]
+    assert schema["$defs"]["not_applicable"]["enum"] == ["not_applicable"]
     assert schema["$defs"]["factual"]["enum"] == ["supported", "unsupported", "contradicted"]
     grades = result(value).model_dump(mode="json")
     for leaf, grade, cited in zip(
@@ -1514,7 +1517,7 @@ def test_synthetic_smoke_cited_not_applicable_remains_billed_invalid_output(
 ) -> None:
     # This new synthetic response mirrors the rejected grade shape, not a historical run.
     payload = wire_payload(result(value), value)
-    payload["statements"][2]["citation_support"] = "not_applicable"
+    payload["statements"]["s3"]["citation_support"] = "not_applicable"
     raw_text = json.dumps(payload, indent=2)
     response = message(
         value,
@@ -1558,8 +1561,8 @@ def test_lossless_mapping_uses_trusted_claim_order_and_preserves_all_grades(
     payload["policy_violations"] = ["S08", "S01", "S07"]
     expected = JudgeResult.model_validate_json(json.dumps(payload))
     output = wire_payload(expected, value)
-    output["required_claims"].reverse()
-    output["statements"].reverse()
+    output["required_claims"] = dict(reversed(list(output["required_claims"].items())))
+    output["statements"] = dict(reversed(list(output["statements"].items())))
     raw_text = json.dumps(output, indent=3).replace('"s1"', '"s\\u0031"')
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": raw_text}])
@@ -1576,16 +1579,18 @@ def test_private_wire_requires_exact_unmodified_array_ids(
 ) -> None:
     output = wire_payload(result(value), value)
     rows = output[field_name]
+    first = next(iter(rows))
     if mutation == "extra":
-        rows.append({**rows[0], "id": "extra"})
+        rows["extra"] = deepcopy(rows[first])
     elif mutation == "missing":
-        rows.pop(0)
+        rows.pop(first)
     elif mutation in {"case", "whitespace"}:
-        rows[0]["id"] = rows[0]["id"].upper() if mutation == "case" else rows[0]["id"] + " "
+        changed = first.upper() if mutation == "case" else first + " "
+        rows[changed] = rows.pop(first)
     elif mutation == "null":
         output[field_name] = None
     else:
-        output[field_name] = {row["id"]: row for row in rows}
+        output[field_name] = [{"id": identifier, **leaf} for identifier, leaf in rows.items()]
     with pytest.raises(ProviderFailure) as caught:
         parse_judgment(
             message(value, content=[{"type": "text", "text": json.dumps(output)}]), value
@@ -1629,9 +1634,9 @@ def test_private_wire_rejects_strict_root_leaf_and_score_type_violations(
     value: JudgeInput, mutation: str
 ) -> None:
     output = wire_payload(result(value), value)
-    claim = 0
+    claim = next(iter(output["required_claims"]))
     leaf = output["required_claims"][claim]
-    statement = output["statements"][0]
+    statement = output["statements"][next(iter(output["statements"]))]
     if mutation == "root_extra":
         output["explanation"] = SENTINEL
     elif mutation == "root_missing":
@@ -1653,7 +1658,9 @@ def test_private_wire_rejects_strict_root_leaf_and_score_type_violations(
     elif mutation == "statement_id":
         statement["id"] = "foreign"
     elif mutation in {"statement_null", "statement_array"}:
-        output["statements"][0] = None if mutation.endswith("null") else []
+        output["statements"][next(iter(output["statements"]))] = (
+            None if mutation.endswith("null") else []
+        )
     elif mutation in {"factual_enum", "factual_bool"}:
         statement["factual"] = "SUPPORTED" if mutation.endswith("enum") else True
     elif mutation in {"citation_enum", "citation_null"}:
@@ -1685,37 +1692,40 @@ _DUPLICATE_FRAGMENTS = [
     ("false_pass", '"false_pass":true,"false_pa\\u0073s":true'),
     (
         "required_claims",
-        '"required_claims":[{"id":"c1","result":"met"}],"required_claims":[{"id":"c1","result":"met"}]',
+        '"required_claims":{"c1":{"result":"met"}},"required_claims":{"c1":{"result":"met"}}',
     ),
     (
         "statements",
-        '"statements":[{"id":"s1","factual":"supported","citation_support":"supported"}],"statements":[{"id":"s1","factual":"supported","citation_support":"supported"}]',
-    ),
-    ("policy_violations", '"policy_violations":[],"policy_violations":[]'),
-    ("required_claims", '"required_claims":[{"id":"c1","id":"c1","result":"met"}]'),
-    ("required_claims", '"required_claims":[{"id":"foreign","id":"c1","result":"met"}]'),
-    ("required_claims", '"required_claims":[{"id":"c1","i\\u0064":"c1","result":"met"}]'),
-    (
-        "statements",
-        '"statements":[{"id":"s1","id":"s1","factual":"supported","citation_support":"supported"}]',
+        '"statements":{"s1":{"factual":"supported","citation_support":"supported"}},"statements":{"s1":{"factual":"supported","citation_support":"supported"}}',
     ),
     (
-        "statements",
-        '"statements":[{"id":"foreign","i\\u0064":"s1","factual":"supported","citation_support":"supported"}]',
+        "policy_violations",
+        '"policy_violations":{"S01":false,"S02":false,"S03":false,"S04":false,"S05":false,"S06":false,"S07":false,"S08":false},"policy_violations":{"S01":false,"S02":false,"S03":false,"S04":false,"S05":false,"S06":false,"S07":false,"S08":false}',
     ),
-    ("required_claims", '"required_claims":[{"id":"c1","result":"met","result":"met"}]'),
-    ("required_claims", '"required_claims":[{"id":"c1","result":"missing","res\\u0075lt":"met"}]'),
+    ("required_claims", '"required_claims":{"c1":{"result":"met"},"c1":{"result":"met"}}'),
+    ("required_claims", '"required_claims":{"c1":{"result":"missing"},"c1":{"result":"met"}}'),
+    ("required_claims", '"required_claims":{"c1":{"result":"met"},"c\\u0031":{"result":"met"}}'),
     (
         "statements",
-        '"statements":[{"id":"s1","factual":"supported","factual":"supported","citation_support":"supported"}]',
+        '"statements":{"s1":{"factual":"supported","citation_support":"supported"},"s1":{"factual":"supported","citation_support":"supported"}}',
     ),
     (
         "statements",
-        '"statements":[{"id":"s1","factual":"unsupported","fact\\u0075al":"supported","citation_support":"supported"}]',
+        '"statements":{"s1":{"factual":"unsupported","citation_support":"supported"},"s\\u0031":{"factual":"supported","citation_support":"supported"}}',
+    ),
+    ("required_claims", '"required_claims":{"c1":{"result":"met","result":"met"}}'),
+    ("required_claims", '"required_claims":{"c1":{"result":"missing","res\\u0075lt":"met"}}'),
+    (
+        "statements",
+        '"statements":{"s1":{"factual":"supported","factual":"supported","citation_support":"supported"}}',
     ),
     (
         "statements",
-        '"statements":[{"id":"s1","factual":"supported","citation_support":"supported","citation_s\\u0075pport":"supported"}]',
+        '"statements":{"s1":{"factual":"unsupported","fact\\u0075al":"supported","citation_support":"supported"}}',
+    ),
+    (
+        "statements",
+        '"statements":{"s1":{"factual":"supported","citation_support":"supported","citation_s\\u0075pport":"supported"}}',
     ),
 ]
 
@@ -1802,9 +1812,9 @@ def test_trailing_text_and_legacy_arrays_have_no_fallback(value: JudgeInput) -> 
         json.dumps(
             {
                 **wire_payload(result(value), value),
-                "required_claims": {
-                    row.id: {"result": row.result} for row in result(value).required_claims
-                },
+                "required_claims": [
+                    row.model_dump(mode="json") for row in result(value).required_claims
+                ],
             }
         ),
     ):
@@ -1845,7 +1855,7 @@ def test_recorder_and_raw_replay_independently_reject_schema_shape_tampering(
             )
             node = stored_node(schema, schema["properties"][name])
             if location.endswith("leaf"):
-                node = stored_node(schema, node["items"])
+                node = stored_node(schema, next(iter(node["properties"].values())))
         if mutation == "missing_required":
             if node.get("type") == "array":
                 node["minItems"] = 0
@@ -2000,7 +2010,7 @@ def test_six_statement_judge_preserves_full_600_character_qualifications_through
             statement_result["citation_support"] = "not_applicable"
     expected = JudgeResult.model_validate_json(json.dumps(payload))
     wire = wire_payload(expected, value)
-    wire["statements"].reverse()
+    wire["statements"] = dict(reversed(list(wire["statements"].items())))
     test = harness(value)
     test.port.response = message(value, content=[{"type": "text", "text": json.dumps(wire)}])
     evaluated = test.run()

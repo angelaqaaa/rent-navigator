@@ -1,6 +1,7 @@
 """Restricted fourteen-vote judge smoke with content-free per-vote evidence."""
 
 import argparse
+import ast
 import asyncio
 import json
 import math
@@ -41,10 +42,13 @@ from rent_navigator.provider import (
     _raise_failure,
     create_client,
 )
+from rent_navigator.security_cases import SecurityCaseId
 from rent_navigator.trace import PRICING_HASH, TraceContext, provider_cost_totals
 
 ROOT = Path(__file__).resolve().parents[1]
 CAP = Decimal("2.00")
+PACKET_IDS = (*tuple(f"J{number:02}" for number in range(1, 14)), "R04")
+MEASUREMENT_JUDGE_HASH = "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04"
 
 
 def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:
@@ -60,13 +64,17 @@ def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:
     votes: list[tuple[str, JudgeInput, dict[str, Any] | None]] = []
     for identifier in CALIBRATION_IDS:
         fixture = load_calibration(identifier, corpus=corpus)
-        votes.append(
-            (
-                identifier,
-                calibration_input(fixture["provider_packet"], corpus),
-                grade_only_output(fixture),
-            )
-        )
+        value = calibration_input(fixture["provider_packet"], corpus)
+        wire = grade_only_output(fixture)
+        expected = {
+            "required_claims": [
+                {"id": key, **leaf} for key, leaf in wire["required_claims"].items()
+            ],
+            "statements": [{"id": key, **leaf} for key, leaf in wire["statements"].items()],
+            "false_pass": wire["false_pass"],
+            "policy_violations": [key for key, flag in wire["policy_violations"].items() if flag],
+        }
+        votes.append((identifier, value, expected))
     case = next(case for case in load_gold(ROOT / "eval", corpus).cases if case.id == "R04")
     votes.append(("R04", build_smoke_input(case, corpus), None))
     return votes
@@ -74,6 +82,67 @@ def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:
 
 def head_sha() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+
+
+def _measurement_provenance(source_commit: str, runner_commit: str | None) -> str:
+    """Bind unchanged judging content to an explicit committed runner descendant."""
+    if runner_commit is None:
+        raise ValueError("Measurement requires its runner commit")
+    runner = TypeAdapter(SourceCommit).validate_python(runner_commit, strict=True)
+    if runner != head_sha() or judge_config_hash() != MEASUREMENT_JUDGE_HASH:
+        raise ValueError("Measurement runner or judge identity differs")
+    try:
+        resolved = subprocess.check_output(
+            ["git", "rev-parse", "--verify", source_commit + "^{commit}"],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if resolved != source_commit:
+            raise ValueError("Measurement judging source differs")
+        subprocess.check_output(
+            ["git", "merge-base", "--is-ancestor", source_commit, runner],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+        )
+        changed = subprocess.check_output(
+            ["git", "diff", "--name-only", "--no-renames", "-z", source_commit, runner],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        helper_sources = [
+            subprocess.check_output(
+                ["git", "show", revision + ":scripts/judge_smoke.py"],
+                cwd=ROOT,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            for revision in (source_commit, runner)
+        ]
+    except subprocess.CalledProcessError:
+        raise ValueError("Measurement requires a verified ancestor") from None
+    if set(changed.rstrip("\0").split("\0")) - {
+        "",
+        "scripts/judge_smoke.py",
+        "tests/test_judge_smoke.py",
+    }:
+        raise ValueError("Measurement source delta contains unrelated changes")
+    helpers = [
+        {
+            node.name: ast.get_source_segment(source, node)
+            for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef | ast.ClassDef)
+            and node.name in {"fixed_votes", "VotePort", "OfflineMessages"}
+        }
+        for source in helper_sources
+    ]
+    if (
+        set(helpers[0]) != {"fixed_votes", "VotePort", "OfflineMessages"}
+        or helpers[0] != helpers[1]
+    ):
+        raise ValueError("Measurement judging helpers differ from the original source")
+    return runner
 
 
 def agreement(
@@ -194,6 +263,20 @@ class OfflineMessages:
             "false_pass": True,
             "policy_violations": [],
         }
+        output = {
+            **output,
+            "required_claims": {
+                row["id"]: {"result": row["result"]} for row in output["required_claims"]
+            },
+            "statements": {
+                row["id"]: {"factual": row["factual"], "citation_support": row["citation_support"]}
+                for row in output["statements"]
+            },
+            "policy_violations": {
+                identifier: identifier in output["policy_violations"]
+                for identifier in get_args(SecurityCaseId)
+            },
+        }
         return Message.model_construct(
             id="msg_synthetic_judge_smoke",
             type="message",
@@ -214,15 +297,32 @@ async def run_smoke(
     billing_ready: bool = False,
     messages_factory: Callable[[JudgeInput, dict[str, Any] | None], MessagesPort] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    measurement: bool = False,
+    packets: list[str] | None = None,
+    runner_commit: str | None = None,
 ) -> dict[str, Any]:
     source_commit = TypeAdapter(SourceCommit).validate_python(source_commit, strict=True)
-    if source_commit != head_sha():
-        raise ValueError("Source commit must equal HEAD")
+    if measurement:
+        if (
+            not packets
+            or len(set(packets)) != len(packets)
+            or any(identifier not in PACKET_IDS for identifier in packets)
+            or packets != [identifier for identifier in PACKET_IDS if identifier in packets]
+        ):
+            raise ValueError("Measurement requires a unique nonempty registered-order subset")
+        runner_commit = _measurement_provenance(source_commit, runner_commit)
+    else:
+        if packets is not None or runner_commit is not None:
+            raise ValueError("Named packets and runner commit require measurement mode")
+        if source_commit != head_sha():
+            raise ValueError("Source commit must equal HEAD")
     if live and not billing_ready:
         raise ProviderFailure("budget_exhausted")
     if live and subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True):
         raise ValueError("Live smoke requires a clean checkout")
     votes = fixed_votes()
+    if measurement:
+        votes = [vote for vote in votes if vote[0] in cast(list[str], packets)]
     corpus = load_corpus()
     config = judge_config_hash()
     evidence_dir.mkdir(parents=True, exist_ok=False)
@@ -230,6 +330,7 @@ async def run_smoke(
     client: AsyncAnthropic | None = None
     records = []
     rows: list[dict[str, Any]] = []
+    attempted: list[str] = []
     run_id = uuid4()
     stopped: str | None = None
     genuine_live = live and messages_factory is None
@@ -259,6 +360,8 @@ async def run_smoke(
             decoded = None
             code = None
             smoke_passed = None
+            decode_reason = None
+            attempted.append(identifier)
             try:
                 evaluated = await RealJudge(
                     port,
@@ -278,8 +381,9 @@ async def run_smoke(
                         smoke_passed = False
             except JudgeFailure as error:
                 accounting, code = error.accounting, error.code
+                decode_reason = error.decode_rejection_reason
                 if port.diagnostic is None:
-                    port.diagnostic = ProviderFailure(code).diagnostic.model_dump(mode="json")
+                    port.diagnostic = error.diagnostic.model_dump(mode="json")
             finally:
                 elapsed = clock() - start
                 metadata.close()
@@ -307,6 +411,7 @@ async def run_smoke(
                 "actual_cost_usd": accounting.cost.model_dump(mode="json")["actual_cost_usd"],
                 "reserved_cost_usd": accounting.cost.model_dump(mode="json")["reserved_cost_usd"],
                 "failure_diagnostic": port.diagnostic,
+                "decode_rejection_reason": decode_reason,
                 "provider_request_id": port.request_id,
                 "provider_error_type": port.error_type,
                 "thinking_metrics": port.thinking_metrics,
@@ -318,11 +423,18 @@ async def run_smoke(
                     else None
                 ),
             }
+            if measurement:
+                row.update(judging_source_commit=source_commit, runner_commit=runner_commit)
             criterion = failed_criterion(row, value, expected, source_commit, config)
             row["failed_criterion"] = criterion
             (evidence_dir / (identifier + ".json")).write_text(json.dumps(row, indent=2) + "\n")
             rows.append(row)
-            if criterion is not None or ledger.stopped:
+            hard_stop = (
+                ledger.stopped
+                or code == "budget_exhausted"
+                or (port.diagnostic is not None and port.diagnostic.get("category") == "cancelled")
+            )
+            if hard_stop or criterion is not None and not measurement:
                 stopped = code or "registered_criterion_failed"
                 break
     except ProviderFailure as error:
@@ -334,7 +446,10 @@ async def run_smoke(
             except Exception:
                 stopped = "provider_error"
         cost = provider_cost_totals(records)
-        complete = len(rows) == 14 and all(row["decoded_judgment"] is not None for row in rows)
+        planned_votes = len(votes) if measurement else 14
+        complete = len(rows) == planned_votes and (
+            measurement or all(row["decoded_judgment"] is not None for row in rows)
+        )
         matched = sum(row["agreement"] is not None and row["agreement"]["exact"] for row in rows)
         generations = sum(record.provider_operation == "generation" for record in records)
         summary = {
@@ -343,12 +458,14 @@ async def run_smoke(
             "pricing_hash": PRICING_HASH,
             "corpus_hash": corpus.corpus_hash,
             "execution_mode": "live" if genuine_live else "synthetic",
-            "planned_votes": 14,
+            "planned_votes": planned_votes,
             "recorded_votes": len(rows),
             "complete": complete and stopped is None,
             "expectations": "proposed_not_independently_reviewed",
             "calibration_matched": matched,
-            "calibration_denominator": 13,
+            "calibration_denominator": sum(expected is not None for _, _, expected in votes)
+            if measurement
+            else 13,
             "field_agreement": field_agreement(rows),
             "fail_to_pass_flips": sum(row["fail_to_pass"] is True for row in rows),
             "completed_votes": [row["packet_id"] for row in rows],
@@ -362,12 +479,25 @@ async def run_smoke(
             "real_generation_attempts": generations if genuine_live else 0,
             "budget_limit_usd": "2.00",
             "reservation_forecast_usd": format(
-                14 * MODEL_POLICIES[JUDGE_MODEL].reservation_usd, "f"
+                planned_votes * MODEL_POLICIES[JUDGE_MODEL].reservation_usd, "f"
             ),
             "batch_committed_usd": format(ledger.committed_usd, "f"),
             "cost": cost.model_dump(mode="json"),
             "stop_reason": stopped,
         }
+        if measurement:
+            summary.update(
+                measurement=True,
+                purpose="measurement after a failed gate",
+                gate_passed=False,
+                judging_source_commit=source_commit,
+                runner_commit=runner_commit,
+                requested_votes=[identifier for identifier, _, _ in votes],
+                attempted_votes=attempted,
+                unstarted_votes=[identifier for identifier, _, _ in votes[len(attempted) :]],
+                measurement_complete=complete and stopped is None,
+                decoded_votes=sum(row["decoded_judgment"] is not None for row in rows),
+            )
         (evidence_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 
@@ -410,7 +540,11 @@ def failed_criterion(
         return "identity"
     if row.get("failure_code") is not None or row.get("failure_diagnostic") is not None:
         return "call_failure"
-    if row.get("decode_error") is not None or type(row.get("decoded_judgment")) is not dict:
+    if (
+        row.get("decode_error") is not None
+        or row.get("decode_rejection_reason") is not None
+        or type(row.get("decoded_judgment")) is not dict
+    ):
         return "decode"
     if row.get("requested_model_id") != JUDGE_MODEL or row.get("returned_model_id") != JUDGE_MODEL:
         return "model"
@@ -433,9 +567,19 @@ def failed_criterion(
     if not math.isfinite(elapsed) or not 0 <= elapsed <= 90:
         return "elapsed_bound"
     try:
-        from rent_navigator.eval.judge import _decode_judgment, build_judge_packet
-
-        judgment = _decode_judgment(json.dumps(row["decoded_judgment"]), build_judge_packet(value))
+        judgment = JudgeResult.model_validate(row["decoded_judgment"], strict=True)
+        judgment.validate_coverage(
+            (claim.id for claim in value.required_claims),
+            (statement.id for statement in value.response.statements),
+        )
+        citations: dict[str, bool] = {
+            statement.id: bool(statement.citation_ids) for statement in value.response.statements
+        }
+        if any(
+            citations[statement.id] == (statement.citation_support == "not_applicable")
+            for statement in judgment.statements
+        ):
+            raise ValueError("citation_applicability")
         if expected is None:
             if row.get("r04_smoke_passed") is not True:
                 return "r04_smoke"
@@ -467,7 +611,9 @@ def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str
     """Check recorded vote criteria; proposed-label agreement remains a measurement."""
     config = judge_config_hash()
     if (
-        source_commit != head_sha()
+        summary.get("measurement") is not None
+        or summary.get("purpose") == "measurement after a failed gate"
+        or source_commit != head_sha()
         or summary.get("source_commit") != source_commit
         or summary.get("judge_config_hash") != config
         or summary.get("complete") is not True
@@ -557,6 +703,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--billing-ready", action="store_true")
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument(
+        "--measurement",
+        action="store_true",
+        help="Record a named subset after a failed gate; never qualify a gate",
+    )
+    parser.add_argument("--packets", nargs="+", help="Measurement packet IDs in registered order")
+    parser.add_argument(
+        "--runner-commit", help="Measurement runner HEAD, distinct from judging source"
+    )
     args = parser.parse_args(argv)
     try:
         summary = asyncio.run(
@@ -565,12 +720,17 @@ def main(argv: list[str] | None = None) -> int:
                 evidence_dir=args.evidence_dir,
                 live=args.live,
                 billing_ready=args.billing_ready,
+                measurement=args.measurement,
+                packets=args.packets,
+                runner_commit=args.runner_commit,
             )
         )
     except (ValueError, OSError, ProviderFailure):
         print("Judge smoke admission failed.")
         return 2
     print(json.dumps(summary))
+    if args.measurement:
+        return 0 if summary.get("measurement_complete") is True else 1
     return 0 if _passes_gate(summary, args.evidence_dir, args.source_commit) else 1
 
 

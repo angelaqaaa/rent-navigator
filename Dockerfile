@@ -9,11 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
-COPY pyproject.toml uv.lock .python-version README.md NOTICE ./
+COPY pyproject.toml uv.lock .python-version README.md LICENSE NOTICE ./
 COPY src/ ./src/
 RUN uv sync --locked --no-dev --no-editable
 
-ARG SOURCE_COMMIT
+ARG RENDER_GIT_COMMIT
+ARG SOURCE_COMMIT=${RENDER_GIT_COMMIT}
 RUN python -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]), "SOURCE_COMMIT must be a full Git SHA"' "$SOURCE_COMMIT"
 ENV SOURCE_COMMIT=$SOURCE_COMMIT
 LABEL org.opencontainers.image.revision=$SOURCE_COMMIT

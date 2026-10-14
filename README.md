@@ -1,6 +1,6 @@
 # Rent Navigator
 
-The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, an internal asynchronous provider/extraction seam, bounded analysis orchestration, pattern redaction, eight offline security fixtures, and an offline evaluation and synthetic collection harness. Development CLIs accept only fixed synthetic inputs. The service exposes only `GET /healthz`; calculation, extraction and question-answering endpoints are not implemented. There is no deployed demo, evaluation baseline, or performance measurement.
+The current package provides strict data models, metadata tracing, a six-source official snapshot, an offline SQLite FTS5 index, pure notice/rent calculators, bounded analysis orchestration, pattern redaction, eight offline security fixtures and the evaluation harness. The service exposes a text-only page at `GET /`, `GET /healthz`, `POST /api/extract` and `POST /api/ask`. Local image entry points support the fixed collection and a separate three-attempt dry run. A Render blueprint is included; there is no deployed demo, activated baseline or release collection. Free tests establish integration behavior, not genuine quality, latency or cost measurements.
 
 > Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal.
 
@@ -8,9 +8,11 @@ The snapshot date is the earliest actual UTC fetch date among the six sources. I
 
 ## Owner release-scope revision, 2026-10-12
 
-The owner ruled the revised scope in PROJECT-SPEC.md §12 and CONTRACTS.md §11. It is not acceptance of the original definition of shipped. There is no deployed demo, activated baseline or release collection. The current implementation uses grade-only wire policy 7; anchor wire version 6 remains in history. Shared-service collection integration and live validation remain pending. The wire implementation is complete; this does not claim genuine judge success.
+The owner ruled the revised scope in PROJECT-SPEC.md §12 and CONTRACTS.md §11. It is not acceptance of the original definition of shipped. There is no deployed demo, activated baseline or release collection. The current implementation uses grade-only wire policy 7; anchor wire version 6 remains in history. HTTP and shared-service collection entry points are implemented; live release validation remains pending.
 
-main requires `checks`, `docker` and `offline-eval`, with strict required checks and administrator enforcement. `live-eval-gate` is not required this cycle, and the live-eval environment reviewer rule is not restored. The approved guards are `github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-plan` and `always() && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-gate`; this amendment does not implement them or change environments, secrets or variables. The full live gate, its unchanged 28/32 and 7/7 thresholds and seven live attacks are not exercised this cycle. Baseline activation and the retrieval floor remain pending. Retrieval and answer-quality regressions are not gated.
+main requires `checks`, `docker` and `offline-eval`, with strict required checks and administrator enforcement. `live-eval-gate` is not required this cycle, and the live-eval environment reviewer rule is not restored. The workflow now applies the approved guards `github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-plan` and `always() && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-gate`. Environments, secrets and variables are unchanged. The full live gate, its unchanged 28/32 and 7/7 thresholds and seven live attacks are not exercised this cycle. Baseline activation and the retrieval floor remain pending. Retrieval and answer-quality regressions are not gated.
+
+The reporting, probe and review paragraphs below retain their pre-smoke checkpoint. The later completed operational smoke does not establish grading acceptance; the current collection hold is recorded under Local image collection and dry run.
 
 The narrower release wording for bullet 2 is exactly: "exact-match tool evals and security fixtures run in CI as required checks and block regressions; LLM-as-judge scoring runs at release (calibration agreement m of 13; human audit agreement k of 32)". This is the approved reporting scope, not a completed measurement. No actual m/13 or k/32 value exists yet. The original PROJECT-SPEC.md §1 targets remain verbatim.
 
@@ -37,7 +39,7 @@ Both historical retained failure envelopes have `category=http_error`, `http_sta
 
 Paid runs are local and require separate owner go for each exact command with its cap on the same line: judge smoke US$2.00, dry run US$1.00, collection US$32.00 per attempt. The release/warm-up forecast is US$29.15320, not actual spending. One explicitly marked whole-batch retry is allowed only for an infrastructure cause after correction, under a separately approved second US$32.00 cap; preserve both runs. A third attempt is outside budget. A model-output stop is published as incomplete with no headline; unchanged paid runs are not repeated to select a favorable result.
 
-The collect command is WP10 shared-service integration, pending in the combined WP10/11 PR before S is tagged. Preserve essential HTTP service checks, N=16, three warm-ups per arm, five fixed repetitions, 80 measured attempts per arm, seed-42/alternating-arm order and judging of every scored attempt under the existing scoring rules. A serving-side `provider_error` or `deadline_exceeded` is a failed attempt in its denominator and collection continues; five consecutive such failures end it as `collection_untrustworthy`. Warm-ups count toward that counter but no scored denominator. Judge-side reasons and every other error code keep existing behavior. Budget/call guards and missing-usage reservations remain required. This is the approved behavior, not completed integration.
+The collect command implements WP10 shared-service integration. It preserves essential HTTP service checks, N=16, three warm-ups per arm, five fixed repetitions, 80 measured attempts per arm, seed-42/alternating-arm order and judging of scored answered attempts under the existing scoring rules. A serving-side `provider_error` or `deadline_exceeded` is a failed attempt in its denominator and collection continues; five consecutive such failures end it as `collection_untrustworthy`, resetting on any other attempt. Warm-ups count toward that counter but no scored denominator. Judge-side reasons and every other error code keep existing behavior. Budget/call guards and missing-usage reservations remain required. No release collection has been executed.
 
 Tag clean source S `v1.0-source` and deploy S to Render with auto-deploy off. Generation is gated at US$0/day during deploy verification, then admitted at US$0.30/day on the day the public letter smoke passes. Release requires accepted judge smoke, reviewed PRs, complete verified collection and the owner's 32-output audit plus flagged outputs. README then reports exactly what ran, the smoke/release hash match, actual measurements and all unexercised gates. Calendar dates do not replace quality gates. The Decision Log remains the decision record; career evidence-card and inventory integration follow shipping outside this repository.
 
@@ -65,7 +67,49 @@ In another terminal:
 curl --fail http://127.0.0.1:8000/healthz
 ```
 
-The response contains `status: "ok"` and the full commit SHA. Startup fails if `SOURCE_COMMIT` is missing or malformed. There are no `/api/ask`, `/api/extract`, page, or documentation routes yet.
+The response contains `status: "ok"` and the full commit SHA. Startup fails if `SOURCE_COMMIT` is missing or malformed. API documentation routes are disabled. Open `/` for the letter and general-question flows. Provider credentials are read only when an admitted, valid API request needs the client.
+
+## Page and deployment configuration
+
+The page uses inline script and text-only DOM rendering without external assets, analytics or browser storage. Extracted amounts/date are suggestions for correction. Ordinary-scope checklist, rental-period start and reviewed-facts confirmations are explicit actions, never inferred from extraction. Blank fields remain unknown; no previous increase and an unknown previous increase remain distinct. Extraction and confirmed analysis share one attempt ID; general questions use a fresh attempt. Clearing or changing the letter resets its draft confirmations. Errors, including exhausted daily budget and stale rules, appear in plain words. The disclaimer stays fixed, and the footer shows the actual snapshot date and running source SHA. HTTPS or localhost is needed for browser UUID creation. The page and health remain available when POST checks are paused for a stale corpus.
+
+`render.yaml` defines one Docker web service with `/healthz`, one instance and automatic deploys off. The owner supplies `ANTHROPIC_API_KEY` and the exact `PUBLIC_ORIGIN` through the dashboard; neither value is committed. Initial `DEMO_DAILY_USD` is `0`, and `PORT` is `8000`, matching the single-worker Docker command. Admission at `0.30` belongs to the later approved public smoke, not blueprint creation. This configuration has not been deployed or validated through an account operation.
+
+Render documents `autoDeploy: false` as the deprecated equivalent of `autoDeployTrigger: off`. Its default environment variables are available during builds unless otherwise noted, and Docker service variables become build arguments. `ARG RENDER_GIT_COMMIT` supplies the default for `ARG SOURCE_COMMIT`; the existing full-SHA assertion, runtime environment and revision label remain. Local/CI builds may provide the actual Git SHA through the existing build argument. Do not place `SOURCE_COMMIT` in the blueprint or an environment file: the build must bind the actual deployed source. See the official [blueprint reference](https://render.com/docs/blueprint-spec), [default variables](https://render.com/docs/environment-variables) and [Docker behavior](https://render.com/docs/docker).
+
+## HTTP admission and responses
+
+Both POST routes accept only the existing public contracts. The entire UTF-8 request body is limited to 16,384 bytes before JSON parsing. Requests with an Origin must match `PUBLIC_ORIGIN` exactly; requests without Origin share the same global 60-POST UTC-hour limit. In-flight concurrency is two, rejecting excess requests rather than queueing. There is no permissive CORS or authentication claim.
+
+Set `PUBLIC_ORIGIN` to the exact browser origin. `DEMO_DAILY_USD` defaults to `0.30` and accepts lower limits, including `0` while generation is disabled. Reservations are reconciled to known actual usage on their original UTC day, including replies after midnight; unknown usage retains the full reservation and stops further calls. The in-memory counter resets on restart and is not a durable funding guarantee. Each request retains the 45-second deadline and metadata-only logging. Reuse one client attempt ID for extraction and confirmed analysis; each request receives a distinct server trace ID.
+
+Both HTTP routes and local collection reject a corpus older than 90 days. Admission does not affect GET handlers. Unknown routes retain normal 404 responses and wrong methods normal 405 responses; contract errors use the fixed ErrorResponse envelope. There are no uploads, history or public evaluation overrides.
+
+## Local image collection and dry run
+
+These entry points are implemented, but a command is not paid authority. The calibration gate remains failed; the owner's 2026-10-14 conditional release decision is recorded in `CONTRACTS.md`, and collection remains held pending fresh paid execution approval and subject to its disclosure, targeted audit and judge freeze obligations. No judge configuration, rubric, labels or evidence changed in this integration. A future paid command requires a fresh exact-command go with its cap.
+
+Keyless help:
+
+```sh
+uv run --locked python -m rent_navigator.eval collect --help
+uv run --locked python -m rent_navigator.eval collect-dry-run --help
+```
+
+Before building a measurement image, verify the host source tree is clean:
+
+```sh
+test -z "$(git status --porcelain)"
+docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" -t rent-navigator:source .
+```
+
+The image contains the packaged corpus and runs as uid 65532; it contains no root `eval/` data. Mount `-v "$PWD/eval:/data/eval:ro"`, use `--data-dir /data/eval`, enable network access, and supply a results volume writable by uid 65532. `--source-sha` defaults to the image's `SOURCE_COMMIT`; `--lockfile` defaults to `/app/uv.lock` through the image working directory. Supply the image digest, Docker version, provider access date and pricing URL. OS/CPU/RAM have automatic defaults with explicit overrides. `--source-clean` is a required caller assertion after the host check, not a Git check inside the image.
+
+`collect` uses the unchanged six-warm-up/160-measured protocol. Its default forecast is US$29.15320, with a cap no greater than US$32.00. Forecasts must be finite, nonnegative and no greater than the cap. The new results root contains `batch-ledger.json`, written before the first operation, plus `collection/` with the existing strictly verified artifacts. Input data are read only; output directories are exclusive. HTTP rate, concurrency and daily quotas alone are disabled. Stale-corpus, redaction, token, call, deadline, citation and scope protections remain.
+
+`collect-dry-run` uses exactly R01, N01 and Q01, production arm, repeat 0, with judging rather than warm-up handling. It constructs no partial CollectionPlan. Its default forecast is US$0.53076, with a cap no greater than US$1.00. The results root contains the batch ledger plus `dry-run/`. The manifest explicitly marks `dry_run=true`, `reportable=false` and `evaluation_complete=false`; it never runs complete-collection verification or produces release headlines. Each attempt records warm-local serving duration, whole-vote judge wall time, stop reasons, usage, requested/returned identifiers and actual/reserved costs, retaining incomplete accounting safely.
+
+Code is licensed under [MIT](LICENSE); [NOTICE](NOTICE) preserves the separate official-source attribution.
 
 ## Snapshot and provenance
 

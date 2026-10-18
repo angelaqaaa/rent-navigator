@@ -48,7 +48,7 @@ def test_collection_records_stale_failure_before_any_provider_operation(
             messages=port,
             budget=SpendLedger(Decimal("32")),
             batch_ledger=RecordingBatchLedger([]),
-            forecast_usd=Decimal("29.15320"),
+            forecast_usd=Decimal("42.26040"),
             retrieve=lambda query: canonical_hits(corpus, query),
         )
     )

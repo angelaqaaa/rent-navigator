@@ -84,7 +84,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
     assert actor.actual_cost_usd == Decimal("0.004069")
     assert actor.reserved_cost_usd == Decimal("0.027")
     assert judge.actual_cost_usd == Decimal("0.008138")
-    assert judge.reserved_cost_usd == Decimal("0.13192")
+    assert judge.reserved_cost_usd == Decimal("0.21384")
     assert actor.usage_complete is True
     assert json.loads(actor.model_dump_json())["actual_cost_usd"] == "0.004069"
 
@@ -98,7 +98,7 @@ def test_synthetic_exact_actor_and_judge_costs() -> None:
         Usage(input_tokens=None, output_tokens=100),
     ],
 )
-@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.13192")])
+@pytest.mark.parametrize(("model", "reserved"), [(ACTOR_MODEL, "0.027"), (JUDGE_MODEL, "0.21384")])
 def test_synthetic_missing_usage_retains_reservation(
     usage: Usage | None, model: RequestedModel, reserved: str
 ) -> None:
@@ -121,13 +121,13 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
         JUDGE_MODEL: {
             "preflight_limit": 24000,
             "reserved_input_tokens": 25000,
-            "max_output_tokens": 8192,
+            "max_output_tokens": 16384,
             "input_per_million": "2",
             "output_per_million": "10",
         },
     }
     assert MODEL_POLICIES[ACTOR_MODEL].reservation_usd == Decimal("0.027")
-    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.13192")
+    assert MODEL_POLICIES[JUDGE_MODEL].reservation_usd == Decimal("0.21384")
     assert (
         PRICING_HASH
         == sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -144,10 +144,10 @@ def test_shared_model_policy_and_pricing_identity_cover_model_limits() -> None:
     assert policy_manifest()[ACTOR_MODEL]["reserved_input_tokens"] == 21000
 
 
-def test_current_capacity_forecast_preserves_historical_gap_and_approved_funding() -> None:
+def test_historical_capacity_forecast_preserves_gap_and_approved_funding() -> None:
     actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
-    judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
-    assert actor == Decimal("0.027") and judge == Decimal("0.13192")
+    judge = Decimal("0.13192")
+    assert actor == Decimal("0.027")
     release = 298 * actor + 160 * judge
     gate = 77 * actor + 39 * judge
     development = 3 * actor + judge
@@ -182,6 +182,24 @@ def test_synthetic_zero_is_known_usage_and_overage_is_not_clamped() -> None:
     assert overage.actual_cost_usd == Decimal("0.036")
     assert overage.reserved_cost_usd == Decimal("0.027")
     assert overage.actual_cost_usd > overage.reserved_cost_usd
+
+
+def test_k2_judge_reservation_and_current_release_forecasts() -> None:
+    from test_live_permit import bootstrap_payload
+
+    from rent_navigator.eval.permit import LivePermit, _reservation
+
+    actor = MODEL_POLICIES[ACTOR_MODEL].reservation_usd
+    judge = MODEL_POLICIES[JUDGE_MODEL].reservation_usd
+    assert actor == Decimal("0.027")
+    assert judge == Decimal("0.21384")
+    assert 298 * actor + 160 * judge == Decimal("42.26040")
+    assert 5 * actor + 3 * judge == Decimal("0.77652")
+    assert 14 * judge == Decimal("2.99376")
+    assert _reservation(298, 160) == Decimal("42.26040")
+    # The deferred historical permit cannot fund its full inventory at the new limits.
+    with pytest.raises(ValidationError, match="funded budget"):
+        LivePermit.model_validate_json(json.dumps(bootstrap_payload()))
 
 
 @pytest.mark.parametrize(

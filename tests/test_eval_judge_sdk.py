@@ -170,7 +170,7 @@ def assert_final_sdk_requests(
     requests: list[httpx2.Request],
     records: list[RawJudgeRecord],
     packet: dict[str, Any],
-    timeouts: tuple[float, ...] = (180.0, 180.0),
+    timeouts: tuple[float, ...] = (300.0, 300.0),
 ) -> None:
     paths = ["/v1/messages/count_tokens", "/v1/messages"][: len(timeouts)]
     assert [request.url.path for request in requests] == paths
@@ -330,9 +330,9 @@ def test_locked_sdk_honors_decreasing_judge_http_timeout_above_shared_client_def
 
     evaluated = asyncio.run(evaluate())
     records = [RawJudgeRecord.model_validate_json(line) for line in raw.getvalue().splitlines()]
-    assert_final_sdk_requests(requests, records, packet, (180.0, 120.0))
+    assert_final_sdk_requests(requests, records, packet, (300.0, 240.0))
     assert evaluated.cost.actual_cost_usd == budget.committed_usd == Decimal("0.003")
-    assert evaluated.cost.reserved_cost_usd == Decimal("0.13192")
+    assert evaluated.cost.reserved_cost_usd == Decimal("0.21384")
     verify_judge_records(
         records,
         value=value,
@@ -400,7 +400,7 @@ def test_locked_sdk_generation_400_diagnostic_privacy_and_unknown_hold(
     }
     assert accounting.cost.actual_cost_usd is None
     assert accounting.cost.usage_complete is False
-    assert accounting.cost.reserved_cost_usd == budget.committed_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == budget.committed_usd == Decimal("0.21384")
     assert budget.stopped
     assert provider_cost_totals(accounting.records) == accounting.cost
     generation = [r for r in accounting.records if r.provider_operation == "generation"]
@@ -457,7 +457,7 @@ def test_locked_sdk_missing_serving_usage_does_not_infer_free_cost(
     assert caught.value.code == "provider_error"
     assert accounting.cost.actual_cost_usd is None
     assert accounting.cost.usage_complete is False
-    assert accounting.cost.reserved_cost_usd == budget.committed_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == budget.committed_usd == Decimal("0.21384")
     assert budget.stopped
     assert provider_cost_totals(accounting.records) == accounting.cost
     records = [RawJudgeRecord.model_validate_json(line) for line in raw.getvalue().splitlines()]
@@ -518,7 +518,7 @@ def test_locked_sdk_count_400_never_admits_generation_or_reserves_cost(
         asyncio.run(evaluate())
     accounting = caught.value.accounting
     records = [RawJudgeRecord.model_validate_json(line) for line in raw.getvalue().splitlines()]
-    assert_final_sdk_requests(requests, records, packet, (180.0,))
+    assert_final_sdk_requests(requests, records, packet, (300.0,))
     assert records[-1].value == {
         "code": "provider_error",
         "diagnostic": {

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
 from typing import Any, cast, get_args
@@ -46,9 +46,9 @@ from rent_navigator.security_cases import SecurityCaseId
 from rent_navigator.trace import PRICING_HASH, TraceContext, provider_cost_totals
 
 ROOT = Path(__file__).resolve().parents[1]
-CAP = Decimal("2.00")
+CAP = Decimal("3.00")
 PACKET_IDS = (*tuple(f"J{number:02}" for number in range(1, 14)), "R04")
-MEASUREMENT_JUDGE_HASH = "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04"
+MEASUREMENT_JUDGE_HASH = "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8"
 
 
 def fixed_votes() -> list[tuple[str, JudgeInput, dict[str, Any] | None]]:
@@ -85,11 +85,15 @@ def head_sha() -> str:
 
 
 def _measurement_provenance(source_commit: str, runner_commit: str | None) -> str:
-    """Bind unchanged judging content to an explicit committed runner descendant."""
+    """Bind the current complete judging configuration and runner to the same HEAD."""
     if runner_commit is None:
         raise ValueError("Measurement requires its runner commit")
     runner = TypeAdapter(SourceCommit).validate_python(runner_commit, strict=True)
-    if runner != head_sha() or judge_config_hash() != MEASUREMENT_JUDGE_HASH:
+    if (
+        runner != head_sha()
+        or source_commit != runner
+        or judge_config_hash() != MEASUREMENT_JUDGE_HASH
+    ):
         raise ValueError("Measurement runner or judge identity differs")
     try:
         resolved = subprocess.check_output(
@@ -300,6 +304,8 @@ async def run_smoke(
     measurement: bool = False,
     packets: list[str] | None = None,
     runner_commit: str | None = None,
+    cap_usd: Decimal = CAP,
+    forecast_usd: Decimal | None = None,
 ) -> dict[str, Any]:
     source_commit = TypeAdapter(SourceCommit).validate_python(source_commit, strict=True)
     if measurement:
@@ -316,6 +322,18 @@ async def run_smoke(
             raise ValueError("Named packets and runner commit require measurement mode")
         if source_commit != head_sha():
             raise ValueError("Source commit must equal HEAD")
+    expected_forecast = (len(packets) if measurement and packets else 14) * MODEL_POLICIES[
+        JUDGE_MODEL
+    ].reservation_usd
+    forecast = expected_forecast if forecast_usd is None else forecast_usd
+    if (
+        not cap_usd.is_finite()
+        or not 0 <= cap_usd <= CAP
+        or not forecast.is_finite()
+        or forecast != expected_forecast
+        or forecast > cap_usd
+    ):
+        raise ValueError("Judge forecast and cap violate the registered bounds")
     if live and not billing_ready:
         raise ProviderFailure("budget_exhausted")
     if live and subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True):
@@ -326,7 +344,7 @@ async def run_smoke(
     corpus = load_corpus()
     config = judge_config_hash()
     evidence_dir.mkdir(parents=True, exist_ok=False)
-    ledger = SpendLedger(CAP)
+    ledger = SpendLedger(cap_usd)
     client: AsyncAnthropic | None = None
     records = []
     rows: list[dict[str, Any]] = []
@@ -431,7 +449,9 @@ async def run_smoke(
             rows.append(row)
             hard_stop = (
                 ledger.stopped
-                or code == "budget_exhausted"
+                or code is not None
+                or criterion
+                in {"identity", "model", "stop_reason", "decode", "task_success_evidence"}
                 or (port.diagnostic is not None and port.diagnostic.get("category") == "cancelled")
             )
             if hard_stop or criterion is not None and not measurement:
@@ -477,10 +497,8 @@ async def run_smoke(
             "official_n16_evaluation": False,
             "generation_attempts": generations,
             "real_generation_attempts": generations if genuine_live else 0,
-            "budget_limit_usd": "2.00",
-            "reservation_forecast_usd": format(
-                planned_votes * MODEL_POLICIES[JUDGE_MODEL].reservation_usd, "f"
-            ),
+            "budget_limit_usd": format(cap_usd, "f"),
+            "reservation_forecast_usd": format(forecast, "f"),
             "batch_committed_usd": format(ledger.committed_usd, "f"),
             "cost": cost.model_dump(mode="json"),
             "stop_reason": stopped,
@@ -695,6 +713,13 @@ def _passes_gate(summary: dict[str, Any], evidence_dir: Path, source_commit: str
     )
 
 
+def _amount(value: str) -> Decimal:
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        raise argparse.ArgumentTypeError("Amount must be a decimal") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -706,11 +731,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--measurement",
         action="store_true",
-        help="Record a named subset after a failed gate; never qualify a gate",
+        help=(
+            "Record current-config registered votes, including criterion misses; "
+            "never qualify a gate"
+        ),
     )
     parser.add_argument("--packets", nargs="+", help="Measurement packet IDs in registered order")
     parser.add_argument(
-        "--runner-commit", help="Measurement runner HEAD, distinct from judging source"
+        "--runner-commit", help="Measurement runner HEAD, equal to the judging source commit"
+    )
+    parser.add_argument("--cap-usd", type=_amount, default=CAP, help="Flat cap, at most 3.00 USD")
+    parser.add_argument(
+        "--forecast-usd", type=_amount, help="Exact selected-vote reservation, no greater than cap"
     )
     args = parser.parse_args(argv)
     try:
@@ -723,6 +755,8 @@ def main(argv: list[str] | None = None) -> int:
                 measurement=args.measurement,
                 packets=args.packets,
                 runner_commit=args.runner_commit,
+                cap_usd=args.cap_usd,
+                forecast_usd=args.forecast_usd,
             )
         )
     except (ValueError, OSError, ProviderFailure):

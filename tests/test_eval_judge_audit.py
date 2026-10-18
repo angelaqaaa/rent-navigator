@@ -99,7 +99,7 @@ def test_output_limit_boundary_is_accepted_with_exact_usage_and_replay(value: Ju
         },
     )
     evaluated = test.run()
-    assert evaluated.cost.actual_cost_usd == Decimal("0.08392")
+    assert evaluated.cost.actual_cost_usd == Decimal("0.16584")
     test.verify(evaluated, evaluated.judgment)
 
 
@@ -116,7 +116,7 @@ def test_output_over_limit_failure_cannot_be_rehashed_into_success(value: JudgeI
         test.run()
     assert caught.value.code == "invalid_generated_output"
     accounting = caught.value.accounting
-    assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.08393")
+    assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.16585")
     assert len(test.port.counts) == len(test.port.creates) == 1
     test.verify(accounting)
     # Keep complete usage, costs and response bytes, but forge every status as ok.
@@ -232,7 +232,7 @@ def test_locked_sdk_grade_text_and_shared_output_limit_with_exact_replay(
         evaluated = asyncio.run(evaluate())
         accounting, judgment = evaluated, evaluated.judgment
     assert len(requests) == 2
-    assert requests[1]["max_tokens"] == MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 8192
+    assert requests[1]["max_tokens"] == MODEL_POLICIES[JUDGE_MODEL].max_output_tokens == 16384
     assert requests[0]["output_config"] == requests[1]["output_config"]
     assert requests[1]["output_config"]["format"]["schema"] == judge_schema(packet)
     assert accounting.cost.actual_cost_usd == budget.committed_usd == Decimal("0.006")

@@ -150,7 +150,7 @@ def test_collection_rebuilds_approved_facts_on_full_and_failed_replay(
     )
     if outcome == "failed_unknown":
         assert target_accounting.cost.actual_cost_usd is None
-        assert target_accounting.cost.reserved_cost_usd == Decimal("0.13192")
+        assert target_accounting.cost.reserved_cost_usd == Decimal("0.21384")
         assert not target_accounting.cost.usage_complete
     else:
         assert target_accounting.cost.actual_cost_usd == Decimal("0.003")

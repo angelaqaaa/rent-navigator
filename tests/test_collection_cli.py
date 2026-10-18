@@ -22,7 +22,7 @@ def arguments(command: str, data: Path, output: Path) -> list[str]:
     return [
         command,
         "--cap-usd",
-        "32" if command == "collect" else "1",
+        "43" if command == "collect" else "1",
         "--results-dir",
         str(output),
         "--data-dir",
@@ -62,6 +62,12 @@ def test_command_records_ledger_before_operations_and_preserves_read_only_data(
             assert len(ledger["batches"]) == 1
             assert Decimal(ledger["batches"][0]["forecast_usd"]) <= Decimal(
                 ledger["batches"][0]["cap_usd"]
+            )
+            assert Decimal(ledger["batches"][0]["forecast_usd"]) == Decimal(
+                "42.26040" if command == "collect" else "0.77652"
+            )
+            assert Decimal(ledger["batches"][0]["cap_usd"]) == Decimal(
+                "43" if command == "collect" else "1"
             )
             events.append("count")
             return await super().count_tokens(**kwargs)
@@ -118,7 +124,7 @@ def test_command_records_ledger_before_operations_and_preserves_read_only_data(
         assert not (output / "dry-run" / "plan.json").exists()
 
 
-@pytest.mark.parametrize("forecast,cap", [("2", "1"), ("NaN", "1"), ("1", "33"), ("-1", "1")])
+@pytest.mark.parametrize("forecast,cap", [("2", "1"), ("NaN", "1"), ("1", "44"), ("-1", "1")])
 def test_invalid_cap_or_forecast_is_rejected_before_client_or_results(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, forecast: str, cap: str
 ) -> None:

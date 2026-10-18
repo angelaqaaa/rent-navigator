@@ -189,7 +189,7 @@ def test_adapter_rejections_keep_observed_local_reason(
     assert caught.value.accounting.cost.actual_cost_usd == (
         Decimal("0.003") if reason == "stop_reason" else None
     )
-    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.21384")
     test.verify(caught.value.accounting)
 
 
@@ -337,7 +337,7 @@ def test_probe_and_real_judge_share_response_envelope_validation(
         test.verify(evaluated, evaluated.judgment)
     assert len(calls) == len(test.port.creates) == len(test.port.counts) == 1
     assert accounting.cost.actual_cost_usd == Decimal("0.003")
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
     assert accounting.cost.usage_complete
     assert accounting.cost.input_tokens == 1000 and accounting.cost.output_tokens == 100
     assert observation["usage"]["input_tokens"] == 1000

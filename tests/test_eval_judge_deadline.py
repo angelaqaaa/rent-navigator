@@ -49,7 +49,7 @@ INVALID_DURATIONS = [
     float("-inf"),
     0,
     -1,
-    180.00000000000003,
+    300.00000000000006,
     10**10000,
     -(10**10000),
 ]
@@ -63,7 +63,7 @@ INVALID_DURATION_IDS = [
     "negative-infinity",
     "zero",
     "negative",
-    "over180",
+    "over300",
     "huge-positive-int",
     "huge-negative-int",
 ]
@@ -78,7 +78,7 @@ def test_explicit_duration_rejects_before_clock_or_numeric_conversion(duration: 
         Deadline.start(clock=forbidden_clock, duration_seconds=cast(Any, duration))
 
 
-@pytest.mark.parametrize("duration", [1, 45.0, 180, 180.0])
+@pytest.mark.parametrize("duration", [1, 45.0, 180, 180.0, 300, 300.0])
 def test_explicit_duration_numeric_boundaries(duration: float) -> None:
     deadline = Deadline.start(clock=lambda: 10.0, duration_seconds=duration)
     assert deadline.expires_at == 10.0 + duration
@@ -119,13 +119,13 @@ def test_preparation_and_public_replay_reject_invalid_dynamic_timeout(
         )
 
 
-def test_exact180_is_valid_for_preparation_and_replay(value: JudgeInput) -> None:
+def test_exact300_is_valid_for_preparation_and_replay(value: JudgeInput) -> None:
     test = harness(value)
     evaluated = test.run()
     records = test.records()
     for index in (0, 2):
         payload = deepcopy(records[index].value)
-        payload["timeout"] = 180
+        payload["timeout"] = 300
         records[index] = records[index].model_copy(update={"value": payload})
     judge_module.verify_judge_records(
         records,
@@ -140,9 +140,9 @@ def test_exact180_is_valid_for_preparation_and_replay(value: JudgeInput) -> None
 @pytest.mark.parametrize(
     "input_tokens,output_tokens,code,actual",
     [
-        (25000, 8192, None, "0.13192"),
-        (25001, 8192, "provider_error", "0.131922"),
-        (25000, 8193, "invalid_generated_output", "0.131930"),
+        (25000, 16384, None, "0.21384"),
+        (25001, 16384, "provider_error", "0.213842"),
+        (25000, 16385, "invalid_generated_output", "0.213850"),
     ],
 )
 def test_judge_input_output_cost_boundaries_preserve_known_usage(
@@ -167,31 +167,44 @@ def test_judge_input_output_cost_boundaries_preserve_known_usage(
         accounting = caught.value.accounting
         test.verify(accounting)
     assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal(actual)
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
     assert accounting.cost.usage_complete
     assert len(test.port.counts) == len(test.port.creates) == 1
     if input_tokens > 25000:
         assert test.budget.stopped
 
 
-def test_judge_progress_beyond45_uses_decreasing_same180_budget(value: JudgeInput) -> None:
+def test_judge_progress_beyond45_uses_decreasing_same300_budget(value: JudgeInput) -> None:
     test = harness(value)
     test.port.count_delay, test.port.generation_delay = 55.0, 65.0
     evaluated = test.run()
     assert test.clock.now > 10.0 + 45.0
-    assert test.port.counts[0]["timeout"] == 180.0
-    assert test.port.creates[0]["timeout"] == 125.0
+    assert test.port.counts[0]["timeout"] == 300.0
+    assert test.port.creates[0]["timeout"] == 245.0
     assert evaluated.records[-1].response_code == "ok"
     test.verify(evaluated, evaluated.judgment)
 
 
-def test_individually_below180_stages_cannot_refresh_combined_deadline(value: JudgeInput) -> None:
+def test_k2_judge_can_use_one300_second_budget_beyond180(value: JudgeInput) -> None:
     test = harness(value)
-    test.port.count_delay, test.port.generation_delay = 100.0, 81.0
+    test.port.count_delay, test.port.generation_delay = 150.0, 149.0
+    evaluated = test.run()
+    assert test.port.counts[0]["timeout"] == 300.0
+    assert test.port.creates[0]["timeout"] == 150.0
+    assert evaluated.records[-1].response_code == "ok"
+    assert evaluated.cost.actual_cost_usd == Decimal("0.003")
+    assert evaluated.cost.reserved_cost_usd == Decimal("0.21384")
+    assert Deadline.start(clock=lambda: 0.0).remaining() == 45.0
+    test.verify(evaluated, evaluated.judgment)
+
+
+def test_individually_below300_stages_cannot_refresh_combined_deadline(value: JudgeInput) -> None:
+    test = harness(value)
+    test.port.count_delay, test.port.generation_delay = 100.0, 201.0
     with pytest.raises(JudgeFailure) as caught:
         test.run()
     assert caught.value.code == "deadline_exceeded"
-    assert test.port.creates[0]["timeout"] == 80.0
+    assert test.port.creates[0]["timeout"] == 200.0
     assert caught.value.accounting.cost.actual_cost_usd == Decimal("0.003")
     test.verify(caught.value.accounting)
 
@@ -206,7 +219,7 @@ def test_assembly_uses_shared_deadline_before_dispatch(
 
     def delayed(*args: Any, **kwargs: Any) -> Any:
         result = original(*args, **kwargs)
-        test.clock.now += 180.0
+        test.clock.now += 300.0
         return result
 
     monkeypatch.setattr(judge_module, name, delayed)
@@ -225,7 +238,7 @@ def test_budget_admission_expiry_refunds_undispatched_generation(value: JudgeInp
     class DelayedBudget(SpendLedger):
         def reserve(self, model: Any) -> Reservation:
             reservation = super().reserve(model)
-            test.clock.now += 180.0
+            test.clock.now += 300.0
             return reservation
 
     test.budget = DelayedBudget(Decimal("1"))
@@ -272,7 +285,7 @@ def test_final_success_validation_expiry_publishes_one_failure_endpoint_and_no_j
             observed_candidates.append(endpoint[0].response_code)
             original_accounting(accounting, context)
             if endpoint[0].response_code == "ok":
-                test.clock.now += 180.0
+                test.clock.now += 300.0
 
         monkeypatch.setattr(judge_module, "validate_judge_accounting", delayed_accounting)
     else:
@@ -282,7 +295,7 @@ def test_final_success_validation_expiry_publishes_one_failure_endpoint_and_no_j
             verify_unpublished()
             evaluated = original_evaluation(**kwargs)
             observed_candidates.append(evaluated.records[-1].response_code)
-            test.clock.now += 180.0
+            test.clock.now += 300.0
             return evaluated
 
         monkeypatch.setattr(judge_module, "JudgeEvaluation", delayed_evaluation)
@@ -301,14 +314,14 @@ def test_final_success_validation_expiry_publishes_one_failure_endpoint_and_no_j
     assert len(metadata) == 3 and len(endpoints) == 1
     assert endpoints[0].response_code == "deadline_exceeded"
     assert (
-        endpoints[0].duration_ms < 180000
+        endpoints[0].duration_ms < 300000
     )  # Captured before final validation, not its total duration.
     assert all(record.response_code == "ok" for record in metadata[:2])
     accounting = caught.value.accounting
     assert accounting.cost == provider_cost_totals(metadata)
     assert accounting.records == metadata
     assert accounting.cost.actual_cost_usd == test.budget.committed_usd == Decimal("0.003")
-    assert accounting.cost.reserved_cost_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == Decimal("0.21384")
     # Replay without instrumentation proves retained raw/trace linkage.
     monkeypatch.undo()
     test.verify(accounting)
@@ -359,13 +372,13 @@ def test_buffered_metadata_is_visible_at_each_publication_and_stable_before_clos
         candidates.append(endpoint[0].response_code)
         original_accounting(accounting, context)
         if boundary == "accounting" and endpoint[0].response_code == "ok":
-            test.clock.now += 180.0
+            test.clock.now += 300.0
 
     def inspect_evaluation(**kwargs: Any) -> JudgeEvaluation:
         verify_calls_visible_without_endpoint()
         evaluated = original_evaluation(**kwargs)
         if boundary == "evaluation":
-            test.clock.now += 180.0
+            test.clock.now += 300.0
         return evaluated
 
     monkeypatch.setattr(TraceRecorder, "finish", counted_finish)
@@ -425,8 +438,8 @@ def test_cancellation_retains_unknown_usage_and_finishes_without_background_task
         test.run()
     assert caught.value.code == "deadline_exceeded"
     assert caught.value.accounting.cost.actual_cost_usd is None
-    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.13192")
-    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.13192")
+    assert caught.value.accounting.cost.reserved_cost_usd == Decimal("0.21384")
+    assert test.budget.stopped and test.budget.committed_usd == Decimal("0.21384")
     assert len(test.port.counts) == len(test.port.creates) == 1
     assert (
         len(
@@ -480,7 +493,7 @@ def test_pending_judge_generation_cancels_without_leaving_a_task(
 
     accounting = asyncio.run(scenario())
     assert accounting.cost.actual_cost_usd is None and not accounting.cost.usage_complete
-    assert accounting.cost.reserved_cost_usd == test.budget.committed_usd == Decimal("0.13192")
+    assert accounting.cost.reserved_cost_usd == test.budget.committed_usd == Decimal("0.21384")
     assert test.budget.stopped
     assert len(test.port.counts) == len(test.port.creates) == 1
     test.verify(accounting)

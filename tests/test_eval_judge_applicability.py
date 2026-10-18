@@ -143,9 +143,9 @@ def test_real_judge_recorder_count_create_use_the_bound_packet_full_schema(
         for key, value in create.items()
         if key not in {"max_tokens", "stream", "service_tier", "timeout"}
     } == {key: value for key, value in count.items() if key != "timeout"}
-    assert create["max_tokens"] == 8192 and create["stream"] is False
+    assert create["max_tokens"] == 16384 and create["stream"] is False
     assert create["service_tier"] == "standard_only"
-    assert count["timeout"] == 180.0 and create["timeout"] == pytest.approx(179.9)
+    assert count["timeout"] == 300.0 and create["timeout"] == pytest.approx(299.9)
     assert json.loads(count["messages"][0]["content"]) == packet
     expected_schema = judge_schema(packet)
     assert_applicability(expected_schema, packet)

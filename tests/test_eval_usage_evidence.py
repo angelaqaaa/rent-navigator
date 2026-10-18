@@ -180,3 +180,42 @@ def test_failed_billed_judge_packet_is_replayed_in_partial_real_collection(
     replace_rows(directory, "judge-raw-provider.jsonl", raw)
     with pytest.raises(ValueError):
         verify_partial(directory, corpus, dataset)
+
+
+@pytest.mark.parametrize("model", [ACTOR_MODEL, JUDGE_MODEL])
+@pytest.mark.parametrize("speed", ["standard", "fast"])
+def test_synthetic_collection_speed_replays_for_each_model(
+    tmp_path: Path, inputs: tuple[Corpus, GoldDataset], model: RequestedModel, speed: str
+) -> None:
+    class SpeedPort(SyntheticRealCompositionPort):
+        async def create(self, **kwargs: Any) -> Message:
+            response = await super().create(**kwargs)
+            if kwargs["model"] == model:
+                response.usage = response.usage.model_copy(update={"speed": speed})
+            return response
+
+    corpus, dataset = inputs
+    directory = tmp_path / "synthetic-speed"
+    manifest = run(directory, dataset, corpus, SpeedPort())
+    accepted = speed == "standard"
+    assert manifest.evaluation_complete is manifest.collection_complete is accepted
+    assert verify_partial(directory, corpus, dataset, complete=accepted) == manifest
+    filename = "raw-provider.jsonl" if model == ACTOR_MODEL else "judge-raw-provider.jsonl"
+    responses = [
+        row["value"]
+        for row in rows(directory, filename)
+        if row["operation"] == "generation" and row["event"] == "response"
+    ]
+    assert responses and all(row["usage"]["speed"] == speed for row in responses)
+    if model == ACTOR_MODEL:
+        verify_raw_links(
+            [
+                RawProviderRecord.model_validate_json(line)
+                for line in (directory / filename).read_bytes().splitlines()
+            ],
+            [
+                TraceRecord.model_validate_json(line)
+                for line in (directory / "metadata.jsonl").read_bytes().splitlines()
+            ],
+            manifest.run_id,
+        )

@@ -518,7 +518,7 @@ def _usage(message: Message) -> Usage | None:
         return None
     # Disable serializer warnings: malformed SDK data can contain sensitive values.
     values = raw.model_dump(warnings=False)
-    if values.get("service_tier") not in (None, "standard"):
+    if any(values.get(name) not in (None, "standard") for name in ("service_tier", "speed")):
         return None
     known = {
         "input_tokens",
@@ -526,6 +526,7 @@ def _usage(message: Message) -> Usage | None:
         "output_tokens_details",
         "inference_geo",
         "service_tier",
+        "speed",
     }
     if any(not _zero_category(value) for name, value in values.items() if name not in known):
         return None

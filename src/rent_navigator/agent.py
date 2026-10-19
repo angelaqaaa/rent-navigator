@@ -169,11 +169,11 @@ _RETRIEVAL_SIDECAR_POLICY: Final = {
     "identity": "no evidence ID, citation permission, rank or metadata",
 }
 _CITATION_SCHEMA_POLICY: Final = {
-    "version": 1,
+    "version": 2,
     "sources": ["actual initial context chunk IDs", "actual executed ToolResult rule evidence IDs"],
     "order": "sorted unique exact chunk IDs",
     "production_nonempty": "Statement.citation_ids items string enum and minItems 1",
-    "baseline": "unchanged transformed schema",
+    "baseline": "nonempty allowed IDs use Statement.citation_ids items string enum; minItems 0",
     "empty": "unchanged transformed schema",
 }
 
@@ -229,12 +229,13 @@ def _system(mode: Mode, arm: Arm, *, selection: bool = False) -> str:
 
 
 def _final_schema(arm: Arm, allowed: set[str]) -> dict[str, Any]:
-    """Constrain only citations available to this production call, using a fresh schema."""
+    """Constrain available citation IDs in both arms, requiring citations only in production."""
     schema = transform_schema(GeneratedResult.model_json_schema())
-    if arm == "production" and allowed:
+    if allowed:
         citations = schema["$defs"]["Statement"]["properties"]["citation_ids"]
         citations["items"]["enum"] = sorted(allowed)
-        citations["minItems"] = 1
+        if arm == "production":
+            citations["minItems"] = 1
     return schema
 
 

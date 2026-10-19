@@ -13,9 +13,11 @@ from uuid import UUID
 import pytest
 from anthropic.types import Message, MessageTokensCount
 from eval_fixtures import TOY_HASH, TOY_RUN_ID, TOY_SOURCE_SHA, canonical_hits, toy_cases
+from test_agent import _schema_accepts
 
 from rent_navigator.context import context_provenance, query_for_request
 from rent_navigator.corpus import Corpus, load_corpus
+from rent_navigator.eval.judge import build_judge_packet
 from rent_navigator.eval.models import (
     Arm,
     GoldCase,
@@ -328,6 +330,57 @@ def test_actual_pipeline_synthetic_cases_and_arm_fairness(
         assert all(
             '"evidence"' not in json.dumps(call["messages"]) for call in harness.fake.creates
         )
+
+
+@pytest.mark.parametrize("case_id", ["N01", "R01", "R02", "R04"])
+@pytest.mark.parametrize("cited", [False, True])
+def test_baseline_tool_schema_and_independent_judge_evidence(
+    corpus: Corpus, case_id: str, cited: bool
+) -> None:
+    harness = _harness(corpus, case_id, arm="baseline")
+    expected = harness.case.expected_tool_result
+    assert expected is not None
+    allowed = {
+        identifier for rule in expected.rule_ids for identifier in corpus.rule(rule).evidence_ids
+    }
+    response = harness.fake.responses[-1]
+    assert isinstance(response, Message)
+    content = response.content[0]
+    assert content.type == "text"
+    payload = json.loads(content.text)
+    identifiers = [sorted(allowed)[0]] if cited else []
+    payload["statements"][0]["citation_ids"] = identifiers
+    harness.fake.responses[-1] = _message([{"type": "text", "text": json.dumps(payload)}])
+    outcome = harness.run()
+    assert outcome.row.classification == "success"
+    assert isinstance(outcome.row.response, AskResponse)
+    assert outcome.row.actual_tool_args == harness.case.expected_tool_args
+    assert outcome.row.actual_tool_result == expected
+    assert outcome.row.actual_extract == harness.case.expected_extract
+    schema = harness.fake.creates[-1]["output_config"]["format"]["schema"]
+    assert _schema_accepts(schema, payload)
+    assert harness.fake.counts[-1]["output_config"]["format"]["schema"] == schema
+    assert harness.judge is not None and len(harness.judge.inputs) == 1
+    value = harness.judge.inputs[0]
+    canonical = set(harness.case.evidence_ids)
+    assert {chunk.id for chunk in value.evidence} == canonical
+    assert {chunk.id for chunk in value.cited_evidence} == set(identifiers)
+    packet = build_judge_packet(value)
+    assert {entry["id"] for entry in packet["evidence"]} == canonical | set(identifiers)
+    assert {entry["id"] for entry in packet["evidence"] if entry["canonical"]} == canonical
+    assert packet["observed_tool_result"] == expected.model_dump(mode="json")
+    assert packet["approved_facts"] is not None
+    assert not harness.queries
+    assert all('"evidence"' not in json.dumps(call["messages"]) for call in harness.fake.creates)
+    assert (
+        len(harness.fake.creates) == len(harness.fake.counts) == (3 if harness.case.letter else 2)
+    )
+    assert outcome.row.serving_cost_usd == len(harness.fake.creates) * Decimal("0.0015")
+    assert outcome.row.judge_cost_usd == Decimal("0.0007")
+    assert outcome.row.judge is not None
+    assert outcome.row.judge.statements[0].citation_support == (
+        "supported" if cited else "not_applicable"
+    )
 
 
 @pytest.mark.parametrize(

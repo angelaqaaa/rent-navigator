@@ -6,6 +6,7 @@ import sys
 from collections.abc import Awaitable, Callable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from decimal import Decimal, localcontext
 from io import StringIO
 from pathlib import Path
@@ -25,7 +26,7 @@ from sdk_test_boundary import (
 
 import rent_navigator.agent as agent_module
 from rent_navigator.agent import agent_config_hash, answer
-from rent_navigator.context import CONTEXT_POLICY, context_provenance, foundation_ids
+from rent_navigator.context import CONTEXT_POLICY, Arm, context_provenance, foundation_ids
 from rent_navigator.corpus import Corpus, load_corpus
 from rent_navigator.index import NOTICE_QUERY, RENT_QUERY, SearchHit, build_index, search
 from rent_navigator.models import (
@@ -54,6 +55,7 @@ from rent_navigator.trace import (
     MetadataSink,
     TraceContext,
     TraceRecord,
+    TraceRecorder,
     provider_cost_totals,
 )
 
@@ -268,6 +270,53 @@ def strings(value: object) -> list[str]:
 
 def rule_ids(result: ToolResult, corpus: Corpus) -> set[str]:
     return {evidence for rule in result.rule_ids for evidence in corpus.rule(rule).evidence_ids}
+
+
+def _schema_accepts(schema: dict[str, Any], value: Any, root: dict[str, Any] | None = None) -> bool:
+    """Evaluate the emitted object/array/string/null/enum subset independently."""
+    root = schema if root is None else root
+    if "$ref" in schema:
+        name = schema["$ref"].removeprefix("#/$defs/")
+        return _schema_accepts(root["$defs"][name], value, root)
+    if "anyOf" in schema:
+        return any(_schema_accepts(branch, value, root) for branch in schema["anyOf"])
+    if "enum" in schema and value not in schema["enum"]:
+        return False
+    kind = schema["type"]
+    if kind == "object":
+        return (
+            type(value) is dict
+            and set(schema.get("required", ())) <= set(value)
+            and (
+                schema.get("additionalProperties", True) or set(value) <= set(schema["properties"])
+            )
+            and all(
+                _schema_accepts(schema["properties"][name], item, root)
+                for name, item in value.items()
+            )
+        )
+    if kind == "array":
+        return (
+            type(value) is list
+            and len(value) >= schema.get("minItems", 0)
+            and ("maxItems" not in schema or len(value) <= schema["maxItems"])
+            and all(_schema_accepts(schema["items"], item, root) for item in value)
+        )
+    if kind == "string":
+        return type(value) is str
+    if kind == "null":
+        return value is None
+    raise AssertionError("Unexpected emitted schema subset")
+
+
+def _version1_final_schema(arm: Arm, allowed: set[str]) -> dict[str, Any]:
+    """Frozen prior schema construction for production request parity."""
+    schema = transform_schema(GeneratedResult.model_json_schema())
+    if arm == "production" and allowed:
+        citations = schema["$defs"]["Statement"]["properties"]["citation_ids"]
+        citations["items"]["enum"] = sorted(allowed)
+        citations["minItems"] = 1
+    return schema
 
 
 def assert_count_matches_generation(fake: RecordingMessages) -> None:
@@ -579,9 +628,12 @@ def test_baseline_has_no_retrieval_or_passages_and_allows_empty_citations(
     assert not harness.endpoint().retrieved_evidence_ids
     assert not harness.endpoint().foundation_evidence_ids
     assert not harness.endpoint().initial_context_evidence_ids
-    assert harness.fake.creates[-1]["output_config"]["format"]["schema"] == transform_schema(
-        GeneratedResult.model_json_schema()
-    )
+    expected_schema = transform_schema(GeneratedResult.model_json_schema())
+    if mode != "question":
+        expected_schema["$defs"]["Statement"]["properties"]["citation_ids"]["items"]["enum"] = (
+            sorted(rule_ids(expected_tool(request, corpus), corpus))
+        )
+    assert harness.fake.creates[-1]["output_config"]["format"]["schema"] == expected_schema
     assert_count_matches_generation(harness.fake)
 
 
@@ -591,8 +643,15 @@ def test_final_schema_is_fresh_and_preserves_empty_and_refusal_branches(corpus: 
     production = agent_module._final_schema("production", allowed)
     assert production != original
     assert "minItems" not in production["properties"]["statements"]
-    assert agent_module._final_schema("baseline", allowed) == original
+    baseline = deepcopy(original)
+    baseline["$defs"]["Statement"]["properties"]["citation_ids"]["items"]["enum"] = sorted(allowed)
+    assert agent_module._final_schema("baseline", allowed) == baseline
     assert agent_module._final_schema("production", set()) == original
+    assert agent_module._final_schema("baseline", set()) == original
+    refusal = final_message([], reason="insufficient_evidence").content[0]
+    assert isinstance(refusal, TextBlock)
+    assert _schema_accepts(production, json.loads(refusal.text))
+    assert _schema_accepts(baseline, json.loads(refusal.text))
     production["$defs"]["Statement"]["properties"]["citation_ids"]["items"]["enum"].clear()
     assert agent_module._final_schema("production", allowed)["$defs"]["Statement"]["properties"][
         "citation_ids"
@@ -615,7 +674,7 @@ def test_citation_policy_hash_is_static_and_binds_construction(
     agent_module._final_schema("production", {corpus.chunks[0].id})
     agent_module._final_schema("production", {corpus.chunks[1].id})
     assert agent_config_hash("rent") == before
-    policy = dict(agent_module._CITATION_SCHEMA_POLICY, version=2)
+    policy = dict(agent_module._CITATION_SCHEMA_POLICY, version=3)
     monkeypatch.setattr(agent_module, "_CITATION_SCHEMA_POLICY", policy)
     assert agent_config_hash("rent") != before
 
@@ -660,6 +719,48 @@ def test_baseline_optional_citations_only_resolve_executed_rules(
         assert caught.value.code == "invalid_generated_output"
     assert not harness.queries
     harness.endpoint()
+
+
+@pytest.mark.parametrize("mode", ["notice", "rent"])
+@pytest.mark.parametrize(
+    "citation_kind,accepted",
+    [
+        ("empty", True),
+        ("executed_evidence", True),
+        ("calendar.s89", False),
+        ("notice.90_days", False),
+        ("scope.ordinary", False),
+        ("unavailable_evidence", False),
+    ],
+)
+def test_baseline_emitted_schema_protects_optional_citations(
+    corpus: Corpus, mode: Literal["notice", "rent"], citation_kind: str, accepted: bool
+) -> None:
+    request = request_for(mode)
+    result = expected_tool(request, corpus)
+    allowed = rule_ids(result, corpus)
+    identifiers = (
+        []
+        if citation_kind == "empty"
+        else [sorted(allowed)[0]]
+        if citation_kind == "executed_evidence"
+        else [next(chunk.id for chunk in corpus.chunks if chunk.id not in allowed)]
+        if citation_kind == "unavailable_evidence"
+        else [citation_kind]
+    )
+    fake = RecordingMessages([selection(request), final_message([])])
+    harness = Harness(request, corpus, fake, arm="baseline")
+    response = asyncio.run(harness.run())
+    assert response.tool_result == result and response.citations == []
+    schema = fake.creates[-1]["output_config"]["format"]["schema"]
+    block = final_message(identifiers).content[0]
+    assert isinstance(block, TextBlock)
+    GeneratedResult.model_validate_json(block.text)
+    assert _schema_accepts(schema, json.loads(block.text)) is accepted
+    assert_count_matches_generation(fake)
+    assert not harness.queries
+    assert all(chunk.text not in strings(fake.creates) for chunk in corpus.chunks)
+    assert harness.endpoint().actual_cost_usd == Decimal("0.003")
 
 
 @pytest.mark.parametrize("failure", ["provider", "missing_usage", "budget", "malformed"])
@@ -822,14 +923,31 @@ def test_config_identity_is_deterministic_and_separates_all_modes_and_arms() -> 
     assert agent_config_hash("rent", "production") == agent_config_hash("rent", "production")
 
 
+@pytest.mark.parametrize("mode", ["question", "notice", "rent"])
 def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(
-    corpus: Corpus, monkeypatch: pytest.MonkeyPatch, sdk_boundary: SDKBoundary
+    corpus: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    sdk_boundary: SDKBoundary,
+    mode: Literal["question", "notice", "rent"],
 ) -> None:
-    request = request_for()
-    result = expected_tool(request, corpus)
-    replies = [selection(request), final_message([sorted(rule_ids(result, corpus))[0]])]
+    request = request_for(mode)
+    result = None if mode == "question" else expected_tool(request, corpus)
+    allowed = set(foundation_ids(corpus)) if result is None else rule_ids(result, corpus)
+    replies = ([] if mode == "question" else [selection(request)]) + [
+        final_message([sorted(allowed)[0]])
+    ]
     requests: list[tuple[str, dict[str, Any]]] = []
     generated = 0
+
+    def recording_trace(context: TraceContext, sink: MetadataSink) -> TraceRecorder:
+        return TraceRecorder(
+            context,
+            sink,
+            monotonic=lambda: 100.0,
+            utc_now=lambda: datetime(2026, 10, 19, tzinfo=UTC),
+        )
+
+    monkeypatch.setattr(agent_module, "TraceRecorder", recording_trace)
 
     async def handle(raw: httpx2.Request) -> httpx2.Response:
         nonlocal generated
@@ -844,6 +962,9 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(
 
     async def run() -> tuple[AskResponse, Harness]:
         harness = Harness(request, corpus, RecordingMessages([]))
+        harness.context = harness.context.model_copy(
+            update={"trace_id": UUID("10000000-0000-4000-8000-000000000074")}
+        )
         transport = httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
         sdk_boundary.transports.append(transport)
         client: AsyncAnthropic | None = None
@@ -870,15 +991,41 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(
             assert all(getattr(owner, name) is original for owner, name, original in before)
         return response, harness
 
-    response, harness = asyncio.run(run())
-    assert response.tool_result == result
-    assert [path for path, _ in requests] == [
-        "/v1/messages/count_tokens",
-        "/v1/messages",
-        "/v1/messages/count_tokens",
-        "/v1/messages",
+    with monkeypatch.context() as prior:
+        prior.setattr(agent_module, "_final_schema", _version1_final_schema)
+        prior.setattr(
+            agent_module,
+            "_CITATION_SCHEMA_POLICY",
+            dict(
+                agent_module._CITATION_SCHEMA_POLICY,
+                version=1,
+                baseline="unchanged transformed schema",
+            ),
+        )
+        previous_response, previous_harness = asyncio.run(run())
+    previous_requests = [
+        (path, json.dumps(body, sort_keys=True, separators=(",", ":")).encode())
+        for path, body in requests
     ]
-    for offset in (0, 2):
+    requests.clear()
+    generated = 0
+    sdk_boundary.attempts.clear()
+    response, harness = asyncio.run(run())
+    assert [
+        (path, json.dumps(body, sort_keys=True, separators=(",", ":")).encode())
+        for path, body in requests
+    ] == previous_requests
+    assert response == previous_response
+    assert harness.context.config_hash != previous_harness.context.config_hash
+    assert [record.model_dump(exclude={"config_hash"}) for record in harness.records()] == [
+        record.model_dump(exclude={"config_hash"}) for record in previous_harness.records()
+    ]
+    assert RAW not in harness.stream.getvalue()
+    assert response.tool_result == result
+    assert [path for path, _ in requests] == ["/v1/messages/count_tokens", "/v1/messages"] * len(
+        replies
+    )
+    for offset in range(0, len(requests), 2):
         count, create = requests[offset][1], requests[offset + 1][1]
         for field in (
             "model",
@@ -895,24 +1042,26 @@ def test_locked_sdk_serializes_native_roundtrip_and_matching_full_preflight(
         assert create["max_tokens"] == 1200
         assert create["stream"] is False
         assert "temperature" not in count
-    second = requests[3][1]
-    assert second["tool_choice"] == {"type": "none"}
-    assert json.loads(second["messages"][-1]["content"][1]["text"]) == {
-        "money_display_cad": {
-            "current_rent_cad": "2000.00",
-            "proposed_rent_cad": "2048.00",
-            "exact_new_rent_ceiling_cad": "2042.00",
+    second = requests[-1][1]
+    if result is not None:
+        assert second["tool_choice"] == {"type": "none"}
+        assert second["messages"][-1]["content"][0]["tool_use_id"] == TOOL_ID
+        assert second["messages"][-2]["content"][0]["type"] == "tool_use"
+        assert json.loads(second["messages"][-1]["content"][0]["content"]) == result.model_dump(
+            mode="json"
+        )
+        for identifier in rule_ids(result, corpus):
+            assert corpus.chunk(identifier).text in strings(requests[2][1])
+    if mode == "rent":
+        assert json.loads(second["messages"][-1]["content"][1]["text"]) == {
+            "money_display_cad": {
+                "current_rent_cad": "2000.00",
+                "proposed_rent_cad": "2048.00",
+                "exact_new_rent_ceiling_cad": "2042.00",
+            }
         }
-    }
-    assert agent_module._RENT_MONEY_SYSTEM in second["system"]
-    assert second["messages"][-1]["content"][0]["tool_use_id"] == TOOL_ID
-    assert second["messages"][-2]["content"][0]["type"] == "tool_use"
-    assert json.loads(second["messages"][-1]["content"][0]["content"]) == result.model_dump(
-        mode="json"
-    )
-    for identifier in rule_ids(result, corpus):
-        assert corpus.chunk(identifier).text in strings(requests[2][1])
-    assert harness.endpoint().actual_cost_usd == Decimal("0.003")
+        assert agent_module._RENT_MONEY_SYSTEM in second["system"]
+    assert harness.endpoint().actual_cost_usd == len(replies) * Decimal("0.0015")
 
 
 @pytest.mark.parametrize("attribute", ["id", "name", "input"])

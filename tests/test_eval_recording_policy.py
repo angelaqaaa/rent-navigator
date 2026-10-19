@@ -347,13 +347,32 @@ def test_actual_result_not_gold_defines_rule_union(
         verify(harness, forged)
 
 
-def test_baseline_has_no_retrieval_or_dynamic_constraint(corpus: Corpus) -> None:
-    harness = _harness(corpus, "R01", arm="baseline")
-    harness.run()
+@pytest.mark.parametrize("case_id", ["Q01", "N01", "R01"])
+def test_baseline_recording_enforces_only_optional_executed_evidence(
+    corpus: Corpus, case_id: str
+) -> None:
+    harness = _harness(corpus, case_id, arm="baseline")
+    outcome = harness.run()
     assert not harness.queries
-    assert "enum" not in citations(harness.fake.counts[-1])["items"]
+    result = outcome.row.actual_tool_result
+    if result is None:
+        assert "enum" not in citations(harness.fake.counts[-1])["items"]
+    else:
+        expected = {
+            identifier
+            for rule_id in result.rule_ids
+            for identifier in corpus.rule(rule_id).evidence_ids
+        }
+        assert citations(harness.fake.counts[-1])["items"]["enum"] == sorted(expected)
+    assert citations(harness.fake.counts[-1]) == citations(harness.fake.creates[-1])
     assert "minItems" not in citations(harness.fake.counts[-1])
     verify(harness, records(harness))
+    forged = records(harness)
+    for record in forged:
+        if record.event == "request" and "output_config" in record.value:
+            citations(record.value)["items"]["enum"] = ["scope.ordinary"]
+    with pytest.raises(ValueError):
+        verify(harness, forged)
 
 
 def test_accepted_replay_independently_recomputes_context_and_requires_consistency(

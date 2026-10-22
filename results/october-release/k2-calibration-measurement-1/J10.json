@@ -1,0 +1,69 @@
+{
+  "packet_id": "J10",
+  "source_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
+  "execution_mode": "live",
+  "decoded_judgment": {
+    "required_claims": [
+      {
+        "id": "c1",
+        "result": "contradicted"
+      }
+    ],
+    "statements": [
+      {
+        "id": "s1",
+        "factual": "contradicted",
+        "citation_support": "unsupported"
+      }
+    ],
+    "false_pass": false,
+    "policy_violations": []
+  },
+  "decode_error": null,
+  "failure_code": null,
+  "agreement": {
+    "claims": {
+      "c1": true
+    },
+    "statements": {
+      "s1": {
+        "factual": true,
+        "citation_support": true
+      }
+    },
+    "false_pass": true,
+    "policy_violations": true,
+    "exact": true
+  },
+  "r04_smoke_passed": null,
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 3078,
+    "output_tokens": 430
+  },
+  "usage_complete": true,
+  "elapsed_seconds": 4.916302917059511,
+  "requested_model_id": "claude-sonnet-5",
+  "returned_model_id": "claude-sonnet-5",
+  "actual_cost_usd": "0.010456",
+  "reserved_cost_usd": "0.21384",
+  "failure_diagnostic": null,
+  "decode_rejection_reason": null,
+  "provider_request_id": "req_011Cg2scEmcv8oWDxiAZPGn6",
+  "provider_error_type": null,
+  "thinking_metrics": {
+    "thinking_blocks": 1,
+    "redacted_thinking_blocks": 0,
+    "thinking_present": true,
+    "output_tokens": 430,
+    "thinking_tokens": 305,
+    "thinking_output_share": 0.7093023255813954
+  },
+  "expected_task_success": false,
+  "observed_task_success": false,
+  "fail_to_pass": false,
+  "judging_source_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "runner_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "failed_criterion": null
+}

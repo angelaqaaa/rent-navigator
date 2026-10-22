@@ -1,0 +1,109 @@
+{
+  "packet_id": "J02",
+  "source_commit": "5839f980c32e570b06a3a4f53035228d577f3b8a",
+  "judge_config_hash": "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04",
+  "execution_mode": "live",
+  "decoded_judgment": {
+    "required_claims": [
+      {
+        "id": "c1",
+        "result": "met"
+      },
+      {
+        "id": "c2",
+        "result": "met"
+      },
+      {
+        "id": "c3",
+        "result": "met"
+      },
+      {
+        "id": "c4",
+        "result": "met"
+      }
+    ],
+    "statements": [
+      {
+        "id": "s1",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s2",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s3",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s4",
+        "factual": "supported",
+        "citation_support": "supported"
+      }
+    ],
+    "false_pass": false,
+    "policy_violations": []
+  },
+  "decode_error": null,
+  "failure_code": null,
+  "agreement": {
+    "claims": {
+      "c1": true,
+      "c2": true,
+      "c3": true,
+      "c4": true
+    },
+    "statements": {
+      "s1": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s2": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s3": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s4": {
+        "factual": true,
+        "citation_support": true
+      }
+    },
+    "false_pass": true,
+    "policy_violations": true,
+    "exact": true
+  },
+  "r04_smoke_passed": null,
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 5839,
+    "output_tokens": 1903
+  },
+  "usage_complete": true,
+  "elapsed_seconds": 21.186613166937605,
+  "requested_model_id": "claude-sonnet-5",
+  "returned_model_id": "claude-sonnet-5",
+  "actual_cost_usd": "0.030708",
+  "reserved_cost_usd": "0.13192",
+  "failure_diagnostic": null,
+  "decode_rejection_reason": null,
+  "provider_request_id": "req_011Cg1cAoZN2YYNkfFyvzXEB",
+  "provider_error_type": null,
+  "thinking_metrics": {
+    "thinking_blocks": 1,
+    "redacted_thinking_blocks": 0,
+    "thinking_present": true,
+    "output_tokens": 1903,
+    "thinking_tokens": 1681,
+    "thinking_output_share": 0.883342091434577
+  },
+  "expected_task_success": true,
+  "observed_task_success": true,
+  "fail_to_pass": false,
+  "failed_criterion": null
+}

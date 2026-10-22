@@ -1,0 +1,27 @@
+{
+  "source_commit": "50190c8173c8f36193be15b4f857df8b724094fa",
+  "url": "https://rent-navigator.onrender.com",
+  "attempt_id": "210da942-6cc8-4e2f-9b27-53fcc6c6e815",
+  "forecast_usd": "0.081",
+  "daily_cap_usd": "0.30",
+  "started_at": "2026-10-22T21:09:59.553956+00:00",
+  "complete": true,
+  "extract_http_status": 200,
+  "ask_http_status": 200,
+  "tool_status": "fails_checked_rules",
+  "check_statuses": {
+    "scope": "pass",
+    "supported_year": "pass",
+    "period_start": "pass",
+    "notice": "fail",
+    "spacing": "pass",
+    "guideline": "fail",
+    "form": "pass"
+  },
+  "linked_attempt": true,
+  "distinct_traces": true,
+  "statutory_citations_present": true,
+  "narrative_review": "pending",
+  "actual_cost_usd": null,
+  "finished_at": "2026-10-22T21:10:16.816097+00:00"
+}

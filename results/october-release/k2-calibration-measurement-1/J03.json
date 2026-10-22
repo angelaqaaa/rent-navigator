@@ -1,0 +1,120 @@
+{
+  "packet_id": "J03",
+  "source_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
+  "execution_mode": "live",
+  "decoded_judgment": {
+    "required_claims": [
+      {
+        "id": "c1",
+        "result": "met"
+      },
+      {
+        "id": "c2",
+        "result": "met"
+      },
+      {
+        "id": "c3",
+        "result": "met"
+      },
+      {
+        "id": "c4",
+        "result": "met"
+      }
+    ],
+    "statements": [
+      {
+        "id": "s1",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s2",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s3",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s4",
+        "factual": "supported",
+        "citation_support": "supported"
+      },
+      {
+        "id": "s5",
+        "factual": "supported",
+        "citation_support": "supported"
+      }
+    ],
+    "false_pass": false,
+    "policy_violations": []
+  },
+  "decode_error": null,
+  "failure_code": null,
+  "agreement": {
+    "claims": {
+      "c1": true,
+      "c2": true,
+      "c3": true,
+      "c4": true
+    },
+    "statements": {
+      "s1": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s2": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s3": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s4": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s5": {
+        "factual": true,
+        "citation_support": true
+      }
+    },
+    "false_pass": true,
+    "policy_violations": true,
+    "exact": true
+  },
+  "r04_smoke_passed": null,
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 5945,
+    "output_tokens": 2122
+  },
+  "usage_complete": true,
+  "elapsed_seconds": 21.795251959003508,
+  "requested_model_id": "claude-sonnet-5",
+  "returned_model_id": "claude-sonnet-5",
+  "actual_cost_usd": "0.03311",
+  "reserved_cost_usd": "0.21384",
+  "failure_diagnostic": null,
+  "decode_rejection_reason": null,
+  "provider_request_id": "req_011Cg2sTDfenCEo4YXwYKrxD",
+  "provider_error_type": null,
+  "thinking_metrics": {
+    "thinking_blocks": 1,
+    "redacted_thinking_blocks": 0,
+    "thinking_present": true,
+    "output_tokens": 2122,
+    "thinking_tokens": 1877,
+    "thinking_output_share": 0.8845428840716305
+  },
+  "expected_task_success": true,
+  "observed_task_success": true,
+  "fail_to_pass": false,
+  "judging_source_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "runner_commit": "fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e",
+  "failed_criterion": null
+}

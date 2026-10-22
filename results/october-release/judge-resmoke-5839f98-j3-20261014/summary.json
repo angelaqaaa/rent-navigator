@@ -1,0 +1,52 @@
+{
+  "source_commit": "5839f980c32e570b06a3a4f53035228d577f3b8a",
+  "judge_config_hash": "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04",
+  "pricing_hash": "d1a472e5668c0455e1ff2e5a881403e9ccf01e148552153a757bd6c3aabd7f31",
+  "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+  "execution_mode": "live",
+  "planned_votes": 14,
+  "recorded_votes": 4,
+  "complete": false,
+  "expectations": "proposed_not_independently_reviewed",
+  "calibration_matched": 2,
+  "calibration_denominator": 13,
+  "field_agreement": {
+    "matched": 55,
+    "denominator": 59
+  },
+  "fail_to_pass_flips": 1,
+  "completed_votes": [
+    "J01",
+    "J02",
+    "J03",
+    "J04"
+  ],
+  "unstarted_votes": [
+    "J05",
+    "J06",
+    "J07",
+    "J08",
+    "J09",
+    "J10",
+    "J11",
+    "J12",
+    "J13",
+    "R04"
+  ],
+  "r04_smoke_passed": null,
+  "reportable": false,
+  "official_n16_evaluation": false,
+  "generation_attempts": 4,
+  "real_generation_attempts": 4,
+  "budget_limit_usd": "2.00",
+  "reservation_forecast_usd": "1.84688",
+  "batch_committed_usd": "0.140836",
+  "cost": {
+    "input_tokens": 26523,
+    "output_tokens": 8779,
+    "usage_complete": true,
+    "actual_cost_usd": "0.140836",
+    "reserved_cost_usd": "0.52768"
+  },
+  "stop_reason": "registered_criterion_failed"
+}

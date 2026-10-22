@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-10-22T21:27:32.180088+00:00",
+  "source_commit": "50190c8173c8f36193be15b4f857df8b724094fa",
+  "free_requests": [
+    {
+      "route": "/healthz",
+      "http_status": 200,
+      "source_matches": true
+    },
+    {
+      "route": "/",
+      "http_status": 200,
+      "source_matches": true
+    }
+  ],
+  "budget_zero": "owner confirmed applied; not exposed by GET responses",
+  "auto_deploy_off": "owner confirmed",
+  "result": "pass"
+}

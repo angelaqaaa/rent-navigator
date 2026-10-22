@@ -1,0 +1,830 @@
+{
+  "schema_version": 1,
+  "dry_run": true,
+  "reportable": false,
+  "evaluation_complete": false,
+  "dry_run_complete": true,
+  "run_id": "7cb467a4-d32b-416a-b229-034cbf651cbb",
+  "source_sha": "50190c8173c8f36193be15b4f857df8b724094fa",
+  "lock_hash": "8de12f5eae66dbbb2744fda68316826aba2e82d9b4d7f8d00764bc6dd0f5b80a",
+  "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+  "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
+  "environment": {
+    "os": "Linux-7.2.9-orbstack-00391-g2b298d05fbd4-aarch64-with-glibc2.36",
+    "cpu": "aarch64",
+    "ram_bytes": 8392929280,
+    "docker_version": "Docker version 29.8.2, build 7fc2dff",
+    "image_digest": "sha256:c9293278a2a7237288098296f5b4a8e9a375c66cbf76dfab88a30fdeacda9273",
+    "source_clean": true,
+    "provider_access_date": "2026-10-19",
+    "pricing_url": "https://platform.claude.com/docs/en/about-claude/pricing"
+  },
+  "attempts": [
+    {
+      "run_id": "7cb467a4-d32b-416a-b229-034cbf651cbb",
+      "case_id": "R01",
+      "arm": "production",
+      "repeat": 0,
+      "source_sha": "50190c8173c8f36193be15b4f857df8b724094fa",
+      "config_hash": "c86feb55ad1496138a94ee0809038954a8a3ebce14ba71b6a57b43700a317322",
+      "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+      "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+      "pricing_hash": "228cdd725a2de9973174f170f19ae38bdd2de30a603168a80d9dfcf1436f1541",
+      "attempt_id": "6770e15b-2a0c-47ce-90ca-25086fe515ed",
+      "trace_ids": [
+        "50d93d3c-720a-445a-aa10-24b6e18cff6a"
+      ],
+      "retrieved_ids": [
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "6ebf013239401d00cc45d78657ddfba061ca9251b07c54795e6171d66b1e8b71",
+        "ef2c8278e771d0c5485f4ed65142dbdde28e0ffd29163920c27e96b4c9f30509",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e"
+      ],
+      "foundation_evidence_ids": [],
+      "initial_context_evidence_ids": [
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "6ebf013239401d00cc45d78657ddfba061ca9251b07c54795e6171d66b1e8b71",
+        "ef2c8278e771d0c5485f4ed65142dbdde28e0ffd29163920c27e96b4c9f30509",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e"
+      ],
+      "response": {
+        "attempt_id": "6770e15b-2a0c-47ce-90ca-25086fe515ed",
+        "trace_id": "50d93d3c-720a-445a-aa10-24b6e18cff6a",
+        "status": "answered",
+        "answer": "A landlord must give a tenant at least 90 days' written notice before increasing rent. The notice must be in a form approved by the Landlord and Tenant Board and must set out the landlord's intention to increase the rent and the amount of the new rent.\nIn most cases, rent can be increased only if at least 12 months have passed since the tenant first moved into the rental unit or since the tenant's last rent increase. If the previous tenant assigned the rental unit to the current tenant within the 12 months before the increase date, the landlord can increase the rent if at least 12 months have passed since the previous tenant's last rent increase.\nFor a controlled rental unit in 2026, a landlord cannot increase rent by more than the guideline of 2.1% per year, except in accordance with specific statutory exceptions. The proposed rent of $1021.00 (an increase from $1000.00) equals exactly 2.1% and complies with the guideline limit.\nNotice was served by hand on June 3, 2026, for an effective date of September 1, 2026, providing 90 days' notice as required. The 12-month spacing requirement is satisfied because the tenancy began September 1, 2025, and no previous rent increase occurred, so the increase on September 1, 2026, is at least 12 months from the tenancy start date.\nForm N1 is the correct notice form for this rent increase because the rental unit is subject to the rent increase guideline under the Residential Tenancies Act and is not exempt or partially exempt.",
+        "statements": [
+          {
+            "id": "s1",
+            "text": "A landlord must give a tenant at least 90 days' written notice before increasing rent. The notice must be in a form approved by the Landlord and Tenant Board and must set out the landlord's intention to increase the rent and the amount of the new rent.",
+            "citation_ids": [
+              "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+            ]
+          },
+          {
+            "id": "s2",
+            "text": "In most cases, rent can be increased only if at least 12 months have passed since the tenant first moved into the rental unit or since the tenant's last rent increase. If the previous tenant assigned the rental unit to the current tenant within the 12 months before the increase date, the landlord can increase the rent if at least 12 months have passed since the previous tenant's last rent increase.",
+            "citation_ids": [
+              "d23348353fecdb08307c3e74b0e8899d26b35fd5bb14420c1f744ed51dbfca52",
+              "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf"
+            ]
+          },
+          {
+            "id": "s3",
+            "text": "For a controlled rental unit in 2026, a landlord cannot increase rent by more than the guideline of 2.1% per year, except in accordance with specific statutory exceptions. The proposed rent of $1021.00 (an increase from $1000.00) equals exactly 2.1% and complies with the guideline limit.",
+            "citation_ids": [
+              "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+              "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109"
+            ]
+          },
+          {
+            "id": "s4",
+            "text": "Notice was served by hand on June 3, 2026, for an effective date of September 1, 2026, providing 90 days' notice as required. The 12-month spacing requirement is satisfied because the tenancy began September 1, 2025, and no previous rent increase occurred, so the increase on September 1, 2026, is at least 12 months from the tenancy start date.",
+            "citation_ids": [
+              "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+              "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf"
+            ]
+          },
+          {
+            "id": "s5",
+            "text": "Form N1 is the correct notice form for this rent increase because the rental unit is subject to the rent increase guideline under the Residential Tenancies Act and is not exempt or partially exempt.",
+            "citation_ids": [
+              "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e",
+              "416445ce84343a5b8e40226374c738b0b3a1e94663b5822e5b3b9b2cf08b88e5"
+            ]
+          }
+        ],
+        "tool_result": {
+          "tool": "rent_increase_check",
+          "status": "passes_checked_rules",
+          "checks": [
+            {
+              "id": "scope",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "scope.ordinary"
+              ]
+            },
+            {
+              "id": "supported_year",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": []
+            },
+            {
+              "id": "period_start",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "scope.ordinary"
+              ]
+            },
+            {
+              "id": "notice",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "calendar.s89",
+                "notice.90_days"
+              ]
+            },
+            {
+              "id": "spacing",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "calendar.s89",
+                "spacing.12_months"
+              ]
+            },
+            {
+              "id": "guideline",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "guideline.2026"
+              ]
+            },
+            {
+              "id": "form",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "form.N1"
+              ]
+            }
+          ],
+          "deemed_served_on": "2026-06-03",
+          "notice_days": 90,
+          "earliest_notice_on": "2026-09-01",
+          "latest_deemed_service_on": "2026-06-03",
+          "latest_dispatch_on": "2026-06-03",
+          "earliest_spacing_on": "2026-09-01",
+          "guideline_percent": "2.1",
+          "cap_cents_exact": "102100",
+          "rule_ids": [
+            "calendar.s89",
+            "form.N1",
+            "guideline.2026",
+            "notice.90_days",
+            "scope.ordinary",
+            "spacing.12_months"
+          ]
+        },
+        "citations": [
+          {
+            "id": "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+            "url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+            "heading": "N1 instructions — Section C: How to increase the rent and give this notice",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+            "url": "https://www.ontario.ca/laws/statute/06r17",
+            "heading": "RTA s. 120 — Guideline increase",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "416445ce84343a5b8e40226374c738b0b3a1e94663b5822e5b3b9b2cf08b88e5",
+            "url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+            "heading": "N1 instructions — Section A: When to use this notice",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+            "url": "https://www.ontario.ca/laws/statute/06r17",
+            "heading": "RTA s. 116 — Notice of rent increase required",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+            "url": "https://www.ontario.ca/laws/statute/06l21",
+            "heading": "Legislation Act s. 89",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "d23348353fecdb08307c3e74b0e8899d26b35fd5bb14420c1f744ed51dbfca52",
+            "url": "https://www.ontario.ca/laws/statute/06r17",
+            "heading": "RTA s. 119 — 12-month rule",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e",
+            "url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+            "heading": "N1 instructions — Section B: When to use a different notice",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+            "url": "https://www.ontario.ca/page/residential-rent-increases",
+            "heading": "Previous rent increase guidelines",
+            "snapshot_date": "2026-09-21"
+          }
+        ],
+        "snapshot_date": "2026-09-21",
+        "disclaimer": "Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal."
+      },
+      "actual_extract": null,
+      "actual_tool_args": {
+        "scope": {
+          "ordinary": "confirmed",
+          "period_start": "confirmed"
+        },
+        "effective_on": "2026-09-01",
+        "served_on": "2026-06-03",
+        "service_method": "hand",
+        "current_cents": 100000,
+        "proposed_cents": 102100,
+        "tenancy_start": "2025-09-01",
+        "last_increase": {
+          "state": "none",
+          "date": null
+        },
+        "guideline_status": "controlled",
+        "form": "N1"
+      },
+      "actual_tool_result": {
+        "tool": "rent_increase_check",
+        "status": "passes_checked_rules",
+        "checks": [
+          {
+            "id": "scope",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "scope.ordinary"
+            ]
+          },
+          {
+            "id": "supported_year",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": []
+          },
+          {
+            "id": "period_start",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "scope.ordinary"
+            ]
+          },
+          {
+            "id": "notice",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "calendar.s89",
+              "notice.90_days"
+            ]
+          },
+          {
+            "id": "spacing",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "calendar.s89",
+              "spacing.12_months"
+            ]
+          },
+          {
+            "id": "guideline",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "guideline.2026"
+            ]
+          },
+          {
+            "id": "form",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "form.N1"
+            ]
+          }
+        ],
+        "deemed_served_on": "2026-06-03",
+        "notice_days": 90,
+        "earliest_notice_on": "2026-09-01",
+        "latest_deemed_service_on": "2026-06-03",
+        "latest_dispatch_on": "2026-06-03",
+        "earliest_spacing_on": "2026-09-01",
+        "guideline_percent": "2.1",
+        "cap_cents_exact": "102100",
+        "rule_ids": [
+          "calendar.s89",
+          "form.N1",
+          "guideline.2026",
+          "notice.90_days",
+          "scope.ordinary",
+          "spacing.12_months"
+        ]
+      },
+      "deterministic_assertions": [
+        {
+          "id": "tool_name_exact",
+          "passed": true
+        },
+        {
+          "id": "tool_args_exact",
+          "passed": true
+        },
+        {
+          "id": "tool_result_exact",
+          "passed": true
+        }
+      ],
+      "judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "classification": "success",
+      "latency_ms": 16015.159731003223,
+      "input_tokens": 16865,
+      "output_tokens": 1042,
+      "serving_cost_usd": "0.022075",
+      "judge_cost_usd": "0.053944",
+      "usage_complete": true
+    },
+    {
+      "run_id": "7cb467a4-d32b-416a-b229-034cbf651cbb",
+      "case_id": "N01",
+      "arm": "production",
+      "repeat": 0,
+      "source_sha": "50190c8173c8f36193be15b4f857df8b724094fa",
+      "config_hash": "e8648b63c86afe0826a58f8fc558f92c71eb689c6645578097105fb647f0fd6b",
+      "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+      "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+      "pricing_hash": "228cdd725a2de9973174f170f19ae38bdd2de30a603168a80d9dfcf1436f1541",
+      "attempt_id": "4333eac6-a5e0-450e-9442-54f26b9ba7f5",
+      "trace_ids": [
+        "0e91fd40-f482-4d6a-be70-7fea4d1e7422"
+      ],
+      "retrieved_ids": [
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+        "78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2",
+        "8c05df2155a417224adfe8d6373ad0fb66c46776574b5e633892ce52b5880502"
+      ],
+      "foundation_evidence_ids": [],
+      "initial_context_evidence_ids": [
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+        "78bdbb08ad03091d61e6fc6348085684e086003d7085608996508d9007fe5fe2",
+        "8c05df2155a417224adfe8d6373ad0fb66c46776574b5e633892ce52b5880502"
+      ],
+      "response": {
+        "attempt_id": "4333eac6-a5e0-450e-9442-54f26b9ba7f5",
+        "trace_id": "0e91fd40-f482-4d6a-be70-7fea4d1e7422",
+        "status": "answered",
+        "answer": "A landlord must give a tenant at least 90 days' written notice before increasing rent. The notice must be in an approved form and set out the landlord's intention to increase the rent and the amount of the new rent.\nNotice can be given by handing it directly to the tenant or an adult in the rental unit, leaving it in the mailbox or where mail is ordinarily delivered, placing it under the door or through a mail slot, sending it by fax, courier, or mail. Notice cannot be given by posting it on the door.\nFor most rental units, a landlord cannot increase rent by more than the annual guideline set by the Ontario Government, which is based on the Consumer Price Index and capped at 2.5 percent. The guideline is published by August 31 for increases taking effect January 1 of the following year.\nRental units not occupied for residential purposes on or before November 15, 2018 may be exempt from the rent increase guideline. For such exempt units, a landlord must still give at least 90 days' notice but there is no limit on the size of the rent increase.\nThe notice served on June 3, 2026 for an effective date of September 1, 2026 satisfies the 90-day notice requirement. When counting days between two events, the day the first event happens is excluded and the day the second event happens is included.",
+        "statements": [
+          {
+            "id": "s1",
+            "text": "A landlord must give a tenant at least 90 days' written notice before increasing rent. The notice must be in an approved form and set out the landlord's intention to increase the rent and the amount of the new rent.",
+            "citation_ids": [
+              "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163"
+            ]
+          },
+          {
+            "id": "s2",
+            "text": "Notice can be given by handing it directly to the tenant or an adult in the rental unit, leaving it in the mailbox or where mail is ordinarily delivered, placing it under the door or through a mail slot, sending it by fax, courier, or mail. Notice cannot be given by posting it on the door.",
+            "citation_ids": [
+              "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+              "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29"
+            ]
+          },
+          {
+            "id": "s3",
+            "text": "For most rental units, a landlord cannot increase rent by more than the annual guideline set by the Ontario Government, which is based on the Consumer Price Index and capped at 2.5 percent. The guideline is published by August 31 for increases taking effect January 1 of the following year.",
+            "citation_ids": [
+              "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+              "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723"
+            ]
+          },
+          {
+            "id": "s4",
+            "text": "Rental units not occupied for residential purposes on or before November 15, 2018 may be exempt from the rent increase guideline. For such exempt units, a landlord must still give at least 90 days' notice but there is no limit on the size of the rent increase.",
+            "citation_ids": [
+              "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b"
+            ]
+          },
+          {
+            "id": "s5",
+            "text": "The notice served on June 3, 2026 for an effective date of September 1, 2026 satisfies the 90-day notice requirement. When counting days between two events, the day the first event happens is excluded and the day the second event happens is included.",
+            "citation_ids": [
+              "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859"
+            ]
+          }
+        ],
+        "tool_result": {
+          "tool": "notice_deadline_check",
+          "status": "passes_checked_rules",
+          "checks": [
+            {
+              "id": "scope",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "scope.ordinary"
+              ]
+            },
+            {
+              "id": "supported_year",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": []
+            },
+            {
+              "id": "period_start",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "scope.ordinary"
+              ]
+            },
+            {
+              "id": "notice",
+              "status": "pass",
+              "reason": "satisfied",
+              "rule_ids": [
+                "calendar.s89",
+                "notice.90_days"
+              ]
+            }
+          ],
+          "deemed_served_on": "2026-06-03",
+          "notice_days": 90,
+          "earliest_notice_on": "2026-09-01",
+          "latest_deemed_service_on": "2026-06-03",
+          "latest_dispatch_on": "2026-06-03",
+          "earliest_spacing_on": null,
+          "guideline_percent": null,
+          "cap_cents_exact": null,
+          "rule_ids": [
+            "calendar.s89",
+            "notice.90_days",
+            "scope.ordinary"
+          ]
+        },
+        "citations": [
+          {
+            "id": "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+            "url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+            "heading": "N1 instructions — Section C: How to increase the rent and give this notice",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+            "url": "https://www.ontario.ca/laws/statute/06r17",
+            "heading": "RTA s. 120 — Guideline increase",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+            "url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N2%20instructions_final_Nov30_2015.pdf",
+            "heading": "N2 instructions — Section C: How to increase the rent and give this notice",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+            "url": "https://www.ontario.ca/laws/statute/06r17",
+            "heading": "RTA s. 116 — Notice of rent increase required",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+            "url": "https://tribunalsontario.ca/documents/ltb/Brochures/Guide%20to%20RTA%20%28English%29.html",
+            "heading": "The rent increase guideline",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+            "url": "https://www.ontario.ca/laws/statute/06l21",
+            "heading": "Legislation Act s. 89",
+            "snapshot_date": "2026-09-21"
+          }
+        ],
+        "snapshot_date": "2026-09-21",
+        "disclaimer": "Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal."
+      },
+      "actual_extract": null,
+      "actual_tool_args": {
+        "scope": {
+          "ordinary": "confirmed",
+          "period_start": "confirmed"
+        },
+        "effective_on": "2026-09-01",
+        "served_on": "2026-06-03",
+        "service_method": "hand"
+      },
+      "actual_tool_result": {
+        "tool": "notice_deadline_check",
+        "status": "passes_checked_rules",
+        "checks": [
+          {
+            "id": "scope",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "scope.ordinary"
+            ]
+          },
+          {
+            "id": "supported_year",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": []
+          },
+          {
+            "id": "period_start",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "scope.ordinary"
+            ]
+          },
+          {
+            "id": "notice",
+            "status": "pass",
+            "reason": "satisfied",
+            "rule_ids": [
+              "calendar.s89",
+              "notice.90_days"
+            ]
+          }
+        ],
+        "deemed_served_on": "2026-06-03",
+        "notice_days": 90,
+        "earliest_notice_on": "2026-09-01",
+        "latest_deemed_service_on": "2026-06-03",
+        "latest_dispatch_on": "2026-06-03",
+        "earliest_spacing_on": null,
+        "guideline_percent": null,
+        "cap_cents_exact": null,
+        "rule_ids": [
+          "calendar.s89",
+          "notice.90_days",
+          "scope.ordinary"
+        ]
+      },
+      "deterministic_assertions": [
+        {
+          "id": "tool_name_exact",
+          "passed": true
+        },
+        {
+          "id": "tool_args_exact",
+          "passed": true
+        },
+        {
+          "id": "tool_result_exact",
+          "passed": true
+        }
+      ],
+      "judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "classification": "success",
+      "latency_ms": 13073.329860984813,
+      "input_tokens": 16605,
+      "output_tokens": 779,
+      "serving_cost_usd": "0.0205",
+      "judge_cost_usd": "0.04536",
+      "usage_complete": true
+    },
+    {
+      "run_id": "7cb467a4-d32b-416a-b229-034cbf651cbb",
+      "case_id": "Q01",
+      "arm": "production",
+      "repeat": 0,
+      "source_sha": "50190c8173c8f36193be15b4f857df8b724094fa",
+      "config_hash": "28935b7820c6165a5ce87dcd26351dfb53f7f2f3b5ed11836a192ec9e44c8856",
+      "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+      "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+      "pricing_hash": "228cdd725a2de9973174f170f19ae38bdd2de30a603168a80d9dfcf1436f1541",
+      "attempt_id": "12eeea2d-4b8f-471c-a04f-f9767ed8c950",
+      "trace_ids": [
+        "7e8f84f1-39fe-4b03-9795-6e4248bf57d9"
+      ],
+      "retrieved_ids": [
+        "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+        "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+        "b59967432a319e4fd466d3519bf83cac404217fbfa065e60d68b006816529773",
+        "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "b62abe1ca85a1ae7c60dade0d3dacd6fcceb6edf923d26fa51c86be1bd257ff7"
+      ],
+      "foundation_evidence_ids": [
+        "bf98890cc4532908b3862ad1c97a02d500d0de513ea402ec4d1eea7d73e51ec2",
+        "8c05df2155a417224adfe8d6373ad0fb66c46776574b5e633892ce52b5880502",
+        "abcdfba56fd89aa859d86e60bd19a328493cf5ba2508867a55aa7bb21c4a1ea7",
+        "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+        "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8",
+        "fad7d737385e942ab2cc28788f74b62bef39c10a8fc92f422337e55ae3f386f1",
+        "79d155d4cd0bc67a97cc20eb19e66d5ff6bbfa1096d9671ff711464bd329dfdb",
+        "c32486aa0f815df76c04be918a02ae818208b717e94dc680bb323468cf80c43b",
+        "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+        "11ca9f2885f8162384c24815bf6bf0fd47893b301f35a7c63fa43a67042c50eb",
+        "d23348353fecdb08307c3e74b0e8899d26b35fd5bb14420c1f744ed51dbfca52",
+        "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "0de611461cb91b2b1cee6dfccf2e8da154d6d858f40490c411a021411a04cb3b",
+        "c2f54625ea915df85ea272c98e140a40f9d54a1865a73ec405a772d8b9c44ee3",
+        "f98fecd206abbbaf02afa4334a3275ae052e19d5ee8f5b609c28f22a96fcc05a",
+        "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+        "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2",
+        "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+        "416445ce84343a5b8e40226374c738b0b3a1e94663b5822e5b3b9b2cf08b88e5",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e",
+        "a68845e8524b0c5bad6303e8560c462512fe41eb2176366c63abaa608c59edc4"
+      ],
+      "initial_context_evidence_ids": [
+        "bf98890cc4532908b3862ad1c97a02d500d0de513ea402ec4d1eea7d73e51ec2",
+        "8c05df2155a417224adfe8d6373ad0fb66c46776574b5e633892ce52b5880502",
+        "abcdfba56fd89aa859d86e60bd19a328493cf5ba2508867a55aa7bb21c4a1ea7",
+        "76e43ee03b23a15cb3a289c5a3da5f0289ecfdd030e8e387ffb980bb4eec7c16",
+        "cd3315e72a9ca27705d2ab881c15481f5cd52ea2febb3320f82f0c1e57fbbde8",
+        "fad7d737385e942ab2cc28788f74b62bef39c10a8fc92f422337e55ae3f386f1",
+        "79d155d4cd0bc67a97cc20eb19e66d5ff6bbfa1096d9671ff711464bd329dfdb",
+        "c32486aa0f815df76c04be918a02ae818208b717e94dc680bb323468cf80c43b",
+        "9dc1e76e7aa94913d4d506df9ae748a0ae9b8de10a0a9253069dec8ea3bdc163",
+        "11ca9f2885f8162384c24815bf6bf0fd47893b301f35a7c63fa43a67042c50eb",
+        "d23348353fecdb08307c3e74b0e8899d26b35fd5bb14420c1f744ed51dbfca52",
+        "39b1009bc8f5986ff6d23158c48054a70425f9a7e59c9afe73a0a9ae4599a723",
+        "b59967432a319e4fd466d3519bf83cac404217fbfa065e60d68b006816529773",
+        "0de611461cb91b2b1cee6dfccf2e8da154d6d858f40490c411a021411a04cb3b",
+        "c2f54625ea915df85ea272c98e140a40f9d54a1865a73ec405a772d8b9c44ee3",
+        "f98fecd206abbbaf02afa4334a3275ae052e19d5ee8f5b609c28f22a96fcc05a",
+        "d08ffeb8ee9441f0852fa0b6039c56666890205c8a61f3aece4e90f8e8c23859",
+        "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2",
+        "b62abe1ca85a1ae7c60dade0d3dacd6fcceb6edf923d26fa51c86be1bd257ff7",
+        "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+        "b0e650241164fd4a77ae93377f48b2b049494a5f55616d3b6f9ee8897fb1268b",
+        "416445ce84343a5b8e40226374c738b0b3a1e94663b5822e5b3b9b2cf08b88e5",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e",
+        "a68845e8524b0c5bad6303e8560c462512fe41eb2176366c63abaa608c59edc4"
+      ],
+      "response": {
+        "attempt_id": "12eeea2d-4b8f-471c-a04f-f9767ed8c950",
+        "trace_id": "7e8f84f1-39fe-4b03-9795-6e4248bf57d9",
+        "status": "answered",
+        "answer": "For 2026, the rent increase guideline is 2.1%.\nFor 2027, the rent increase guideline is 1.9%.",
+        "statements": [
+          {
+            "id": "s1",
+            "text": "For 2026, the rent increase guideline is 2.1%.",
+            "citation_ids": [
+              "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109"
+            ]
+          },
+          {
+            "id": "s2",
+            "text": "For 2027, the rent increase guideline is 1.9%.",
+            "citation_ids": [
+              "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2"
+            ]
+          }
+        ],
+        "tool_result": null,
+        "citations": [
+          {
+            "id": "24f67b51a6bb8c7ee92df4526f550c536fb477235a8ae893c19efdc926da52d2",
+            "url": "https://www.ontario.ca/page/residential-rent-increases",
+            "heading": "Rent increase guideline",
+            "snapshot_date": "2026-09-21"
+          },
+          {
+            "id": "f5c67f2bad6d3ffb8c81ecb8430050b1e1520e541055e34b8fea06961361f109",
+            "url": "https://www.ontario.ca/page/residential-rent-increases",
+            "heading": "Previous rent increase guidelines",
+            "snapshot_date": "2026-09-21"
+          }
+        ],
+        "snapshot_date": "2026-09-21",
+        "disclaimer": "Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal."
+      },
+      "actual_extract": null,
+      "actual_tool_args": null,
+      "actual_tool_result": null,
+      "deterministic_assertions": [],
+      "judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "classification": "success",
+      "latency_ms": 4034.048707020702,
+      "input_tokens": 13423,
+      "output_tokens": 158,
+      "serving_cost_usd": "0.014213",
+      "judge_cost_usd": "0.011902",
+      "usage_complete": true
+    }
+  ],
+  "failures": []
+}

@@ -6,29 +6,22 @@ Rent Navigator provides general information about ordinary Ontario rent increase
 
 The snapshot date is the earliest actual UTC fetch date in the [retained corpus manifest](results/october-release/source-50190/src/rent_navigator/corpus/manifest.json), separate from statutory consolidation periods. The corpus does not update automatically.
 
-## Public service and smoke
+## At a glance
 
-The service is at [rent-navigator.onrender.com](https://rent-navigator.onrender.com). The [post-reset verification](results/october-release/public-letter-smoke-v1.0.3-source/post-reset-verification.json) records HTTP 200 for `/healthz` and `/` at `2026-10-22T21:27:32.180088Z`, with source `50190c8173c8f36193be15b4f857df8b724094fa` in health and the page footer. This is the measured source, `v1.0.3-source`.
+- **What it does:** paste an anonymized Ontario rent-increase letter, confirm the extracted facts, and get the notice-timing and guideline checks computed by two deterministic calculators with an explanation that cites the statute; or ask a general question about ordinary rent increases.
+- **Try it:** [rent-navigator.onrender.com](https://rent-navigator.onrender.com). The page and the health endpoint always respond. Paid generation is admitted only within a daily budget the owner sets (`DEMO_DAILY_USD`, at most US$0.30 per day), so a check can report that the day's budget is used up.
+- **How it is built:** FastAPI and Pydantic, SQLite FTS5 over a snapshot-versioned corpus of six official sources, one native tool call validated against the confirmed facts, server-resolved citations, pattern redaction and admission limits. See [How it works](#how-it-works).
+- **Measured in run-3 on 2026-10-19 at source `v1.0.3-source`, as judged:**
 
-The [public letter smoke](results/october-release/public-letter-smoke-v1.0.3-source/verification.json) ran once with both POST responses returning HTTP 200. Extraction and confirmed analysis shared an attempt ID with distinct trace IDs. The explanation described the 60-day notice failure and the 2.1% guideline ceiling of $2042.00 against $2048.00 proposed rent, with the required sections 116 and 120 citations.
+| Measure | Production | Same-tool baseline |
+|---|---:|---:|
+| Task success | 64/80 | 55/80 |
+| Serving latency p50 / p95 | 13.153 s / 16.181 s | not reported |
+| Serving cost per 100 attempts | US$1.89 | US$0.63 |
+| Judge calibration agreement | 8 of 13 proposed expectations | |
+| Author audit agreement with the judge | 30 of 32 first-repetition outputs | |
 
-The same receipt records a known instruction limitation: the answer added a correct $6.00 difference beyond the supplied money-display strings. The specified smoke checks passed; strict prompt compliance and general explanation quality are not established.
-
-The [accounting receipt](results/october-release/public-letter-smoke-v1.0.3-source/accounting.json) records **US$0.022208** actual serving cost, complete usage, a **US$0.081** reservation forecast and a **US$0.30/day** test cap. The owner confirmed returning `DEMO_DAILY_USD` to `0` with Save and deploy after the test, and confirmed Auto-Deploy off. These settings are owner-confirmed, not observable from free GET responses. The page and health remain available while generation is gated.
-
-The [smoke verification](results/october-release/public-letter-smoke-v1.0.3-source/verification.json) records **17.262141 seconds** for the HTTP flow including transport and local validation. This is separate from collection serving latency. No retry or judge call was used for this smoke.
-
-## Owner release-scope revision, 2026-10-12
-
-The owner adopted the revised release scope in [PROJECT-SPEC.md §12](PROJECT-SPEC.md#12-owner-release-scope-amendment-2026-10-12) and [CONTRACTS.md §11](CONTRACTS.md#11-owner-release-scope-amendment-2026-10-12). This is a scope revision, not acceptance of the original definition of shipped. The original target claims remain unchanged in PROJECT-SPEC.md.
-
-At the initial revision checkpoint there was no deployed demo, activated baseline or release collection. Those statements describe that checkpoint. Later collection, audit and deployment observations retain their own source identities and do not retroactively change it.
-
-Deferred, not deleted: the live gate as a required check, the permit/environment/ledger protocol, the 22 fixed diagnostics, per-run independent review, baseline activation and the anchor wire. Baseline activation and the retrieval floor remain pending.
-
-Private calibration, admission and ledger work stops. Existing evidence remains preserved. No new private artifact, protocol review, candidate helper, admission preparation or ledger event is required beyond recording actual authorized paid commands, caps and costs. Historical funding and gate designs do not authorize current execution.
-
-The later conditional calibration decision and the actual collection, owner audit and scan are disclosed below. They do not establish a passed calibration gate, an activated baseline or the original full-spec shipment criteria.
+- **Read the limits first:** the calibration gate failed and the owner accepted the known residual miss conditionally; the baseline comparison measures the whole grounded system, not the causal effect of ranking; the 16 cases were reused during development; live prompt-injection resistance was not exercised this cycle; there are no users. Full statements are under [Limitations and evidence integrity](#limitations-and-evidence-integrity) and in the [results index](results/README.md).
 
 ## How it works
 
@@ -61,20 +54,6 @@ The tools preserve independently available dates and amounts when other facts ar
 Production statements must cite available canonical chunks. The server resolves URLs, headings and snapshot dates. This establishes citation provenance and coverage, not semantic support. Exact money-display context does not validate the meaning of generated prose.
 
 The comparison arm uses the same facts, tools, actor, budgets and deadline without external reference passages. Its citations are optional. Both arms constrain supplied IDs to available evidence IDs. The comparison measures the whole grounded system and citation policy; it does not isolate the causal effect of query ranking. Fixed references do not improve ranked-seed retrieval metrics.
-
-## Reporting scope
-
-The approved reporting sentence is retained exactly:
-
-> exact-match tool evals and security fixtures run in CI as required checks and block regressions; LLM-as-judge scoring runs at release (calibration agreement m of 13; human audit agreement k of 32)
-
-Measured calibration agreement is **8 of 13 against proposed expectations that were not independently reviewed**, as recorded in the [current measurement summary](results/october-release/k2-calibration-measurement-1/summary.json). Only the named J04/J06 s4 factual and citation fields received owner review, with their labels upheld; other labels remain proposed. The registered calibration gate failed and remains failed.
-
-Human audit agreement is **30 of 32** first-repetition outputs, with **20 of 21** additional flagged outputs agreeing, as recorded in [owner-record.json](results/october-release/owner-audit-run-3-record/owner-record.json).
-
-Every output was read against the gold expected fields, required claims, the retained tool result, the cited and canonical passages and the judge rubric. An assisted first pass over all 53 outputs ran three read-only review passes: overall classification; citation support and policy; and an adversarial pass over every overall agree. Each item was classified agree, disagree or unsure with a written reason. The owner decided every item any pass marked disagree or unsure, covering 19 outputs and 26 decisions, and read the four N04/R06 first-repetition outputs in full. Every value in the record is the owner's decision. Overall agreement means agreement with the judge's task-success classification; citation support does not enter task success. No provider call was made for this audit.
-
-The reviewed set is selected, not representative of all outputs. Full-arm results remain as judged. Owner corrections are shown only over matching reviewed denominators and are not propagated to unreviewed repetitions.
 
 ## Measured results as judged
 
@@ -123,36 +102,19 @@ The [owner notes](results/october-release/owner-audit-run-3-record/README.md) re
 
 Original grades remain unchanged beside the owner decisions. The publication record contains only the four owner-approved decision files and a new subset inventory; assisted-pass provenance remains separately retained, as explained in the [results index](results/README.md#owner-record-copy-and-subset-inventory).
 
-## Targeted computed-field scan
+## Reporting scope
 
-The committed [rule](results/run-3-targeted-scan/RULE.md) and [scan result](results/run-3-targeted-scan/scan.json) cover every retained judge-successful N04/R06 answer across both arms and all repetitions. Frozen rule `computed-value-availability-v1` examined 15 eligible answers and all 62 statements among 20 target rows. It found zero candidate statements and zero flagged answers.
+The approved reporting sentence is retained exactly:
 
-| Case and arm | As judged, all repetitions | As audited, actual reviewed subset | Scan-eligible answers |
-|---|---:|---:|---:|
-| N04 production | 0/5 | 0/5 | 0 |
-| N04 baseline | 5/5 | 1/1 | 5 |
-| R06 production | 5/5 | 1/1 | 5 |
-| R06 baseline | 5/5 | 1/1 | 5 |
+> exact-match tool evals and security fixtures run in CI as required checks and block regressions; LLM-as-judge scoring runs at release (calibration agreement m of 13; human audit agreement k of 32)
 
-Audited denominators come from [owner-record.json](results/october-release/owner-audit-run-3-record/owner-record.json); coverage comes from scan.json. The rule links finite field aliases directly to availability predicates and checks that same observed `actual_tool_result` field. It does not use expected results as authority. Finite vocabulary and context guards can miss paraphrases or overflag unusual language. Zero candidates is not semantic clearance.
+Measured calibration agreement is **8 of 13 against proposed expectations that were not independently reviewed**, as recorded in the [current measurement summary](results/october-release/k2-calibration-measurement-1/summary.json). Only the named J04/J06 s4 factual and citation fields received owner review, with their labels upheld; other labels remain proposed. The registered calibration gate failed and remains failed.
 
-No additional owner reads were added. The scan-specific `owner_reads_complete` and `audited_verdicts` fields remain null. The owner read the four first-repetition N04/R06 outputs in full; the scan does not imply review of unflagged repetitions.
+Human audit agreement is **30 of 32** first-repetition outputs, with **20 of 21** additional flagged outputs agreeing, as recorded in [owner-record.json](results/october-release/owner-audit-run-3-record/owner-record.json).
 
-## Judge calibration and limits
+Every output was read against the gold expected fields, required claims, the retained tool result, the cited and canonical passages and the judge rubric. An assisted first pass over all 53 outputs ran three read-only review passes: overall classification; citation support and policy; and an adversarial pass over every overall agree. Each item was classified agree, disagree or unsure with a written reason. The owner decided every item any pass marked disagree or unsure, covering 19 outputs and 26 decisions, and read the four N04/R06 first-repetition outputs in full. Every value in the record is the owner's decision. Overall agreement means agreement with the judge's task-success classification; citation support does not enter task success. No provider call was made for this audit.
 
-The measurement used grade-only wire policy 8, `shared_id_keyed_grades`, and packet policy 3; anchor wire 6 remains retained history. Configuration and historical representation details are indexed in [results/README.md](results/README.md#historical-wire-and-review-checkpoints).
-
-The [collection manifest](results/october-release/run-3/collection/manifest.json) and [current calibration measurement](results/october-release/k2-calibration-measurement-1/summary.json) share judge hash:
-
-```text
-23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8
-```
-
-The measurement, at actual source and runner `fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e`, decoded all 14 votes, agreed on 123/132 fields and matched 8/13 complete proposed expectations. Only J04 and J06 were fail-to-pass flips; the full R04 validator passed. This was a measurement after a failed gate, not a gate pass or official collection.
-
-Collection ran under this actual configuration by the owner's conditional decision after the gate failed. Only the named J04/J06 s4 factual/citation fields were owner-reviewed with labels upheld; other labels remain proposed and not independently reviewed. J04, J06, J10, J13 and R04 informed rubric clarification, so their agreement is in-sample.
-
-The subsequent assisted owner audit is an out-of-sample judge check relative to those calibration packets, not a held-out product benchmark or representative estimate over all outputs. The judge remains frozen unless a new failure type receives an owner ruling.
+The reviewed set is selected, not representative of all outputs. Full-arm results remain as judged. Owner corrections are shown only over matching reviewed denominators and are not propagated to unreviewed repetitions.
 
 ## Latency and cost
 
@@ -179,58 +141,6 @@ sha256:c9293278a2a7237288098296f5b4a8e9a375c66cbf76dfab88a30fdeacda9273
 ```
 
 Render's image architecture and digest have not been independently measured. The local image does not prove the deployed image's identity.
-
-## Collection history and stopping rules
-
-All original attempts are retained separately in the [results index](results/README.md).
-
-- [Run-1](results/october-release/run-1/collection/manifest.json) is incomplete and nonreportable after its judge output-limit stop, with no headline.
-- [Dry-run-2](results/october-release/dry-run-2/dry-run/manifest.json) failed on `usage.speed="standard"`; its historical actual cost remains unknown with the full reservation.
-- [Run-2](results/october-release/run-2/collection/manifest.json) passed completion verification but is unusable as a headline comparison because of baseline citation-schema asymmetry.
-- [Run-3](results/october-release/run-3/collection/manifest.json) is the complete post-correction collection used above, not an infrastructure-only whole-batch retry.
-
-Collection ran locally in the recorded Docker image under a flat cap, not the CI permit path. The [batch ledger](results/october-release/run-3/batch-ledger.json) records a US$43.00 cap and US$42.26040 forecast, distinct from actual spending.
-
-The stopping rule ends collection after five consecutive serving-side `provider_error` or `deadline_exceeded` attempts, resetting on another result; judge-side failures stop immediately. Warmups participate in the counter without entering scored denominators. [Run-3 rows and metadata](results/october-release/run-3/collection/) contain no such execution failures in either arm, so both denominators contain zero such failed attempts. Incorrect answers remain counted.
-
-## Historical unresolved holds
-
-These are historical reservations with unresolved usage, using their UTC recording dates, not known actual charges. Their source and funding context are recorded in [results/README.md](results/README.md#historical-funding-and-deferred-protocol) and CONTRACTS.md §10.
-
-| UTC date | Unresolved hold | Purpose |
-|---|---:|---|
-| 2026-09-27 | US$0.08200 | Historical judge calibration; failed third generation after two completed votes. |
-| 2026-10-03 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
-| 2026-10-08 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
-| 2026-10-09 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
-| 2026-10-10 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
-| Total | **US$0.60968** | Actual charges unknown. |
-
-The owner ruled these internal holds written off outside any permit for this cycle. This did not settle provider charges, rewrite receipts, release a historical reservation inside a permit or authorize more work. Actual charges remain unknown, never zero. Historical records and ledger events 43, 44 and 45 remain unchanged.
-
-At that historical checkpoint, known incurred spending was US$0.729081 and cumulative owner-confirmed provider funding was US$75. The latter reflected the October 1 confirmation of an additional US$20, with allocations of US$62 to development/CI/measurement, US$9 to protected demo and US$4 to unallocated provider reserve. Hosting US$14 and separate contingency US$6 made the historical total cash allocation US$95. These are historical confirmations and planning amounts, not current incurred spending, a queried account balance or an execution grant.
-
-Automatic replenishment remains disabled. New missing usage remains `actual_cost=null`, `usage_complete=false`, with its full reservation; the historical write-off is not a general missing-usage exemption.
-
-## CI and unexercised checks
-
-Required checks this cycle are `checks`, `docker` and `offline-eval`, with strict required checks and administrator enforcement under the recorded release policy. This documentation does not claim a new inspection or change of repository settings.
-
-`live-eval-gate` is not required this cycle, and the live-eval environment reviewer rule is not restored.
-
-The [committed workflow](results/october-release/source-50190/.github/workflows/ci.yml) uses `github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-plan` and `always() && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-gate`. The scope revision does not authorize changing environments, secrets or repository variables.
-
-The retrieval floor remains pending, and retrieval and answer-quality regressions are not gated.
-
-Only the exact-match tool evals, deterministic security fixtures and schema/hash/approval checks block evaluation regressions in CI. Missing, skipped, cancelled or stale prerequisites do not count as a passing offline summary.
-
-The seven live safety cases S01-S05, S07 and S08 were not executed this cycle because the collection plan uses CASE_IDS only; these attacks exist in the separate live-gate path, as explained in the [results index](results/README.md#ci-and-unexercised-gates).
-
-“Prompt-injection tests” means the eight deterministic S01-S08 fixtures run in CI, not verified semantic resistance by the serving actor.
-
-The live gate's 28/32 and 7/7 thresholds were not exercised this cycle.
-
-A historical non-required merged-main workflow after PR #9 was red; it is not counted as a passing release check.
 
 ## Run locally and verify
 
@@ -282,6 +192,113 @@ Only admission quotas were bypassed for collection; essential checks and token, 
 Model-output stops remain incomplete without a headline. Failed/unusable attempts retain original rows, identities, costs and outcomes. Unchanged paid behavior is not repeated to select a favorable result. A new failure type stops work for an owner ruling before a judge change or retry; the failed gate and labels remain unchanged.
 
 PROJECT-SPEC.md remains the Decision Log. Calendar dates do not replace quality gates.
+
+## Judge calibration and limits
+
+The measurement used grade-only wire policy 8, `shared_id_keyed_grades`, and packet policy 3; anchor wire 6 remains retained history. Configuration and historical representation details are indexed in [results/README.md](results/README.md#historical-wire-and-review-checkpoints).
+
+The [collection manifest](results/october-release/run-3/collection/manifest.json) and [current calibration measurement](results/october-release/k2-calibration-measurement-1/summary.json) share judge hash:
+
+```text
+23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8
+```
+
+The measurement, at actual source and runner `fb9517c308bc4c29a54ec77b6ca05a5adf4cfd6e`, decoded all 14 votes, agreed on 123/132 fields and matched 8/13 complete proposed expectations. Only J04 and J06 were fail-to-pass flips; the full R04 validator passed. This was a measurement after a failed gate, not a gate pass or official collection.
+
+Collection ran under this actual configuration by the owner's conditional decision after the gate failed. Only the named J04/J06 s4 factual/citation fields were owner-reviewed with labels upheld; other labels remain proposed and not independently reviewed. J04, J06, J10, J13 and R04 informed rubric clarification, so their agreement is in-sample.
+
+The subsequent assisted owner audit is an out-of-sample judge check relative to those calibration packets, not a held-out product benchmark or representative estimate over all outputs. The judge remains frozen unless a new failure type receives an owner ruling.
+
+## Targeted computed-field scan
+
+The committed [rule](results/run-3-targeted-scan/RULE.md) and [scan result](results/run-3-targeted-scan/scan.json) cover every retained judge-successful N04/R06 answer across both arms and all repetitions. Frozen rule `computed-value-availability-v1` examined 15 eligible answers and all 62 statements among 20 target rows. It found zero candidate statements and zero flagged answers.
+
+| Case and arm | As judged, all repetitions | As audited, actual reviewed subset | Scan-eligible answers |
+|---|---:|---:|---:|
+| N04 production | 0/5 | 0/5 | 0 |
+| N04 baseline | 5/5 | 1/1 | 5 |
+| R06 production | 5/5 | 1/1 | 5 |
+| R06 baseline | 5/5 | 1/1 | 5 |
+
+Audited denominators come from [owner-record.json](results/october-release/owner-audit-run-3-record/owner-record.json); coverage comes from scan.json. The rule links finite field aliases directly to availability predicates and checks that same observed `actual_tool_result` field. It does not use expected results as authority. Finite vocabulary and context guards can miss paraphrases or overflag unusual language. Zero candidates is not semantic clearance.
+
+No additional owner reads were added. The scan-specific `owner_reads_complete` and `audited_verdicts` fields remain null. The owner read the four first-repetition N04/R06 outputs in full; the scan does not imply review of unflagged repetitions.
+
+## Public service and smoke
+
+The service is at [rent-navigator.onrender.com](https://rent-navigator.onrender.com). The [post-reset verification](results/october-release/public-letter-smoke-v1.0.3-source/post-reset-verification.json) records HTTP 200 for `/healthz` and `/` at `2026-10-22T21:27:32.180088Z`, with source `50190c8173c8f36193be15b4f857df8b724094fa` in health and the page footer. This is the measured source, `v1.0.3-source`.
+
+The [public letter smoke](results/october-release/public-letter-smoke-v1.0.3-source/verification.json) ran once with both POST responses returning HTTP 200. Extraction and confirmed analysis shared an attempt ID with distinct trace IDs. The explanation described the 60-day notice failure and the 2.1% guideline ceiling of $2042.00 against $2048.00 proposed rent, with the required sections 116 and 120 citations.
+
+The same receipt records a known instruction limitation: the answer added a correct $6.00 difference beyond the supplied money-display strings. The specified smoke checks passed; strict prompt compliance and general explanation quality are not established.
+
+The [accounting receipt](results/october-release/public-letter-smoke-v1.0.3-source/accounting.json) records **US$0.022208** actual serving cost, complete usage, a **US$0.081** reservation forecast and a **US$0.30/day** test cap. The owner confirmed returning `DEMO_DAILY_USD` to `0` with Save and deploy after the test, and confirmed Auto-Deploy off. These settings are owner-confirmed, not observable from free GET responses. The page and health remain available while generation is gated.
+
+The [smoke verification](results/october-release/public-letter-smoke-v1.0.3-source/verification.json) records **17.262141 seconds** for the HTTP flow including transport and local validation. This is separate from collection serving latency. No retry or judge call was used for this smoke.
+
+## Collection history and stopping rules
+
+All original attempts are retained separately in the [results index](results/README.md).
+
+- [Run-1](results/october-release/run-1/collection/manifest.json) is incomplete and nonreportable after its judge output-limit stop, with no headline.
+- [Dry-run-2](results/october-release/dry-run-2/dry-run/manifest.json) failed on `usage.speed="standard"`; its historical actual cost remains unknown with the full reservation.
+- [Run-2](results/october-release/run-2/collection/manifest.json) passed completion verification but is unusable as a headline comparison because of baseline citation-schema asymmetry.
+- [Run-3](results/october-release/run-3/collection/manifest.json) is the complete post-correction collection used above, not an infrastructure-only whole-batch retry.
+
+Collection ran locally in the recorded Docker image under a flat cap, not the CI permit path. The [batch ledger](results/october-release/run-3/batch-ledger.json) records a US$43.00 cap and US$42.26040 forecast, distinct from actual spending.
+
+The stopping rule ends collection after five consecutive serving-side `provider_error` or `deadline_exceeded` attempts, resetting on another result; judge-side failures stop immediately. Warmups participate in the counter without entering scored denominators. [Run-3 rows and metadata](results/october-release/run-3/collection/) contain no such execution failures in either arm, so both denominators contain zero such failed attempts. Incorrect answers remain counted.
+
+## CI and unexercised checks
+
+Required checks this cycle are `checks`, `docker` and `offline-eval`, with strict required checks and administrator enforcement under the recorded release policy. This documentation does not claim a new inspection or change of repository settings.
+
+`live-eval-gate` is not required this cycle, and the live-eval environment reviewer rule is not restored.
+
+The [committed workflow](results/october-release/source-50190/.github/workflows/ci.yml) uses `github.event_name == 'pull_request' && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-plan` and `always() && vars.LIVE_EVAL_ENABLED == 'true'` for `live-eval-gate`. The scope revision does not authorize changing environments, secrets or repository variables.
+
+The retrieval floor remains pending, and retrieval and answer-quality regressions are not gated.
+
+Only the exact-match tool evals, deterministic security fixtures and schema/hash/approval checks block evaluation regressions in CI. Missing, skipped, cancelled or stale prerequisites do not count as a passing offline summary.
+
+The seven live safety cases S01-S05, S07 and S08 were not executed this cycle because the collection plan uses CASE_IDS only; these attacks exist in the separate live-gate path, as explained in the [results index](results/README.md#ci-and-unexercised-gates).
+
+“Prompt-injection tests” means the eight deterministic S01-S08 fixtures run in CI, not verified semantic resistance by the serving actor.
+
+The live gate's 28/32 and 7/7 thresholds were not exercised this cycle.
+
+A historical non-required merged-main workflow after PR #9 was red; it is not counted as a passing release check.
+
+## Owner release-scope revision, 2026-10-12
+
+The owner adopted the revised release scope in [PROJECT-SPEC.md §12](PROJECT-SPEC.md#12-owner-release-scope-amendment-2026-10-12) and [CONTRACTS.md §11](CONTRACTS.md#11-owner-release-scope-amendment-2026-10-12). This is a scope revision, not acceptance of the original definition of shipped. The original target claims remain unchanged in PROJECT-SPEC.md.
+
+At the initial revision checkpoint there was no deployed demo, activated baseline or release collection. Those statements describe that checkpoint. Later collection, audit and deployment observations retain their own source identities and do not retroactively change it.
+
+Deferred, not deleted: the live gate as a required check, the permit/environment/ledger protocol, the 22 fixed diagnostics, per-run independent review, baseline activation and the anchor wire. Baseline activation and the retrieval floor remain pending.
+
+Private calibration, admission and ledger work stops. Existing evidence remains preserved. No new private artifact, protocol review, candidate helper, admission preparation or ledger event is required beyond recording actual authorized paid commands, caps and costs. Historical funding and gate designs do not authorize current execution.
+
+The later conditional calibration decision and the actual collection, owner audit and scan are disclosed below. They do not establish a passed calibration gate, an activated baseline or the original full-spec shipment criteria.
+
+## Historical unresolved holds
+
+These are historical reservations with unresolved usage, using their UTC recording dates, not known actual charges. Their source and funding context are recorded in [results/README.md](results/README.md#historical-funding-and-deferred-protocol) and CONTRACTS.md §10.
+
+| UTC date | Unresolved hold | Purpose |
+|---|---:|---|
+| 2026-09-27 | US$0.08200 | Historical judge calibration; failed third generation after two completed votes. |
+| 2026-10-03 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-08 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-09 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| 2026-10-10 | US$0.13192 | Fresh judge calibration; failed J01 generation. |
+| Total | **US$0.60968** | Actual charges unknown. |
+
+The owner ruled these internal holds written off outside any permit for this cycle. This did not settle provider charges, rewrite receipts, release a historical reservation inside a permit or authorize more work. Actual charges remain unknown, never zero. Historical records and ledger events 43, 44 and 45 remain unchanged.
+
+At that historical checkpoint, known incurred spending was US$0.729081 and cumulative owner-confirmed provider funding was US$75. The latter reflected the October 1 confirmation of an additional US$20, with allocations of US$62 to development/CI/measurement, US$9 to protected demo and US$4 to unallocated provider reserve. Hosting US$14 and separate contingency US$6 made the historical total cash allocation US$95. These are historical confirmations and planning amounts, not current incurred spending, a queried account balance or an execution grant.
+
+Automatic replenishment remains disabled. New missing usage remains `actual_cost=null`, `usage_complete=false`, with its full reservation; the historical write-off is not a general missing-usage exemption.
 
 ## Sources and licensing
 

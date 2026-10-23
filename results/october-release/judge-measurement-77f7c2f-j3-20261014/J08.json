@@ -1,0 +1,83 @@
+{
+  "packet_id": "J08",
+  "source_commit": "5839f980c32e570b06a3a4f53035228d577f3b8a",
+  "judge_config_hash": "258529b186b909caf4a86e6b8eda05d495f887e2ffb778891816457db1afcb04",
+  "execution_mode": "live",
+  "decoded_judgment": {
+    "required_claims": [
+      {
+        "id": "c1",
+        "result": "met"
+      },
+      {
+        "id": "c2",
+        "result": "met"
+      }
+    ],
+    "statements": [
+      {
+        "id": "s1",
+        "factual": "supported",
+        "citation_support": "unsupported"
+      },
+      {
+        "id": "s2",
+        "factual": "supported",
+        "citation_support": "unsupported"
+      }
+    ],
+    "false_pass": false,
+    "policy_violations": []
+  },
+  "decode_error": null,
+  "failure_code": null,
+  "agreement": {
+    "claims": {
+      "c1": true,
+      "c2": true
+    },
+    "statements": {
+      "s1": {
+        "factual": true,
+        "citation_support": true
+      },
+      "s2": {
+        "factual": true,
+        "citation_support": true
+      }
+    },
+    "false_pass": true,
+    "policy_violations": true,
+    "exact": true
+  },
+  "r04_smoke_passed": null,
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 5436,
+    "output_tokens": 634
+  },
+  "usage_complete": true,
+  "elapsed_seconds": 8.026404917007312,
+  "requested_model_id": "claude-sonnet-5",
+  "returned_model_id": "claude-sonnet-5",
+  "actual_cost_usd": "0.017212",
+  "reserved_cost_usd": "0.13192",
+  "failure_diagnostic": null,
+  "decode_rejection_reason": null,
+  "provider_request_id": "req_011Cg1j5DsWA1MoQrWiWwsZ3",
+  "provider_error_type": null,
+  "thinking_metrics": {
+    "thinking_blocks": 1,
+    "redacted_thinking_blocks": 0,
+    "thinking_present": true,
+    "output_tokens": 634,
+    "thinking_tokens": 478,
+    "thinking_output_share": 0.7539432176656151
+  },
+  "expected_task_success": true,
+  "observed_task_success": true,
+  "fail_to_pass": false,
+  "judging_source_commit": "5839f980c32e570b06a3a4f53035228d577f3b8a",
+  "runner_commit": "77f7c2fd802796f6ebab9e902b731893da98a7ea",
+  "failed_criterion": null
+}

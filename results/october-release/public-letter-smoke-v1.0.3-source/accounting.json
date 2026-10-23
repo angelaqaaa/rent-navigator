@@ -1,0 +1,30 @@
+{
+  "source_commit": "50190c8173c8f36193be15b4f857df8b724094fa",
+  "attempt_id": "210da942-6cc8-4e2f-9b27-53fcc6c6e815",
+  "validated_at_utc": "2026-10-22T21:29:19.596088+00:00",
+  "provenance": "Owner-provided metadata-only Render log rows. Independently validated and repriced locally; no account or provider-console access.",
+  "metadata_file": "metadata-owner.jsonl",
+  "metadata_sha256": "6c93117eca44d9ab8fecf3298a2d044d56a0daa84d7bac5821fb0e5c41cc44a5",
+  "schema_validation": "pass",
+  "configuration_and_pricing_bindings": "pass",
+  "token_repricing": "pass",
+  "extraction_cost_usd": "0.000786",
+  "extraction_cost_basis": "One complete endpoint summary; underlying extraction generation row was not supplied and is not manufactured.",
+  "analysis_cost_usd": "0.021422",
+  "analysis_cost_basis": "Two generation details cross-check the one endpoint summary; the endpoint is not added again.",
+  "analysis_generation_costs_usd": [
+    "0.004629",
+    "0.016793"
+  ],
+  "actual_cost_usd": "0.022208",
+  "reserved_cost_usd": "0.081",
+  "daily_cap_usd": "0.30",
+  "input_tokens": 17483,
+  "output_tokens": 945,
+  "usage_complete": true,
+  "endpoint_serving_duration_ms": 16048.872891813517,
+  "native_summary_unchanged": true,
+  "owner_confirmed_budget_reset_to_zero": true,
+  "known_cycle_cost_component_usd": "16.954546",
+  "historical_unknown_costs_remain_unknown": true
+}

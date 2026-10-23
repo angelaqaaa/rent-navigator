@@ -1,0 +1,65 @@
+{
+  "snapshot_date": "2026-09-21",
+  "sources": [
+    {
+      "source_id": "rta",
+      "canonical_url": "https://www.ontario.ca/laws/statute/06r17",
+      "retrieved_url": "https://www.ontario.ca/laws/api/v2/legislation/en/doc-search/statute/06r17",
+      "title": "Residential Tenancies Act, 2006, S.O. 2006, c. 17",
+      "fetched_at_utc": "2026-09-21T15:56:58.151446Z",
+      "consolidation_period": "Consolidation Period: From September 21, 2026 to the e-Laws currency date.",
+      "raw_sha256": "2a3b6692fe7919b5ea74b5ff60eca206bdf5d3128a83613e805fe54f4fed3241",
+      "text_sha256": "6bd984d9e2e823983abf2254cad3b0ef2938f13d061da0ddfa1bdc814bef8a62"
+    },
+    {
+      "source_id": "legislation_act",
+      "canonical_url": "https://www.ontario.ca/laws/statute/06l21",
+      "retrieved_url": "https://www.ontario.ca/laws/api/v2/legislation/en/doc-search/statute/06l21",
+      "title": "Legislation Act, 2006, S.O. 2006, c. 21, Sched. F",
+      "fetched_at_utc": "2026-09-21T15:56:58.224498Z",
+      "consolidation_period": "Consolidation Period: From December 11, 2025 to the e-Laws currency date.",
+      "raw_sha256": "da8cf25bdb117a808af9e11018f88c28445e096f51214fb4bd4fad5b4de67f59",
+      "text_sha256": "fb546868b95c0d46d2c726fcb0258e1e27bd2c9dcd8be1465793413a5117e949"
+    },
+    {
+      "source_id": "guideline",
+      "canonical_url": "https://www.ontario.ca/page/residential-rent-increases",
+      "retrieved_url": "https://www.ontario.ca/page/residential-rent-increases",
+      "title": "Residential rent increases",
+      "fetched_at_utc": "2026-09-21T15:54:17.555377Z",
+      "consolidation_period": null,
+      "raw_sha256": "bec013dceb3481e4883ccfc1eb2c14e7567f07fcf604d1f3eea753e6acff313b",
+      "text_sha256": "4efe9e91e989394380b2bc8d24bbcf9b2cdd2984e42248b8b6d8755ab09c387f"
+    },
+    {
+      "source_id": "ltb_guide",
+      "canonical_url": "https://tribunalsontario.ca/documents/ltb/Brochures/Guide%20to%20RTA%20%28English%29.html",
+      "retrieved_url": "https://tribunalsontario.ca/documents/ltb/Brochures/Guide%20to%20RTA%20%28English%29.html",
+      "title": "Brochure: A Guide to the Residential Tenancies Act",
+      "fetched_at_utc": "2026-09-21T15:54:17.747216Z",
+      "consolidation_period": null,
+      "raw_sha256": "379c56ec6823a385ea93333788981d2f67ce47af5f0fcb96f3ea08bf68dd80cc",
+      "text_sha256": "71eb61ffa346112ed82692538741185b1474897c04607264696a80090750edaa"
+    },
+    {
+      "source_id": "n1",
+      "canonical_url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+      "retrieved_url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N1%20instructions_final_Nov30_2015.pdf",
+      "title": "Notice of Rent Increase",
+      "fetched_at_utc": "2026-09-21T15:54:18.101647Z",
+      "consolidation_period": null,
+      "raw_sha256": "291422838b617bf85ea30bbaeeab40c2339ceeb81da22cda56614e446c44c36e",
+      "text_sha256": "ced9e0a1b02c5e4c71b2d503215efac011adb7d8de079029d2fa3835830fcbf1"
+    },
+    {
+      "source_id": "n2",
+      "canonical_url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N2%20instructions_final_Nov30_2015.pdf",
+      "retrieved_url": "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Rent%20Increase%20%26%20Instructions/N2%20instructions_final_Nov30_2015.pdf",
+      "title": "Notice of Rent Increase (Unit Partially Exempt)",
+      "fetched_at_utc": "2026-09-21T15:54:18.005179Z",
+      "consolidation_period": null,
+      "raw_sha256": "bfb0068658018a6c5f0a66a90a38f4b5ac503e647b67f8e989be7621c2ba5f3c",
+      "text_sha256": "cc2cd0425471478187feec6274ab5f6942771013ee17fc7e098ea021aadc913b"
+    }
+  ]
+}

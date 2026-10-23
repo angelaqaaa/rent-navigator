@@ -1,0 +1,2999 @@
+{
+  "review_status": "not_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "k": null,
+  "denominator": 32,
+  "k_over_32": null,
+  "first32_reviewed_count": null,
+  "additional_flagged_reviewed_count": null,
+  "records": [
+    {
+      "audit_id": "run-3-r01-production-repeat-0",
+      "case_id": "R01",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "4dc159be-630b-4b47-aeb7-0a2ddf94036a",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 12,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r01-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r01-baseline-repeat-0",
+      "case_id": "R01",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "f6b9af98-0295-4d2a-a982-f502dea19831",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 11,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r01-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r02-production-repeat-0",
+      "case_id": "R02",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "791ab2e9-4fa6-48ab-8544-5fe0ecf6a480",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 28,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r02-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r02-baseline-repeat-0",
+      "case_id": "R02",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "6d208c9b-3d2d-4d8d-8c80-9cba3e988e09",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 27,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r02-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r03-production-repeat-0",
+      "case_id": "R03",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "191c3441-0783-4cf2-907e-0c6eefcbe74c",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 13,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r03-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r03-baseline-repeat-0",
+      "case_id": "R03",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "88637aff-5555-427b-bcb2-cd7af0973247",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 14,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r03-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r04-production-repeat-0",
+      "case_id": "R04",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "f1dabe36-52a1-41cd-ae9d-940b46c01080",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 21,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r04-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r04-baseline-repeat-0",
+      "case_id": "R04",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "566fcf3b-9c1e-4005-8c39-bf33e74b915d",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 22,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r04-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r04-baseline-repeat-3",
+      "case_id": "R04",
+      "arm": "baseline",
+      "repeat": 3,
+      "attempt_id": "9b41937c-38f2-4fc9-8a81-2479e5488f17",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 105,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-r04-baseline-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r05-production-repeat-0",
+      "case_id": "R05",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "11b7d4d9-223b-44ce-818d-2032c6db433a",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 9,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r05-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r05-baseline-repeat-0",
+      "case_id": "R05",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "e95640ed-0604-479b-919b-1b54f776b9f2",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 10,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r05-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r06-production-repeat-0",
+      "case_id": "R06",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "eff0cae6-f5f3-4e0f-a4fa-34b4796f1fdd",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 24,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r06-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-r06-baseline-repeat-0",
+      "case_id": "R06",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "b4417acd-b0c6-44dc-947a-cac0767d00ff",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 23,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-r06-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n01-production-repeat-0",
+      "case_id": "N01",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "be366da5-8afc-493a-9bb2-02628028b6a8",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 29,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-n01-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n01-baseline-repeat-0",
+      "case_id": "N01",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "7dbb999f-1632-48cf-81f1-9e008300f9cc",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 30,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-n01-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-production-repeat-0",
+      "case_id": "N02",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "b5ea454a-5a4f-4cac-8353-2623627224cc",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 17,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n02-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "unsupported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-production-repeat-1",
+      "case_id": "N02",
+      "arm": "production",
+      "repeat": 1,
+      "attempt_id": "d57f2d0d-d367-4c3e-af1e-cece386b3dc1",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 35,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n02-production-repeat-1",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-production-repeat-2",
+      "case_id": "N02",
+      "arm": "production",
+      "repeat": 2,
+      "attempt_id": "072f62a7-450f-4c2a-b0d6-ae386e91b403",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 85,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n02-production-repeat-2",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-production-repeat-3",
+      "case_id": "N02",
+      "arm": "production",
+      "repeat": 3,
+      "attempt_id": "d6a9cfde-9e11-4f43-8bad-516c028774b7",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 122,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n02-production-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-production-repeat-4",
+      "case_id": "N02",
+      "arm": "production",
+      "repeat": 4,
+      "attempt_id": "a4884939-10f9-48c3-88ce-624bb7b22c1c",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 156,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n02-production-repeat-4",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "unsupported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "unsupported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n02-baseline-repeat-0",
+      "case_id": "N02",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "1ebda37f-6f97-4310-83e8-78e0f502b88d",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 18,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-n02-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n03-production-repeat-0",
+      "case_id": "N03",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "c7a13a2a-91a3-4092-9fd7-a9347ca7b36b",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 20,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n03-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n03-baseline-repeat-0",
+      "case_id": "N03",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "32bd8990-2a67-4d04-a73d-b31b16f4decb",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 19,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n03-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-production-repeat-0",
+      "case_id": "N04",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "bfc5abaa-fbc7-40cb-8971-d6a9f728d874",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 32,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n04-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-production-repeat-1",
+      "case_id": "N04",
+      "arm": "production",
+      "repeat": 1,
+      "attempt_id": "4e2df70c-f535-4b59-89b2-eddc3201f655",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 54,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n04-production-repeat-1",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-production-repeat-2",
+      "case_id": "N04",
+      "arm": "production",
+      "repeat": 2,
+      "attempt_id": "5f848732-21ab-4f93-ab74-827e3bf59853",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 89,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n04-production-repeat-2",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-production-repeat-3",
+      "case_id": "N04",
+      "arm": "production",
+      "repeat": 3,
+      "attempt_id": "c499ff2c-b977-4ead-8701-8b3c676106c5",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 127,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n04-production-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-production-repeat-4",
+      "case_id": "N04",
+      "arm": "production",
+      "repeat": 4,
+      "attempt_id": "b9c38535-3b60-42b2-a85c-e5f5a28b4fc8",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 132,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-n04-production-repeat-4",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s5",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s6",
+            "factual": "contradicted",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-n04-baseline-repeat-0",
+      "case_id": "N04",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "1a0d669a-8681-4297-a4aa-dec1258e34f2",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 31,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-n04-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-production-repeat-0",
+      "case_id": "Q01",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "a8d09a10-ed04-4244-93a8-03b22d55ebd3",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 25,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q01-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-baseline-repeat-0",
+      "case_id": "Q01",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "90f72eea-fbba-41f2-bf18-c479e70f4a42",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 26,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q01-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-baseline-repeat-1",
+      "case_id": "Q01",
+      "arm": "baseline",
+      "repeat": 1,
+      "attempt_id": "04d3b712-796f-4aa0-9d61-79133cb1fea8",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 44,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q01-baseline-repeat-1",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-baseline-repeat-2",
+      "case_id": "Q01",
+      "arm": "baseline",
+      "repeat": 2,
+      "attempt_id": "175cb728-97b4-481e-a163-1720d5b68a90",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 94,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q01-baseline-repeat-2",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-baseline-repeat-3",
+      "case_id": "Q01",
+      "arm": "baseline",
+      "repeat": 3,
+      "attempt_id": "2d2045b7-26a2-4944-8bfb-1cc0a696e1e0",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 117,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q01-baseline-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q01-baseline-repeat-4",
+      "case_id": "Q01",
+      "arm": "baseline",
+      "repeat": 4,
+      "attempt_id": "6681e7cc-e22e-40c8-b284-267580231853",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 151,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q01-baseline-repeat-4",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-production-repeat-0",
+      "case_id": "Q02",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "d475036b-067a-4b52-be61-06b1b3a40b36",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 5,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q02-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-baseline-repeat-0",
+      "case_id": "Q02",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "5d3386c5-3463-49a9-b070-4098b0733471",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 6,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q02-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-baseline-repeat-1",
+      "case_id": "Q02",
+      "arm": "baseline",
+      "repeat": 1,
+      "attempt_id": "fc95f4cd-56ae-405c-9c25-a8f3fd12ec25",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 33,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q02-baseline-repeat-1",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-baseline-repeat-2",
+      "case_id": "Q02",
+      "arm": "baseline",
+      "repeat": 2,
+      "attempt_id": "6d1ed678-2d3a-4929-81da-f7b260237257",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 87,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q02-baseline-repeat-2",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-baseline-repeat-3",
+      "case_id": "Q02",
+      "arm": "baseline",
+      "repeat": 3,
+      "attempt_id": "9ee12786-47c0-4022-9069-fae15308c496",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 113,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q02-baseline-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q02-baseline-repeat-4",
+      "case_id": "Q02",
+      "arm": "baseline",
+      "repeat": 4,
+      "attempt_id": "1af4f319-f2a9-458c-8fe6-b30db5873c53",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 147,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q02-baseline-repeat-4",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q03-production-repeat-0",
+      "case_id": "Q03",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "d110582a-0af6-4201-abf5-4de6c3512754",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 8,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q03-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q03-baseline-repeat-0",
+      "case_id": "Q03",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "13bdcfe0-436a-4ad3-b3c5-cdfa7f32806e",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 7,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q03-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-production-repeat-0",
+      "case_id": "Q04",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "206144b0-1bf9-4b37-82d7-8dbb56d8d04a",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 1,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "missing"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s4",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-baseline-repeat-0",
+      "case_id": "Q04",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "2764e02d-6aa3-4849-8490-d97224bc31c2",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 2,
+      "first32": true,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          },
+          {
+            "id": "c3",
+            "result": "contradicted"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-baseline-repeat-1",
+      "case_id": "Q04",
+      "arm": "baseline",
+      "repeat": 1,
+      "attempt_id": "21a0fdbd-26af-4883-9305-682fa9d5782e",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 64,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-baseline-repeat-1",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "contradicted"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          },
+          {
+            "id": "c3",
+            "result": "contradicted"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-baseline-repeat-2",
+      "case_id": "Q04",
+      "arm": "baseline",
+      "repeat": 2,
+      "attempt_id": "4aeef81e-5626-47c3-893f-2de2498d674c",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 67,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-baseline-repeat-2",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "contradicted"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-baseline-repeat-3",
+      "case_id": "Q04",
+      "arm": "baseline",
+      "repeat": 3,
+      "attempt_id": "6cbf6cc8-f211-46f9-9c5a-02573e0e0328",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 101,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-baseline-repeat-3",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "contradicted"
+          },
+          {
+            "id": "c3",
+            "result": "contradicted"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q04-baseline-repeat-4",
+      "case_id": "Q04",
+      "arm": "baseline",
+      "repeat": 4,
+      "attempt_id": "fcdca12b-3ea7-4cbd-9ab5-6930b6677376",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 159,
+      "first32": false,
+      "hallucinated_flag": true,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q04-baseline-repeat-4",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "missing"
+          },
+          {
+            "id": "c4",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s4",
+            "factual": "contradicted",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q05-production-repeat-0",
+      "case_id": "Q05",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "7e43844e-88be-4344-a0a6-1c6f6a3fab44",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 16,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q05-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "unsupported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q05-baseline-repeat-0",
+      "case_id": "Q05",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "e5472617-7866-412d-90c9-cb4b96394b7e",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 15,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q05-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q06-production-repeat-0",
+      "case_id": "Q06",
+      "arm": "production",
+      "repeat": 0,
+      "attempt_id": "8a67e82b-8a22-462f-9bfa-930c6fb6eb95",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 4,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "success",
+      "reading_view": "review.html#run-3-q06-production-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "met"
+          },
+          {
+            "id": "c3",
+            "result": "met"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "supported"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "supported"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    },
+    {
+      "audit_id": "run-3-q06-baseline-repeat-0",
+      "case_id": "Q06",
+      "arm": "baseline",
+      "repeat": 0,
+      "attempt_id": "7fb478b6-30c6-4694-875f-3adef5baa538",
+      "source_file": "/Users/Angelaqaaa/rn-results/run-3/collection/results.jsonl",
+      "source_jsonl_line": 3,
+      "first32": true,
+      "hallucinated_flag": false,
+      "original_response_status": "answered",
+      "original_classification": "incorrect",
+      "reading_view": "review.html#run-3-q06-baseline-repeat-0",
+      "original_judge_present": true,
+      "original_judge": {
+        "required_claims": [
+          {
+            "id": "c1",
+            "result": "met"
+          },
+          {
+            "id": "c2",
+            "result": "missing"
+          },
+          {
+            "id": "c3",
+            "result": "missing"
+          }
+        ],
+        "statements": [
+          {
+            "id": "s1",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s2",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          },
+          {
+            "id": "s3",
+            "factual": "supported",
+            "citation_support": "not_applicable"
+          }
+        ],
+        "false_pass": false,
+        "policy_violations": []
+      },
+      "review_status": "not_reviewed",
+      "owner_factual_agreement": null,
+      "owner_citation_agreement": null,
+      "owner_policy_agreement": null,
+      "owner_overall_agreement": null,
+      "owner_brief_discrepancies": null
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "purpose": "owner_review_material",
+  "prepared_at_utc": "2026-10-20T18:51:07.886633+00:00",
+  "source_checkout": "/Users/Angelaqaaa/Desktop/Textbook/rent-navigator",
+  "source_sha": "50190c8173c8f36193be15b4f857df8b724094fa",
+  "release_tag": "v1.0.3-source",
+  "protected_refs_before": {
+    "main": "50190c8173c8f36193be15b4f857df8b724094fa",
+    "origin/main": "50190c8173c8f36193be15b4f857df8b724094fa",
+    "v1.0-source": "a8284e4c8739916df3f0b7d78b2dbc7f0df8dd6d",
+    "v1.0.1-source": "fb298659e2229e6c387c19d67982101c69f9a071",
+    "v1.0.2-source": "1b397e62017aae55dde97bb397fb030b495fdfa6",
+    "v1.0.3-source": "2bd0f2078bd5771403eb3c35004b052ddb48b402"
+  },
+  "parked_checkout": "/Users/Angelaqaaa/Desktop/Textbook/rent-navigator-wp10",
+  "parked_source_sha": "304a349b32bcaa126b2588aa91162b53eb2d3410",
+  "source_manifest_sha256": "aed85f5bd87b95d96ddfc389607f5454056142a02018e05264b6c201b60bedc1",
+  "source_results_sha256": "dd894b0ac4a43a36adc90531cc5054a10aead6e3cb7da6371351e65e874356fc",
+  "source_files_sha256": {
+    "judge-metadata.jsonl": "6c8386a4030e85e570b7a9a4effdea819f827ce5a7c6244365c0a5bb88fdc2b6",
+    "judge-raw-provider.jsonl": "f8964d6a5577657bed1d8f57e7fa241588ea6d63d98bd0ee5d777a5b9b1c4c28",
+    "manifest.json": "aed85f5bd87b95d96ddfc389607f5454056142a02018e05264b6c201b60bedc1",
+    "metadata.jsonl": "4268273e317db3e251911b282637df4b7697990aeffe043ce24419a625a64d21",
+    "plan.json": "95b63be508b1742646e9d0c93be3a34740abdb4ba24c8dfe7a3e2f2fa3343018",
+    "raw-provider.jsonl": "14ae21d5e4a9a9f7ae070f5f6d9372c4a22773010be4b5d3c8d564e4a5a832ff",
+    "results.jsonl": "dd894b0ac4a43a36adc90531cc5054a10aead6e3cb7da6371351e65e874356fc",
+    "summary.json": "30ac895aed5fc1c51b115317e32f9748f40f274a5b88ae4027b1dccb06e65f2c",
+    "warmups.jsonl": "e0798de88eaf7084d09e4b209ac42d6d3a1023216b9aa19883b3b0d295050a3d"
+  },
+  "batch_ledger": {
+    "path": "/Users/Angelaqaaa/rn-results/run-3/batch-ledger.json",
+    "sha256": "b187b23ddb4920dea32ffe6610c9c6ee04d0cbfce8a3a840b5dbcfd7e765ff3c"
+  },
+  "historical_protected_directories": {
+    "run1_collection": {
+      "path": "/Users/Angelaqaaa/rn-results/run-1/collection",
+      "files_sha256": {
+        "judge-metadata.jsonl": "494aacef654e997aeed2e2ca9dbc17b284d7c1b5d8b241af1b6ad2555c62902b",
+        "judge-raw-provider.jsonl": "fdab578d43fa18bce79569d2473f3f5d75481d80cb708943e689e77c1c17f3ab",
+        "manifest.json": "d084c5c2e27429c827bd99cfcd7737242c9a4b4fe391887abfc02163e0a960d6",
+        "metadata.jsonl": "d7f5a183fbdd819a392433179f9b2090c59c0e76dfe02d8977fd35d80cb64714",
+        "plan.json": "96c975080d173680fc70446caa5058e5a37acdcfc97a605e9feca03047ee961a",
+        "raw-provider.jsonl": "35478f576eb3844c9b0ef5071360cf56bef2ed301243a501a982121ca3b9cc45",
+        "results.jsonl": "f4d2c3c59c523fa40d6aadc80832284120fe9177f834893969fef0be658858fc",
+        "summary.json": "55499b06d59d431cce20d8075ccef838f8f720d47432f9efef16b0ad8a1c6f01",
+        "warmups.jsonl": "5bec6520cbb38c9c7a4bc0b5c01d6e3c241f56f2947824f4b31b66517000f11c"
+      }
+    },
+    "run2_collection": {
+      "path": "/Users/Angelaqaaa/rn-results/run-2/collection",
+      "files_sha256": {
+        "judge-metadata.jsonl": "944bdaeedb114e116d2f85f92061e647bcbdd555dd25636efc7a48fa7cf9dd1b",
+        "judge-raw-provider.jsonl": "686653df76202763558164ee723c12c75288196b05937b1ff2d5a56db037c95f",
+        "manifest.json": "2623145fc829e373ef4ffaebb2be3809d1dcd97cc36ffd269c4ec1f4c740ad3e",
+        "metadata.jsonl": "d44c0102b03908401e9eaebc63fc1a080c78631ab87b55e636a2daffd1634d57",
+        "plan.json": "6525403cad7a60c11eea9fa25506e6c1c1debbdef3bb45186e5bd8382da6db77",
+        "raw-provider.jsonl": "24eac34b86da362d1333faa0b88d2ab4aabff432073af12ab26a36bd98fc7fe3",
+        "results.jsonl": "d4c989a9921d4413e94a4f1deacdcfb8e75ca4fa4edcbc0ecf9734f7f819fca2",
+        "summary.json": "68e70e0c9c8fd0eb484d0e4c96c08c758df1bd566e4dcee15ab5969fed899389",
+        "warmups.jsonl": "5adc010c119f1f8b8ae648d3f4f8f5cb94e510c8c6998c08085a4c5efa4d484d"
+      }
+    },
+    "run2_record_only_audit": {
+      "path": "/Users/Angelaqaaa/rn-results/owner-audit-run-2",
+      "files_sha256": {
+        "SHA256SUMS": "cb0058ee4b28995f4c1187af964f32911d39baa459fd3fc190f3b351996957ef",
+        "audit-template.csv": "0e011da9baa7a60c3cc7e68940bac7c996a137cb65af7543881bc7003d37ed1f",
+        "audit-template.json": "bf11d3da99ec98b00828273d885d46248788aceb05c4106a645b2011db6ae8ca",
+        "corpus-passages.jsonl": "0db2758cf10261bf6515b1489983d5683b233ef883072df3e90d8a91bfc6235c",
+        "corpus-passages.md": "f0cd972969be7927703966ef100b624a04e541921c691a04fd1c4b0926d3c08d",
+        "gold-premises.jsonl": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+        "gold-premises.md": "8d1c57fb332f99fe5a6f03d7f3558aab43abd9a440e28aee2acabb883ead9e0c",
+        "index.md": "094c28f9aa96b41af50e5e784a6ab7e07f8b69244f72ea4faed956b41a57a38e",
+        "outputs.md": "80a515c0449e0b3b5da2f2b549276ad54c134d5af991203d81101d80575aab9a",
+        "provenance.json": "5261ea3e46f95ec43706d0552abecdc0154ece115030f5170b1d6d4eafb30d0c",
+        "selected-results.jsonl": "7c5479a24c9ef10f93084bb13b53756508fbe0d1ffb1c3d91605db7417b90357",
+        "selection.json": "fc24bf913a07e4f1f570724d8a21800a48ce485b7d547b2169d674b5c86b9e72"
+      }
+    },
+    "historical_failed_dry_run2": {
+      "path": "/Users/Angelaqaaa/rn-results/dry-run-2",
+      "files_sha256": {
+        "batch-ledger.json": "6313ba680c727ece747658ad1e8b229e041aa239b38eb7fc34a305a086bde37e",
+        "dry-run/attempts.jsonl": "4e5be7a2718cbefd4d0b3bcbc160c1e07c0f038c1afbefb1ad095b2464e0ce6f",
+        "dry-run/judge-metadata.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "dry-run/judge-raw-provider.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "dry-run/manifest.json": "54c49e36c43b8a65f3ab4d4fa8099db00235cf44ca58f752c4040937cfd75cf2",
+        "dry-run/metadata.jsonl": "0c56621495cd16511186c05c3dd6a376f4272cdac528d13e455aca97ab4bf0ef",
+        "dry-run/raw-provider.jsonl": "f41822e9b71e6452e899273560bbc52792281a90406ed4c420ec482dbbd2c3d8"
+      }
+    }
+  },
+  "repository_inputs_sha256": {
+    "PROJECT-SPEC.md": "424c1415a7bb8e30384c4f95e41acb0fd738155fea292e2995a2e35d03816e63",
+    "CONTRACTS.md": "a6f036db7691f2d408dd477fbdeb29b5b6aa37f5e67c021df168639ab40eccf9",
+    "uv.lock": "8de12f5eae66dbbb2744fda68316826aba2e82d9b4d7f8d00764bc6dd0f5b80a",
+    "eval/gold.jsonl": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+    "eval/gold-approval.json": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+    "eval/activation.json": "ffab65d6c52b5c7fe28fe62f721eb709a578a48ac24b29a1e6a0fbad21056396",
+    "src/rent_navigator/corpus/chunks.jsonl": "9a35edb9a30d5d88e5c048c89167f9f10a6c984463e107aa4d8cb5f89d4bbeae",
+    "src/rent_navigator/corpus/manifest.json": "fa656f11bd03b0fa0ea76713296b8b425b72958462264a756c6959f325f85076",
+    "src/rent_navigator/corpus/rules.json": "ef1ee2230ec25e42de2c2d026115d1ad5ba77f7fbf686336d159d72cfc46ad1c",
+    "src/rent_navigator/eval/metrics.py": "86ba7adc8d766a896cb87b2b8f0bc8e300b87e9fc02115f592d997663e2ab093",
+    "src/rent_navigator/eval/models.py": "11635b98446e7cd052c88d0966596f21fd610f862741359e064d17597b1e5852",
+    "src/rent_navigator/eval/judge.py": "b3db1bb942e827eb839fa9d8a798a76205552c433da0045ac079defbb73c75d8",
+    "src/rent_navigator/eval/runner.py": "47cc7f89b78be1294f2d437d93c5a895f693f9e3d8c1efdf2e073050c75a8d09",
+    "tests/fixtures/judge_calibration_v2/J01.json": "06e2dc68ec78db233c1d92f9daeb5df3ee26ad367ffb28dd5c9b6c2aa1a63a41",
+    "tests/fixtures/judge_calibration_v2/J02.json": "2fd99e28d5721d889b40627a268a0c99e89e9865ade25aad9e790b3595f7ae56",
+    "tests/fixtures/judge_calibration_v2/J03.json": "0804e26538b38d0019c5ce8aeb461682bac05cbe2357a311e6ba8db622e0fee4",
+    "tests/fixtures/judge_calibration_v2/J04.json": "3398ae3897eada27334eed6520909d98a06f9fb2ae8a3b887a9557135d823f8e",
+    "tests/fixtures/judge_calibration_v2/J05.json": "b60e954703bf1ce32c1d6051e6f2944ffe8ad253f68a600c234e023f4d4d866b",
+    "tests/fixtures/judge_calibration_v2/J06.json": "f2668aacc56be6a55d2415e9251307cb82021934be1afe5b90254ab2b66dfcc1",
+    "tests/fixtures/judge_calibration_v2/J07.json": "ba6a11dadfa97aab4f1062fb1d396395e2bb8b6abdc54e9a6230d0e669c13956",
+    "tests/fixtures/judge_calibration_v2/J08.json": "a486a40f5857f1edf6700f3c65bf69774f9212947315719aee80427a1fefc700",
+    "tests/fixtures/judge_calibration_v2/J09.json": "4340fb0fca135fce888eb1580806e68adb633925e1b9755911d2e0a89c692fef",
+    "tests/fixtures/judge_calibration_v2/J10.json": "8c78f59d1cc18f78191a91b7d460f08f339ba831cdf48d2c607eca74ca0b456d",
+    "tests/fixtures/judge_calibration_v2/J11.json": "0893ab37bcdfa5fa8e78ce896b4713cdd96c9366dcd779bfad2aa57f777518b4",
+    "tests/fixtures/judge_calibration_v2/J12.json": "e5d5ba708663e3a1542a3175bd8c82a2d42d4694d60267c6a885d61a5a47604c",
+    "tests/fixtures/judge_calibration_v2/J13.json": "ad7c95e9e0b43ad08af528296eecbb3347eb8bfa29b86f926eae8f361c42f7f5"
+  },
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
+  "lock_hash": "8de12f5eae66dbbb2744fda68316826aba2e82d9b4d7f8d00764bc6dd0f5b80a",
+  "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+  "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+  "approval_hash": "f44c07fa54c7c012222fccc79b9ce30ddf576a7191ddb6b0353f969148a1a55d",
+  "pricing_hash": "228cdd725a2de9973174f170f19ae38bdd2de30a603168a80d9dfcf1436f1541",
+  "classification_function": "rent_navigator.eval.metrics.classify",
+  "counts": {
+    "first32": 32,
+    "hallucinated": 27,
+    "hallucinated_by_arm": {
+      "production": 11,
+      "baseline": 16
+    },
+    "overlap": 6,
+    "union": 53,
+    "additional_flagged": 21,
+    "required_first_repeat_N04_R06": 4,
+    "historical_records_in_run3_audit": 0
+  },
+  "grade_display": "Original judge object beside retained answer, plus each original statement/claim grade paired by its unchanged ID. Values are copied, not regraded.",
+  "gate3_status": "Recorded PASS before this preparation; no Gate3 rerun or generation performed here.",
+  "source_punctuation": "Exact source copies retain original punctuation. Selected result lines with literal em dash: 34. Newly written instructions use no em dashes.",
+  "original_line_bytes_preserved": true,
+  "hash_inventory": "SHA256SUMS covers every other package artifact; its own hash is supplied in the final report."
+}

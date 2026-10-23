@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "dry_run": true,
+  "reportable": false,
+  "evaluation_complete": false,
+  "dry_run_complete": false,
+  "run_id": "5f0994ef-6b5b-4ae0-8a56-decdec5b4352",
+  "source_sha": "57fd0410899311d5a2f1d850f7f019130aa4fe67",
+  "lock_hash": "8de12f5eae66dbbb2744fda68316826aba2e82d9b4d7f8d00764bc6dd0f5b80a",
+  "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+  "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+  "judge_config_hash": "23cd495fad0dcc45be0f63018a6f921b152a76fe5a28fc0b2fc4e8d658f38ef8",
+  "environment": {
+    "os": "Linux-7.2.9-orbstack-00391-g2b298d05fbd4-aarch64-with-glibc2.36",
+    "cpu": "aarch64",
+    "ram_bytes": 8392929280,
+    "docker_version": "Docker version 29.8.2, build 7fc2dff",
+    "image_digest": "sha256:3052f7d44213f5a1b6853d3ed2deaaa7a1737d35d379c03062ddef5b30f4de5f",
+    "source_clean": true,
+    "provider_access_date": "2026-10-17",
+    "pricing_url": "https://platform.claude.com/docs/en/about-claude/pricing"
+  },
+  "attempts": [
+    {
+      "run_id": "5f0994ef-6b5b-4ae0-8a56-decdec5b4352",
+      "case_id": "R01",
+      "arm": "production",
+      "repeat": 0,
+      "source_sha": "57fd0410899311d5a2f1d850f7f019130aa4fe67",
+      "config_hash": "d48899db0023156c343042b2e521d1961d2bda88b9f15ae789060c362f724318",
+      "corpus_hash": "8be6cf66829e42c59cbec66896d1c762de130283989623a05edc30b427246720",
+      "gold_hash": "575cfd2b66465633f7cb04b44eb8455293c1a9c24a4911c0482879313d9b82cb",
+      "pricing_hash": "228cdd725a2de9973174f170f19ae38bdd2de30a603168a80d9dfcf1436f1541",
+      "attempt_id": "62f5d4ea-e608-404d-8e09-44f4040b1d94",
+      "trace_ids": [
+        "6bea72a1-225d-4b22-95f0-2cf13e35d40b"
+      ],
+      "retrieved_ids": [
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "6ebf013239401d00cc45d78657ddfba061ca9251b07c54795e6171d66b1e8b71",
+        "ef2c8278e771d0c5485f4ed65142dbdde28e0ffd29163920c27e96b4c9f30509",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e"
+      ],
+      "foundation_evidence_ids": [],
+      "initial_context_evidence_ids": [
+        "7621f3cdfae14d92b5777d44f620edbd19bd2126d494dddfc68261583181ea29",
+        "2b1ee1673d0822c0043a1ecac510f46fa7825cd4b495c907a6adcceb577c01bf",
+        "6ebf013239401d00cc45d78657ddfba061ca9251b07c54795e6171d66b1e8b71",
+        "ef2c8278e771d0c5485f4ed65142dbdde28e0ffd29163920c27e96b4c9f30509",
+        "ef832f209b0ddce5e6d3d7d1172f5781b55cc9699aeb569c88ee258082bfa41e"
+      ],
+      "response": {
+        "attempt_id": "62f5d4ea-e608-404d-8e09-44f4040b1d94",
+        "trace_id": "6bea72a1-225d-4b22-95f0-2cf13e35d40b",
+        "error": {
+          "code": "provider_error",
+          "message": "The provider request could not be completed safely."
+        },
+        "snapshot_date": "2026-09-21",
+        "disclaimer": "Independent project; not affiliated with the Government of Ontario or the Landlord and Tenant Board. General legal information, not legal advice. Rules as of 2026-09-21; results depend on confirmed facts. For advice, consult a licensed Ontario lawyer or paralegal."
+      },
+      "actual_extract": null,
+      "actual_tool_args": null,
+      "actual_tool_result": null,
+      "deterministic_assertions": [
+        {
+          "id": "tool_name_exact",
+          "passed": false
+        },
+        {
+          "id": "tool_args_exact",
+          "passed": false
+        },
+        {
+          "id": "tool_result_exact",
+          "passed": false
+        }
+      ],
+      "judge": null,
+      "classification": "error",
+      "latency_ms": 2781.283756994526,
+      "input_tokens": null,
+      "output_tokens": null,
+      "serving_cost_usd": null,
+      "judge_cost_usd": null,
+      "usage_complete": false
+    }
+  ],
+  "failures": [
+    "serving_usage_missing",
+    "provider_error",
+    "judged_attempt_incomplete"
+  ]
+}

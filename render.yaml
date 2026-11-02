@@ -2,6 +2,7 @@ services:
   - type: web
     name: rent-navigator
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     numInstances: 1
     autoDeploy: false
